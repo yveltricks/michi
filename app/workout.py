@@ -3,7 +3,7 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import login_required, current_user
 from .models import Exercise, Session, User
-from .models import Exercise, Session, User, BodyweightLog  # Add BodyweightLog here
+from .models import Exercise, Session, User, BodyweightLog, Set
 from . import db
 import json
 from datetime import datetime
@@ -25,55 +25,141 @@ def start_workout():
 @login_required
 def log_workout():
     data = request.get_json()
-
-    # Calculate total workout volume and duration (only for completed sets)
-    total_volume = 0
     exercises_data = data.get('exercises', [])
 
-    # Format exercises for better display
-    formatted_exercises = []
-    for exercise in exercises_data:
-        # Only include exercises with completed sets
-        completed_sets = [set for set in exercise['sets'] if set.get('completed', False)]
-        if completed_sets:
-            formatted_exercises.append({
-                'name': exercise['name'],
-                'sets': len(completed_sets)  # Only count completed sets
-            })
-            
-            # Calculate volume only for completed sets
-            exercise_volume = sum(
-                set['weight'] * set['reps']
-                for set in completed_sets
-                if 'weight' in set and 'reps' in set
-            )
-            total_volume += exercise_volume
-
-    # Create new session with formatted exercise data
+    # Create new session
     new_session = Session(
         user_id=current_user.id,
         session_date=datetime.utcnow(),
         duration=f"{data.get('duration', 0)} minutes",
-        volume=total_volume,
-        exercises=json.dumps(formatted_exercises),
-        exp_gained=len(formatted_exercises) * 50,  # Only count exercises with completed sets
-        session_rating=data.get('rating', 5),
         title=data.get('title', 'Workout'),
         description=data.get('description', ''),
+        session_rating=data.get('rating', 5),
         photo=data.get('photo_url', None)
     )
+    
+    db.session.add(new_session)
+    db.session.flush()  # This gets us the new_session.id
+
+    total_volume = 0
+    formatted_exercises = []
+
+    # Process each exercise and its sets
+    for exercise_idx, exercise in enumerate(exercises_data):
+        exercise_sets = [set for set in exercise['sets'] if set.get('completed', False)]
+        if exercise_sets:  # Only process exercises with completed sets
+            formatted_exercises.append({
+                'name': exercise['name'],
+                'sets': len(exercise_sets)
+            })
+
+            # Create Set records for each completed set
+            for set_idx, set_data in enumerate(exercise_sets):
+                # Calculate volume for this set
+                set_volume = set_data.get('weight', 0) * set_data.get('reps', 0)
+                total_volume += set_volume
+
+                # Create new Set record
+                new_set = Set(
+                    exercise_id=int(exercise['id']),
+                    session_id=new_session.id,
+                    weight=set_data.get('weight', 0),
+                    reps=set_data.get('reps', 0),
+                    completed=True,
+                    order=set_idx  # Store the order of the set
+                )
+                db.session.add(new_set)
+
+    # Update session with total volume and exercise data
+    new_session.volume = total_volume
+    new_session.exercises = json.dumps(formatted_exercises)
+    new_session.exp_gained = len(formatted_exercises) * 50
 
     # Update user's exp
     current_user.exp += new_session.exp_gained
     current_user.update_level()
 
-    db.session.add(new_session)
-    db.session.commit()
+    try:
+        db.session.commit()
+        return jsonify({
+            'success': True,
+            'session_id': new_session.id,
+            'exp_gained': new_session.exp_gained
+        })
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
+@workout.route('/api/previous-values/<int:exercise_id>')
+@login_required
+def get_previous_values(exercise_id):
+    # Get the last completed session that has this exercise with completed sets
+    subquery = db.session.query(Session.id)\
+        .join(Set)\
+        .filter(
+            Session.user_id == current_user.id,
+            Set.exercise_id == exercise_id,
+            Set.completed == True
+        )\
+        .order_by(Session.session_date.desc())\
+        .limit(1)\
+        .subquery()
+
+    previous_sets = Set.query\
+        .filter(
+            Set.session_id.in_(subquery),
+            Set.exercise_id == exercise_id,
+            Set.completed == True
+        )\
+        .order_by(Set.order)\
+        .all()
+
+    # Add some debug logging
+    print(f"Found {len(previous_sets)} previous sets for exercise {exercise_id}")
+    for set in previous_sets:
+        print(f"Set {set.order + 1}: {set.weight}kg x {set.reps} reps")
+
+    return jsonify([{
+        'weight': set.weight,
+        'reps': set.reps,
+        'order': set.order
+    } for set in previous_sets])
+
+@workout.route('/api/previous-values/<int:exercise_id>/<int:set_number>')
+@login_required
+def get_specific_previous_value(exercise_id, set_number):
+    # Get the last completed session that has this exercise with completed sets
+    subquery = db.session.query(Session.id)\
+        .join(Set)\
+        .filter(
+            Session.user_id == current_user.id,
+            Set.exercise_id == exercise_id,
+            Set.completed == True
+        )\
+        .order_by(Session.session_date.desc())\
+        .limit(1)\
+        .subquery()
+
+    previous_set = Set.query\
+        .filter(
+            Set.session_id.in_(subquery),
+            Set.exercise_id == exercise_id,
+            Set.order == set_number - 1,  # Convert to 0-based index
+            Set.completed == True
+        )\
+        .first()
+
+    if not previous_set:
+        print(f"No previous set found for exercise {exercise_id}, set number {set_number}")
+        return jsonify(None)
+
+    print(f"Found previous set: {previous_set.weight}kg x {previous_set.reps} reps")
     return jsonify({
-        'success': True,
-        'session_id': new_session.id,
-        'exp_gained': new_session.exp_gained
+        'weight': previous_set.weight,
+        'reps': previous_set.reps
     })
 
 @workout.route('/session/<int:session_id>')

@@ -164,6 +164,9 @@ class Set(db.Model):
     reps = db.Column(db.Integer)
     completed = db.Column(db.Boolean, default=False)
     order = db.Column(db.Integer)  # To maintain set order
+    prev_weight = db.Column(db.Float)  # New column for previous weight
+    prev_reps = db.Column(db.Integer)  # New column for previous reps
+    has_previous = db.Column(db.Boolean, default=False)  # Flag to indicate if previous values exist
 
     # Add relationships
     exercise = db.relationship('Exercise', backref='sets')

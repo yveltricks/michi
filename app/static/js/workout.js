@@ -27,13 +27,34 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Handle adding a new exercise to the workout
 function addExercise(exerciseId, exerciseName) {
-    const exercise = {
-        id: exerciseId,
-        name: exerciseName,
-        sets: [{ weight: 0, reps: 0, completed: false }]
-    };
-    workoutData.exercises.push(exercise);
-    renderExercises();
+    // Fetch previous values for this exercise
+    fetch(`/api/previous-values/${exerciseId}`)
+        .then(response => response.json())
+        .then(prevValues => {
+            const exercise = {
+                id: exerciseId,
+                name: exerciseName,
+                sets: [{
+                    weight: 0,
+                    reps: 0,
+                    completed: false,
+                    prevWeight: prevValues.length > 0 ? prevValues[0].weight : null,
+                    prevReps: prevValues.length > 0 ? prevValues[0].reps : null,
+                    hasPrevious: prevValues.length > 0
+                }]
+            };
+            workoutData.exercises.push(exercise);
+            renderExercises();
+        });
+}
+
+function loadPreviousValues(exerciseIndex, setIndex) {
+    const set = workoutData.exercises[exerciseIndex].sets[setIndex];
+    if (set.hasPrevious) {
+        set.weight = set.prevWeight;
+        set.reps = set.prevReps;
+        renderExercises();
+    }
 }
 
 // Add function to toggle set completion
@@ -45,12 +66,23 @@ function toggleSetCompletion(exerciseIndex, setIndex) {
 
 // Handle adding a new set to an exercise
 function addSet(exerciseIndex) {
-    workoutData.exercises[exerciseIndex].sets.push({ 
-        weight: 0, 
-        reps: 0, 
-        completed: false 
-    });
-    renderExercises();
+    const exercise = workoutData.exercises[exerciseIndex];
+    const setIndex = exercise.sets.length;
+    
+    // Fetch previous values for this set number
+    fetch(`/api/previous-values/${exercise.id}/${setIndex + 1}`)
+        .then(response => response.json())
+        .then(prevValue => {
+            exercise.sets.push({
+                weight: 0,
+                reps: 0,
+                completed: false,
+                prevWeight: prevValue ? prevValue.weight : null,
+                prevReps: prevValue ? prevValue.reps : null,
+                hasPrevious: !!prevValue
+            });
+            renderExercises();
+        });
 }
 
 // Handle updating set data
@@ -94,14 +126,21 @@ function formatSets(sets) {
 function renderExercises() {
     const container = document.getElementById('exercises-container');
     container.innerHTML = '';
-    
+
     workoutData.exercises.forEach((exercise, exerciseIndex) => {
         const exerciseDiv = document.createElement('div');
         exerciseDiv.className = 'exercise-entry';
-        
+
         let setsHtml = exercise.sets.map((set, setIndex) => `
             <div class="set-entry ${set.completed ? 'checked' : ''}">
-                <span>Set ${setIndex + 1}</span>
+                <div class="set-header">
+                    <span>Set ${setIndex + 1}</span>
+                    ${set.hasPrevious ? `
+                        <span class="previous-values" onclick="loadPreviousValues(${exerciseIndex}, ${setIndex})">
+                            Previous: ${set.prevWeight}kg × ${set.prevReps}
+                        </span>
+                    ` : '<span class="previous-values">No previous data</span>'}
+                </div>
                 <input type="number"
                     step="0.1"
                     min="0"
@@ -135,7 +174,7 @@ function renderExercises() {
                 + Add Set
             </button>
         `;
-        
+
         container.appendChild(exerciseDiv);
         
         // Add input event listeners for decimal point fixing
@@ -143,13 +182,13 @@ function renderExercises() {
             input.addEventListener('input', function(e) {
                 const cursorPos = this.selectionStart;
                 const value = this.value;
-                
+
                 // Ensure proper decimal input
                 if (value.includes('.')) {
                     const parts = value.split('.');
                     if (parts[0] === '') parts[0] = '0';
                     this.value = parts[0] + '.' + (parts[1] || '');
-                    
+
                     // Restore cursor position after decimal point
                     if (cursorPos > parts[0].length) {
                         this.setSelectionRange(cursorPos, cursorPos);

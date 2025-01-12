@@ -685,3 +685,24 @@ textarea.form-control {
     margin-left: 10px;
     padding: 5px;
 }
+
+.previous-values {
+    font-size: 0.9em;
+    color: #666;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background-color: #f0f0f0;
+    margin-left: 10px;
+}
+
+.previous-values:hover {
+    background-color: #e0e0e0;
+    color: #333;
+}
+
+.set-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 5px;
+}
