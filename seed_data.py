@@ -9,7 +9,7 @@ from werkzeug.security import generate_password_hash
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app import create_app, db
-from app.models import User, Session, Exercise, Routine, Measurement, Goal, Statistic, SavedItem, Notification
+from app.models import User, Session, Exercise, Routine, Measurement, Goal, Statistic, SavedItem, Notification, BodyweightLog
 
 def create_sample_exercises():
     """Create a list of common exercises"""
@@ -112,7 +112,11 @@ def create_sample_users():
         level = exp // 100
         if level == 0:
             level = 1
-            
+
+        # Generate random bodyweight (in kg)
+        bodyweight = round(random.uniform(50, 100), 1)  # Random weight between 50kg and 100kg
+
+        # Create user with unit preferences
         user = User(
             first_name=first_names[i],
             last_name=last_names[i],
@@ -121,15 +125,27 @@ def create_sample_users():
             level=level,
             exp=exp,
             streak=random.randint(0, 60),
-            unit_preference=random.choice(['kg', 'lbs']),
+            preferred_weight_unit=random.choice(['kg', 'lbs']),
+            preferred_distance_unit=random.choice(['km', 'mi']),
+            preferred_measurement_unit=random.choice(['cm', 'in']),
             privacy_setting=random.choice(['public', 'private'])
         )
         user.set_password(f'password{i+1}')
         db.session.add(user)
+        db.session.flush()  # Ensure user.id is available
+
+        # Create initial bodyweight log (always stored in kg)
+        initial_weight = BodyweightLog(
+            user_id=user.id,
+            weight=bodyweight,  # Already in kg
+            date=datetime.utcnow()
+        )
+        db.session.add(initial_weight)
+
         users.append(user)
     
-    db.session.commit()  # Commit users first to ensure they all have IDs
-    
+    db.session.commit()  # Commit users and bodyweight logs
+
     # Create some follow relationships
     for user in users:
         # Calculate maximum number of users that can be followed (excluding self)

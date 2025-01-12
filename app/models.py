@@ -27,7 +27,12 @@ class User(UserMixin, db.Model):
     streak = db.Column(db.Integer, default=0)
     exp = db.Column(db.Integer, default=0)
     profile_pic = db.Column(db.String(200))
-    unit_preference = db.Column(db.String(20), default='kg')
+    
+    # Updated unit preferences
+    preferred_weight_unit = db.Column(db.String(10), default='kg')
+    preferred_distance_unit = db.Column(db.String(10), default='km')
+    preferred_measurement_unit = db.Column(db.String(10), default='cm')
+    
     privacy_setting = db.Column(db.String(20), default='public')
     
     # Relationships

@@ -2,9 +2,10 @@
 from flask import Blueprint, render_template, redirect, url_for, request, flash
 from flask_login import login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash
-from .models import User, Session
+from .models import User, Session, BodyweightLog 
 from sqlalchemy import desc
 from . import db
+from datetime import datetime  # Added this for utcnow()
 
 auth = Blueprint('auth', __name__)
 
@@ -62,6 +63,30 @@ def register_post():
     username = request.form.get('username')
     password = request.form.get('password')
     privacy_setting = request.form.get('privacy_setting', 'public')
+    
+    # Get unit preferences
+    preferred_weight_unit = request.form.get('preferred_weight_unit', 'kg')
+    preferred_distance_unit = request.form.get('preferred_distance_unit', 'km')
+    preferred_measurement_unit = request.form.get('preferred_measurement_unit', 'cm')
+    
+    # Get bodyweight and its unit
+    bodyweight = request.form.get('bodyweight')
+    weight_unit = request.form.get('weight_unit', 'kg')
+
+    # Validate the bodyweight
+    try:
+        bodyweight = float(bodyweight)
+        if bodyweight <= 0:
+            flash('Please enter a valid body weight')
+            return redirect(url_for('auth.register'))
+            
+        # Convert weight to kg if entered in lbs
+        if weight_unit == 'lbs':
+            bodyweight = bodyweight * 0.45359237  # Convert lbs to kg
+            
+    except (ValueError, TypeError):
+        flash('Please enter a valid body weight')
+        return redirect(url_for('auth.register'))
 
     if User.query.filter_by(email=email).first():
         flash('Email already exists')
@@ -75,6 +100,7 @@ def register_post():
         flash('Password must be at least 8 characters long')
         return redirect(url_for('auth.register'))
 
+    # Create new user with unit preferences
     new_user = User(
         first_name=first_name,
         last_name=last_name,
@@ -82,11 +108,30 @@ def register_post():
         username=username,
         privacy_setting=privacy_setting,
         level=1,
-        exp=0
+        exp=0,
+        preferred_weight_unit=preferred_weight_unit,
+        preferred_distance_unit=preferred_distance_unit,
+        preferred_measurement_unit=preferred_measurement_unit
     )
     new_user.set_password(password)
 
+    # Add the user first
     db.session.add(new_user)
-    db.session.commit()
+    db.session.flush()  # This gets us the user.id
+
+    # Create initial bodyweight log (always stored in kg)
+    initial_weight = BodyweightLog(
+        user_id=new_user.id,
+        weight=bodyweight,  # Already converted to kg if needed
+        date=datetime.utcnow()
+    )
+    db.session.add(initial_weight)
+
+    try:
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        flash('An error occurred. Please try again.')
+        return redirect(url_for('auth.register'))
 
     return redirect(url_for('auth.login'))
