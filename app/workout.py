@@ -25,26 +25,29 @@ def start_workout():
 @login_required
 def log_workout():
     data = request.get_json()
-    
-    # Calculate total workout volume and duration
+
+    # Calculate total workout volume and duration (only for completed sets)
     total_volume = 0
     exercises_data = data.get('exercises', [])
 
     # Format exercises for better display
     formatted_exercises = []
     for exercise in exercises_data:
-        formatted_exercises.append({
-            'name': exercise['name'],
-            'sets': len(exercise['sets'])
-        })
-
-        # Calculate volume
-        exercise_volume = sum(
-            set['weight'] * set['reps']
-            for set in exercise['sets']
-            if 'weight' in set and 'reps' in set
-        )
-        total_volume += exercise_volume
+        # Only include exercises with completed sets
+        completed_sets = [set for set in exercise['sets'] if set.get('completed', False)]
+        if completed_sets:
+            formatted_exercises.append({
+                'name': exercise['name'],
+                'sets': len(completed_sets)  # Only count completed sets
+            })
+            
+            # Calculate volume only for completed sets
+            exercise_volume = sum(
+                set['weight'] * set['reps']
+                for set in completed_sets
+                if 'weight' in set and 'reps' in set
+            )
+            total_volume += exercise_volume
 
     # Create new session with formatted exercise data
     new_session = Session(
@@ -53,10 +56,10 @@ def log_workout():
         duration=f"{data.get('duration', 0)} minutes",
         volume=total_volume,
         exercises=json.dumps(formatted_exercises),
-        exp_gained=len(exercises_data) * 50,
+        exp_gained=len(formatted_exercises) * 50,  # Only count exercises with completed sets
         session_rating=data.get('rating', 5),
-        title=data.get('title', 'Workout'),  # Add title with default
-        description=data.get('description', ''),  # Keep description optional
+        title=data.get('title', 'Workout'),
+        description=data.get('description', ''),
         photo=data.get('photo_url', None)
     )
 

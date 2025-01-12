@@ -30,15 +30,26 @@ function addExercise(exerciseId, exerciseName) {
     const exercise = {
         id: exerciseId,
         name: exerciseName,
-        sets: [{ weight: 0, reps: 0 }]
+        sets: [{ weight: 0, reps: 0, completed: false }]
     };
     workoutData.exercises.push(exercise);
     renderExercises();
 }
 
+// Add function to toggle set completion
+function toggleSetCompletion(exerciseIndex, setIndex) {
+    workoutData.exercises[exerciseIndex].sets[setIndex].completed = 
+        !workoutData.exercises[exerciseIndex].sets[setIndex].completed;
+    renderExercises();
+}
+
 // Handle adding a new set to an exercise
 function addSet(exerciseIndex) {
-    workoutData.exercises[exerciseIndex].sets.push({ weight: 0, reps: 0 });
+    workoutData.exercises[exerciseIndex].sets.push({ 
+        weight: 0, 
+        reps: 0, 
+        completed: false 
+    });
     renderExercises();
 }
 
@@ -75,7 +86,8 @@ function removeSet(exerciseIndex, setIndex) {
 
 // Format sets for display
 function formatSets(sets) {
-    return `${sets.length} set${sets.length > 1 ? 's' : ''}`;
+    const completedSets = sets.filter(set => set.completed).length;
+    return `${completedSets} completed set${completedSets !== 1 ? 's' : ''}`;
 }
 
 // Render the exercises and their sets
@@ -216,17 +228,32 @@ function completeWorkout() {
         return;
     }
 
+    // Filter out incomplete sets from the workout data
+    const processedWorkout = {
+        ...workoutData,
+        exercises: workoutData.exercises.map(exercise => ({
+            ...exercise,
+            sets: exercise.sets.filter(set => set.completed)
+        }))
+    };
+
     const title = document.getElementById('workout-title').value.trim() || 'Workout';
     const description = document.getElementById('workout-description').value;
     const rating = document.getElementById('workout-rating').value;
 
     const data = {
-        exercises: workoutData.exercises,
+        exercises: processedWorkout.exercises,
         title: title,
         description: description,
         rating: rating,
         duration: calculateWorkoutDuration()
     };
+
+    // Only proceed if there are completed sets
+    if (!data.exercises.some(e => e.sets.length > 0)) {
+        alert("Please complete at least one set before finishing the workout.");
+        return;
+    }
 
     fetch('/log-workout', {
         method: 'POST',
