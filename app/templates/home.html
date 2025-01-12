@@ -1,0 +1,70 @@
+{# File: app/templates/home.html #}
+{% extends "base.html" %}
+
+{% block title %}Home{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="feed-tabs">
+        <button class="tab-button active">Following</button>
+        <button class="tab-button">Discover</button>
+    </div>
+
+    <div class="workout-feed">
+        {% for session in sessions %}
+        <div class="workout-card">
+            <div class="workout-header">
+                <img src="{{ session.user.profile_pic or url_for('static', filename='default_profile.jpg') }}" 
+                     alt="Profile" class="profile-pic">
+                <div class="workout-info">
+                    <h3>{{ session.user.first_name }} {{ session.user.last_name }}</h3>
+                    <span class="username">@{{ session.user.username }}</span>
+                    <span class="badge {{ session.user.badge.lower() }}">{{ session.user.badge }}</span>
+                </div>
+                <span class="workout-time">{{ session.session_date.strftime('%B %d, %Y %H:%M') }}</span>
+            </div>
+
+            <div class="workout-content">
+                <h4>{{ session.title }}</h4>
+                {% if session.description %}
+                    <p>{{ session.description }}</p>
+                {% endif %}
+                
+                <div class="exercise-summary">
+                    {% set exercises = session.exercises|from_json %}
+                    {% for exercise in exercises %}
+                    <div class="exercise-item">
+                        {{ exercise.sets }} {% if exercise.sets == 1 %}set{% else %}sets{% endif %} {{ exercise.name }}<br>
+                    </div>
+                    {% endfor %}
+                    {% if exercises|length > 3 %}
+                    <a href="#" class="see-more">See more exercises...</a>
+                    {% endif %}
+                </div>
+            </div>
+            
+            {% if session.photo %}
+            <div class="workout-photo">
+                <img src="{{ session.photo }}" alt="Workout photo">
+            </div>
+            {% endif %}
+
+            <div class="workout-stats">
+                <div class="stat">
+                    <i class="fas fa-stopwatch"></i>
+                    {{ session.duration|format_duration }}
+                </div>
+                <div class="stat">
+                    <i class="fas fa-dumbbell"></i>
+                    {{ session.volume }}kg
+                </div>
+                <div class="stat">
+                    <i class="fas fa-star"></i>
+                    {{ session.session_rating }}/5
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

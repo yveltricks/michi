@@ -1,0 +1,117 @@
+{# File: app/templates/workout/start.html #}
+{% extends "base.html" %}
+
+{% block title %}Start Workout{% endblock %}
+
+{% block content %}
+<div class="workout-stats-bar">
+    <div class="timer-container" onclick="toggleTimerMenu()">
+        <span id="workout-timer">00:00:00</span>
+        <div id="timer-menu" class="timer-menu">
+            <button id="pause-timer" onclick="event.stopPropagation(); toggleTimer()">Pause Timer</button>
+            <button id="reset-timer" onclick="event.stopPropagation(); confirmReset()">Reset Timer</button>
+        </div>
+    </div>
+</div>
+
+<div class="workout-container">
+    <h1 class="text-2xl font-bold mb-4">Start Workout</h1>
+    
+    <!-- Exercise List -->
+    <button id="add-exercise-btn" class="add-exercise-btn">
+        <i class="fas fa-plus"></i> Add Exercise
+    </button>
+    
+    <div id="exercises-container" class="exercise-list">
+        <!-- Exercises will be dynamically added here -->
+    </div>
+
+    <!-- Exercise Selection Modal -->
+    <div id="exercise-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Select Exercise</h2>
+                <span class="close">&times;</span>
+            </div>
+            <div class="modal-body">
+                <input type="text" id="exercise-search" placeholder="Search exercises..." class="form-control">
+
+                <!-- Filter section added here -->
+                <div class="filter-section">
+                    <select id="muscle-filter" class="form-control">
+                        <option value="all">All Muscles</option>
+                        <option value="abdominals">Abdominals</option>
+                        <option value="abductors">Abductors</option>
+                        <option value="adductors">Adductors</option>
+                        <option value="glutes">Glutes</option>
+                        <option value="lats">Lats</option>
+                        <option value="lower back">Lower Back</option>
+                        <option value="upper back">Upper Back</option>
+                        <option value="traps">Traps</option>
+                        <option value="chest">Chest</option>
+                        <option value="biceps">Biceps</option>
+                        <option value="triceps">Triceps</option>
+                        <option value="quadriceps">Quadriceps</option>
+                        <option value="hamstrings">Hamstrings</option>
+                        <option value="back">Back</option>
+                        <option value="shoulders">Shoulders</option>
+                        <option value="forearms">Forearms</option>
+                        <option value="calves">Calves</option>
+                        <option value="neck">Neck</option>
+                        <option value="full body">Full Body</option>
+                        <option value="cardio">Cardio</option>
+                    </select>
+                </div>
+
+                <!-- Updated exercise list section -->
+                <div id="exercise-list" class="exercise-options">
+                    {% for exercise in exercises %}
+                    <div class="exercise-option" 
+                        data-id="{{ exercise.id }}" 
+                        data-name="{{ exercise.name }}"
+                        data-muscles="{{ exercise.muscles_worked }}">
+                        <div class="exercise-info">
+                            <h4>{{ exercise.name }}</h4>
+                            <small>{{ exercise.muscles_worked }}</small>
+                        </div>
+                        <button class="add-btn">Add</button>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="form-group">
+        <label for="workout-title">Workout Title (optional):</label>
+        <input type="text" id="workout-title" class="form-control" placeholder="Enter a title for your workout">
+    </div>
+    <div class="form-group">
+        <label for="workout-description">Description (optional):</label>
+        <textarea id="workout-description" class="form-control" rows="3" placeholder="How was your workout?"></textarea>
+    </div>
+
+    <!-- Workout Completion Form -->
+    <div class="workout-completion-form mt-4">
+        <div class="form-group">
+            <label for="workout-rating">Rate your workout (1-5):</label>
+            <select id="workout-rating" class="form-control">
+                <option value="1">1 - Poor</option>
+                <option value="2">2 - Fair</option>
+                <option value="3">3 - Good</option>
+                <option value="4">4 - Very Good</option>
+                <option value="5">5 - Excellent</option>
+            </select>
+        </div>
+
+        <button onclick="completeWorkout()" class="finish-workout-btn">
+            Complete Workout
+        </button>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/workout.js') }}"></script>
+<script src="{{ url_for('static', filename='js/workout-timer.js') }}"></script>
+{% endblock %}

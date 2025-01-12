@@ -1,0 +1,292 @@
+import sys
+import os
+import json
+from datetime import datetime, timedelta
+import random
+from werkzeug.security import generate_password_hash
+
+# Add the project directory to Python path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from app import create_app, db
+from app.models import User, Session, Exercise, Routine, Measurement, Goal, Statistic, SavedItem, Notification
+
+def create_sample_exercises():
+    """Create a list of common exercises"""
+    exercises = [
+        {
+            'name': 'Bench Press',
+            'equipment': 'Barbell',
+            'muscles_worked': 'Chest, Triceps, Shoulders',
+            'exercise_type': 'strength',
+            'photo': 'bench_press.jpg'
+        },
+        {
+            'name': 'Squat',
+            'equipment': 'Barbell',
+            'muscles_worked': 'Quadriceps, Hamstrings, Glutes',
+            'exercise_type': 'strength',
+            'photo': 'squat.jpg'
+        },
+        {
+            'name': 'Deadlift',
+            'equipment': 'Barbell',
+            'muscles_worked': 'Back, Hamstrings, Glutes',
+            'exercise_type': 'strength',
+            'photo': 'deadlift.jpg'
+        },
+        {
+            'name': 'Pull-ups',
+            'equipment': 'Pull-up Bar',
+            'muscles_worked': 'Back, Biceps',
+            'exercise_type': 'strength',
+            'photo': 'pullups.jpg'
+        },
+        {
+            'name': 'Running',
+            'equipment': 'None',
+            'muscles_worked': 'Full Body',
+            'exercise_type': 'cardio',
+            'photo': 'running.jpg'
+        },
+        {
+            'name': 'Dumbbell Rows',
+            'equipment': 'Dumbbells',
+            'muscles_worked': 'Back, Biceps',
+            'exercise_type': 'strength',
+            'photo': 'dumbbell_rows.jpg'
+        },
+        {
+            'name': 'Push-ups',
+            'equipment': 'None',
+            'muscles_worked': 'Chest, Triceps, Shoulders',
+            'exercise_type': 'strength',
+            'photo': 'pushups.jpg'
+        },
+        {
+            'name': 'Shoulder Press',
+            'equipment': 'Dumbbells',
+            'muscles_worked': 'Shoulders, Triceps',
+            'exercise_type': 'strength',
+            'photo': 'shoulder_press.jpg'
+        },
+        {
+            'name': 'Leg Press',
+            'equipment': 'Machine',
+            'muscles_worked': 'Quadriceps, Hamstrings, Glutes',
+            'exercise_type': 'strength',
+            'photo': 'leg_press.jpg'
+        },
+        {
+            'name': 'Bicep Curls',
+            'equipment': 'Dumbbells',
+            'muscles_worked': 'Biceps',
+            'exercise_type': 'strength',
+            'photo': 'bicep_curls.jpg'
+        }
+    ]
+    
+    created_exercises = []
+    for exercise_data in exercises:
+        exercise = Exercise(
+            name=exercise_data['name'],
+            equipment=exercise_data['equipment'],
+            muscles_worked=exercise_data['muscles_worked'],
+            exercise_type=exercise_data['exercise_type'],
+            photo=exercise_data['photo'],
+            user_created=False
+        )
+        db.session.add(exercise)
+        created_exercises.append(exercise)
+    
+    return created_exercises
+
+def create_sample_users():
+    """Create 10 sample users with varied data"""
+    first_names = ['John', 'Emma', 'Michael', 'Sarah', 'David', 'Lisa', 'James', 'Anna', 'Robert', 'Maria']
+    last_names = ['Smith', 'Johnson', 'Williams', 'Brown', 'Jones', 'Garcia', 'Miller', 'Davis', 'Rodriguez', 'Martinez']
+    
+    users = []
+    for i in range(10):
+        exp = random.randint(100, 3000)
+        level = exp // 100
+        if level == 0:
+            level = 1
+            
+        user = User(
+            first_name=first_names[i],
+            last_name=last_names[i],
+            username=f'user{i+1}',
+            email=f'user{i+1}@example.com',
+            level=level,
+            exp=exp,
+            streak=random.randint(0, 60),
+            unit_preference=random.choice(['kg', 'lbs']),
+            privacy_setting=random.choice(['public', 'private'])
+        )
+        user.set_password(f'password{i+1}')
+        db.session.add(user)
+        users.append(user)
+    
+    db.session.commit()  # Commit users first to ensure they all have IDs
+    
+    # Create some follow relationships
+    for user in users:
+        # Calculate maximum number of users that can be followed (excluding self)
+        max_follows = min(7, len(users) - 1)  # Can't follow more users than exist (minus self)
+        min_follows = min(3, max_follows)  # Ensure minimum doesn't exceed maximum
+        
+        # Each user follows a random number of users between min_follows and max_follows
+        num_to_follow = random.randint(min_follows, max_follows)
+        available_users = [u for u in users if u != user]
+        to_follow = random.sample(available_users, num_to_follow)
+        
+        for followed_user in to_follow:
+            user.following.append(followed_user)
+    
+    return users
+
+def create_sample_routines(users, exercises):
+    """Create sample routines for users"""
+    routine_names = ['Push Day', 'Pull Day', 'Leg Day', 'Full Body', 'Upper Body']
+    levels = ['beginner', 'intermediate', 'advanced']
+    goals = ['strength', 'hypertrophy', 'endurance']
+    
+    for user in users:
+        num_routines = random.randint(1, 3)
+        for _ in range(num_routines):
+            routine_exercises = random.sample(exercises, random.randint(3, 6))
+            exercise_data = []
+            for exercise in routine_exercises:
+                exercise_data.append({
+                    'exercise_id': exercise.id,
+                    'sets': random.randint(3, 5),
+                    'reps': f'{random.randint(8, 12)}-{random.randint(12, 15)}',
+                    'rest': random.randint(60, 120)
+                })
+            
+            routine = Routine(
+                user_id=user.id,
+                name=random.choice(routine_names),
+                level=random.choice(levels),
+                goal=random.choice(goals),
+                muscle_groups='Full Body',
+                exercises=json.dumps(exercise_data),
+                rest_time=60
+            )
+            db.session.add(routine)
+
+def create_sample_sessions(users, exercises):
+    """Create workout sessions for users"""
+    for user in users:
+        # Create sessions over the last 30 days
+        for days_ago in range(30):
+            if random.random() < 0.7:  # 70% chance of having a workout each day
+                session_exercises = random.sample(exercises, random.randint(3, 6))
+                exercise_data = []
+                for exercise in session_exercises:
+                    if exercise.exercise_type == 'strength':
+                        exercise_data.append({
+                            'exercise_id': exercise.id,
+                            'sets': random.randint(3, 5),
+                            'reps': random.randint(8, 12),
+                            'weight': random.randint(20, 100)
+                        })
+                    else:  # cardio
+                        exercise_data.append({
+                            'exercise_id': exercise.id,
+                            'duration': random.randint(15, 60),
+                            'distance': random.randint(2, 10)
+                        })
+                
+                session = Session(
+                    user_id=user.id,
+                    session_date=datetime.utcnow() - timedelta(days=days_ago),
+                    duration=f'{random.randint(30, 90)} minutes',
+                    volume=random.randint(1000, 5000),
+                    exercises=json.dumps(exercise_data),
+                    exp_gained=random.randint(100, 500),
+                    session_rating=random.randint(1, 5),
+                    description=f'Workout {30-days_ago}'
+                )
+                db.session.add(session)
+
+def create_sample_measurements(users):
+    """Create measurement history for users"""
+    measurement_types = ['Weight', 'Body Fat %', 'Chest', 'Waist', 'Arms']
+    
+    for user in users:
+        for measurement_type in measurement_types:
+            base_value = random.uniform(60, 90) if measurement_type == 'Weight' else random.uniform(10, 30)
+            for days_ago in range(30):
+                if random.random() < 0.3:  # 30% chance of taking measurement each day
+                    value = base_value + random.uniform(-2, 2)
+                    measurement = Measurement(
+                        user_id=user.id,
+                        type=measurement_type,
+                        value=round(value, 1),
+                        date=datetime.utcnow() - timedelta(days=days_ago)
+                    )
+                    db.session.add(measurement)
+
+def create_sample_goals(users):
+    """Create goals for users"""
+    goal_templates = [
+        'Bench Press {target}kg',
+        'Squat {target}kg',
+        'Run {target}km',
+        'Lose {target}kg',
+        'Complete {target} workouts'
+    ]
+    
+    for user in users:
+        num_goals = random.randint(2, 4)
+        for _ in range(num_goals):
+            target = random.randint(50, 200)
+            current = random.randint(0, target)
+            goal = Goal(
+                user_id=user.id,
+                goal_name=random.choice(goal_templates).format(target=target),
+                target_value=target,
+                current_value=current,
+                is_complete=(current >= target)
+            )
+            db.session.add(goal)
+
+def seed_database():
+    """Main function to seed the database with sample data"""
+    app = create_app()
+    
+    with app.app_context():
+        # Clear existing data
+        db.drop_all()
+        db.create_all()
+        
+        print("Creating exercises...")
+        exercises = create_sample_exercises()
+        db.session.commit()
+        
+        print("Creating users...")
+        users = create_sample_users()
+        db.session.commit()
+        
+        print("Creating routines...")
+        create_sample_routines(users, exercises)
+        db.session.commit()
+        
+        print("Creating sessions...")
+        create_sample_sessions(users, exercises)
+        db.session.commit()
+        
+        print("Creating measurements...")
+        create_sample_measurements(users)
+        db.session.commit()
+        
+        print("Creating goals...")
+        create_sample_goals(users)
+        db.session.commit()
+        
+        print("Database seeded successfully!")
+
+if __name__ == '__main__':
+    seed_database()

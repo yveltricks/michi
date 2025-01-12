@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+
+{% block title %}Workout Session{% endblock %}
+
+{% block content %}
+<div class="workout-container">
+    <h2>Workout Session</h2>
+
+    <div class="workout-card">
+        <div class="workout-header">
+            <img src="{{ session.user.profile_pic or url_for('static', filename='default_profile.jpg') }}"
+                 alt="Profile" class="profile-pic">
+            <div class="workout-info">
+                <h3>{{ session.user.first_name }} {{ session.user.last_name }}</h3>
+                <span class="username">@{{ session.user.username }}</span>
+                <span class="badge {{ session.user.badge.lower() }}">{{ session.user.badge }}</span>
+            </div>
+            <span class="workout-time">{{ session.session_date.strftime('%B %d, %Y') }}</span>
+        </div>
+
+        <div class="workout-content">
+            <h4>{{ session.description or 'Workout' }}</h4>
+            <div class="exercise-summary">
+                {% for exercise in exercises %}
+                <div class="exercise-item">
+                    <span class="exercise-name">{{ exercise.name }}</span>
+                    {% if exercise.weight %}
+                    <span class="exercise-details">{{ exercise.sets }}x{{ exercise.reps }} @ {{ exercise.weight }}kg</span>
+                    {% else %}
+                    <span class="exercise-details">{{ exercise.duration }} mins</span>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        {% if session.photo %}
+        <div class="workout-photo">
+            <img src="{{ session.photo }}" alt="Workout photo">
+        </div>
+        {% endif %}
+
+        <div class="workout-stats">
+            <div class="stat">
+                <i class="fas fa-stopwatch"></i>
+                {{ session.duration }}
+            </div>
+            <div class="stat">
+                <i class="fas fa-dumbbell"></i>
+                {{ session.volume }}kg
+            </div>
+            <div class="stat">
+                <i class="fas fa-star"></i>
+                {{ session.session_rating }}/5
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
