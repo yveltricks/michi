@@ -155,3 +155,16 @@ class BodyweightLog(db.Model):
     date = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     
     user = db.relationship('User', backref=db.backref('bodyweight_logs', lazy=True))
+
+class Set(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    exercise_id = db.Column(db.Integer, db.ForeignKey('exercise.id'), nullable=False)
+    session_id = db.Column(db.Integer, db.ForeignKey('session.id'), nullable=False)
+    weight = db.Column(db.Float)
+    reps = db.Column(db.Integer)
+    completed = db.Column(db.Boolean, default=False)
+    order = db.Column(db.Integer)  # To maintain set order
+
+    # Add relationships
+    exercise = db.relationship('Exercise', backref='sets')
+    session = db.relationship('Session', backref='sets')

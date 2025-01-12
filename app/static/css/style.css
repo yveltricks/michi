@@ -60,7 +60,6 @@ a:hover {
     text-decoration: underline;
 }
 
-/* Add these new styles to your existing CSS */
 .container {
     max-width: 1200px;
     margin: 0 auto;
@@ -85,8 +84,6 @@ a:hover {
     text-decoration: none;
 }
 
-/* Add these styles to your existing CSS */
-/* Navbar */
 .navbar {
     background-color: white;
     padding: 1rem;
@@ -112,7 +109,6 @@ a:hover {
     color: #007bff;
 }
 
-/* Feed */
 .feed-tabs {
     margin: 20px 0;
     display: flex;
@@ -132,7 +128,6 @@ a:hover {
     color: white;
 }
 
-/* Workout Cards */
 .workout-card {
     background: white;
     border-radius: 8px;
@@ -241,7 +236,6 @@ a:hover {
     color: #666;
 }
 
-/* Registration form additions */
 .privacy-setting {
     margin-top: 15px;
 }
@@ -260,7 +254,6 @@ small {
     margin-top: 5px;
     display: block;
 }
-
 
 .workout-container {
     max-width: 800px;
@@ -293,16 +286,94 @@ small {
 
 .set-entry {
     display: flex;
-    gap: 10px;
     align-items: center;
-    margin-bottom: 10px;
+    gap: 10px;
+    margin-bottom: 8px;
 }
 
-.set-entry input {
-    width: 80px;
-    padding: 8px;
+.set-complete-checkbox {
+    position: relative;
+    display: inline-block;
+    width: 24px; /* Same size as remove button */
+    height: 24px; /* Same size as remove button */
+    cursor: pointer;
+}
+
+.set-complete-checkbox input {
+    position: absolute;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.checkmark {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%; /* Fill the container */
+    height: 100%; /* Fill the container */
+    background-color: #f8f9fa;
     border: 1px solid #ddd;
     border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    color: #666; /* Gray tick when unchecked */
+}
+
+/* Always show the tick */
+.checkmark::after {
+    content: "✓"; /* Tick is always visible */
+}
+
+/* Change styles when the checkbox is checked */
+.set-complete-checkbox input:checked ~ .checkmark {
+    background-color: #28a745; /* Green background when checked */
+    border-color: #28a745;
+    color: white; /* White tick when checked */
+}
+
+.remove-set-btn {
+    background: #dc3545; /* Red background */
+    color: white; /* White cross */
+    border: none;
+    font-size: 16px;
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+    width: 24px; /* Same size as the complete checkbox */
+    height: 24px; /* Same size as the complete checkbox */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px; /* Box style with rounded corners */
+    transition: background-color 0.3s ease;
+}
+
+.remove-set-btn:hover {
+    background: #c82333; /* Darker red on hover */
+}
+
+.weight-input,
+.reps-input {
+    width: 80px;
+    padding: 4px 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+
+.add-set-btn {
+    background: #007bff;
+    color: white;
+    border: none;
+    padding: 5px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-top: 8px;
+}
+
+.add-set-btn:hover {
+    background: #0056b3;
 }
 
 .add-exercise-btn {
@@ -417,7 +488,6 @@ small {
     background: #f8f9fa;
 }
 
-/* Modal styles */
 .modal {
     display: none;
     position: fixed;
@@ -444,7 +514,6 @@ small {
     cursor: pointer;
 }
 
-/* Form controls */
 .form-control {
     width: 100%;
     padding: 8px;
@@ -453,7 +522,6 @@ small {
     margin-bottom: 10px;
 }
 
-/* Buttons */
 .btn {
     padding: 8px 16px;
     border: none;
@@ -470,41 +538,6 @@ small {
     background: #0056b3;
 }
 
-/* Exercise entry styles */
-.exercise-entry {
-    background: #f8f9fa;
-    padding: 15px;
-    border-radius: 4px;
-    margin-bottom: 15px;
-}
-
-.set-entry {
-    display: flex;
-    gap: 10px;
-    align-items: center;
-    margin-bottom: 10px;
-}
-
-.remove-set-btn {
-    padding: 5px 10px;
-    background: #dc3545;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-}
-
-.add-set-btn {
-    padding: 5px 10px;
-    background: #28a745;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    margin-top: 10px;
-}
-
-/* Navbar styles */
 nav {
     background-color: white;
     padding: 1rem;
@@ -548,14 +581,6 @@ nav a:hover {
     font-weight: bold;
 }
 
-.form-control {
-    width: 100%;
-    padding: 8px;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    box-sizing: border-box;
-}
-
 textarea.form-control {
     resize: vertical;
     min-height: 60px;
@@ -591,7 +616,7 @@ textarea.form-control {
     background-color: white;
     border-radius: 4px;
     box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-    z-index: 101; /* Ensure it's above the sticky bar */
+    z-index: 101;
 }
 
 .timer-container:hover {
@@ -613,7 +638,7 @@ textarea.form-control {
     border: 1px solid #dee2e6;
     border-radius: 4px;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    z-index: 102; /* Ensure menu is above everything */
+    z-index: 102;
     min-width: 150px;
 }
 
@@ -634,7 +659,7 @@ textarea.form-control {
 
 .timer-menu button:hover {
     background-color: #f8f9fa;
-    color: #007bff; /* Change color on hover */
+    color: #007bff;
 }
 
 .preferences-section {
@@ -643,16 +668,19 @@ textarea.form-control {
     border-radius: 5px;
     margin: 15px 0;
 }
+
 .preferences-section h3 {
     margin: 0 0 10px 0;
     font-size: 1em;
 }
+
 .preference-item {
     margin: 10px 0;
     display: flex;
     justify-content: space-between;
     align-items: center;
 }
+
 .unit-select {
     margin-left: 10px;
     padding: 5px;

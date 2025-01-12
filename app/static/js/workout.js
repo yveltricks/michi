@@ -100,25 +100,29 @@ function renderExercises() {
         exerciseDiv.className = 'exercise-entry';
         
         let setsHtml = exercise.sets.map((set, setIndex) => `
-            <div class="set-entry">
+            <div class="set-entry ${set.completed ? 'checked' : ''}">
                 <span>Set ${setIndex + 1}</span>
-                <input type="number" 
-                       step="0.1" 
-                       min="0" 
-                       value="${set.weight}" 
-                       onchange="updateSet(${exerciseIndex}, ${setIndex}, 'weight', this.value)" 
-                       placeholder="Weight (kg)"
-                       class="weight-input">
-                <input type="number" 
-                       min="1" 
-                       step="1" 
-                       value="${set.reps}" 
-                       onchange="updateSet(${exerciseIndex}, ${setIndex}, 'reps', this.value)" 
-                       placeholder="Reps"
-                       class="reps-input">
-                <button onclick="removeSet(${exerciseIndex}, ${setIndex})" class="remove-set-btn">
-                    Remove
-                </button>
+                <input type="number"
+                    step="0.1"
+                    min="0"
+                    value="${set.weight}"
+                    onchange="updateSet(${exerciseIndex}, ${setIndex}, 'weight', this.value)"
+                    placeholder="Weight (kg)"
+                    class="weight-input">
+                <input type="number"
+                    min="1"
+                    step="1"
+                    value="${set.reps}"
+                    onchange="updateSet(${exerciseIndex}, ${setIndex}, 'reps', this.value)"
+                    placeholder="Reps"
+                    class="reps-input">
+                <label class="set-complete-checkbox">
+                    <input type="checkbox"
+                        ${set.completed ? 'checked' : ''}
+                        onchange="toggleSetCompletion(${exerciseIndex}, ${setIndex})">
+                    <span class="checkmark"></span>
+                </label>
+                <button onclick="removeSet(${exerciseIndex}, ${setIndex})" class="remove-set-btn">×</button>
             </div>
         `).join('');
 
@@ -228,32 +232,24 @@ function completeWorkout() {
         return;
     }
 
-    // Filter out incomplete sets from the workout data
-    const processedWorkout = {
-        ...workoutData,
-        exercises: workoutData.exercises.map(exercise => ({
-            ...exercise,
-            sets: exercise.sets.filter(set => set.completed)
-        }))
-    };
+    // Filter out exercises with no completed sets
+    const completedExercises = workoutData.exercises.map(exercise => ({
+        ...exercise,
+        sets: exercise.sets.filter(set => set.completed)
+    })).filter(exercise => exercise.sets.length > 0);
 
-    const title = document.getElementById('workout-title').value.trim() || 'Workout';
-    const description = document.getElementById('workout-description').value;
-    const rating = document.getElementById('workout-rating').value;
-
-    const data = {
-        exercises: processedWorkout.exercises,
-        title: title,
-        description: description,
-        rating: rating,
-        duration: calculateWorkoutDuration()
-    };
-
-    // Only proceed if there are completed sets
-    if (!data.exercises.some(e => e.sets.length > 0)) {
+    if (completedExercises.length === 0) {
         alert("Please complete at least one set before finishing the workout.");
         return;
     }
+
+    const data = {
+        exercises: completedExercises,
+        title: document.getElementById('workout-title').value.trim() || 'Workout',
+        description: document.getElementById('workout-description').value,
+        rating: document.getElementById('workout-rating').value,
+        duration: calculateWorkoutDuration()
+    };
 
     fetch('/log-workout', {
         method: 'POST',
