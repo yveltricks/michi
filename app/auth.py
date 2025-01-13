@@ -135,3 +135,4 @@ def register_post():
         return redirect(url_for('auth.register'))
 
     return redirect(url_for('auth.login'))
+

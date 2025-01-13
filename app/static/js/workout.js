@@ -1,5 +1,72 @@
 // File: app/static/js/workout.js
 
+function addExerciseAndStayOpen(exerciseId, exerciseName) {
+    // Fetch previous values for this exercise
+    fetch(`/api/previous-values/${exerciseId}`)
+        .then(response => response.json())
+        .then(prevValues => {
+            const exercise = {
+                id: exerciseId,
+                name: exerciseName,
+                sets: [{
+                    weight: 0,
+                    reps: 0,
+                    completed: false,
+                    set_type: 'normal',
+                    prevWeight: prevValues.length > 0 ? prevValues[0].weight : null,
+                    prevReps: prevValues.length > 0 ? prevValues[0].reps : null,
+                    hasPrevious: prevValues.length > 0
+                }]
+            };
+            workoutData.exercises.push(exercise);
+            renderExercises();
+        });
+}
+
+let currentSetTypeSelection = { exerciseIndex: null, setIndex: null };
+
+const SET_TYPES = {
+    normal: { label: '', color: '#000000', displayName: 'Normal' },
+    warmup: { label: ' (W)', color: '#FFA500', displayName: 'Warm up' },
+    failure: { label: ' (F)', color: '#FF0000', displayName: 'Failure' },
+    drop: { label: ' (D)', color: '#800080', displayName: 'Drop' },
+    right: { label: ' (R)', color: '#008000', displayName: 'Right' },
+    left: { label: ' (L)', color: '#0000FF', displayName: 'Left' },
+    negative: { label: ' (N)', color: '#FF4500', displayName: 'Negative' },
+    partial: { label: ' (P)', color: '#4B0082', displayName: 'Partial' }
+};
+
+function showSetTypeModal(exerciseIndex, setIndex) {
+    console.log('Showing modal for:', exerciseIndex, setIndex); // Debug log
+    const modal = document.getElementById('set-type-modal');
+    const setTypeList = document.getElementById('set-type-list');
+    currentSetTypeSelection = { exerciseIndex, setIndex };
+
+    // Clear and populate the set type list
+    setTypeList.innerHTML = Object.entries(SET_TYPES).map(([type, info]) => `
+        <div class="set-type-option" data-type="${type}">
+            <div class="set-type-info">
+                <h4 style="color: ${info.color}">${info.displayName}${info.label}</h4>
+            </div>
+            <button class="select-btn">Select</button>
+        </div>
+    `).join('');
+
+    // Add click handlers for the options
+    setTypeList.querySelectorAll('.set-type-option').forEach(option => {
+        const selectBtn = option.querySelector('.select-btn');
+        selectBtn.addEventListener('click', () => {
+            const newType = option.dataset.type;
+            console.log('Selected type:', newType); // Debug log
+            workoutData.exercises[exerciseIndex].sets[setIndex].set_type = newType;
+            modal.style.display = 'none';
+            renderExercises();
+        });
+    });
+
+    modal.style.display = 'block';
+}
+
 // Store workout data
 let workoutData = {
     exercises: []
@@ -38,6 +105,7 @@ function addExercise(exerciseId, exerciseName) {
                     weight: 0,
                     reps: 0,
                     completed: false,
+                    set_type: 'normal',
                     prevWeight: prevValues.length > 0 ? prevValues[0].weight : null,
                     prevReps: prevValues.length > 0 ? prevValues[0].reps : null,
                     hasPrevious: prevValues.length > 0
@@ -46,6 +114,12 @@ function addExercise(exerciseId, exerciseName) {
             workoutData.exercises.push(exercise);
             renderExercises();
         });
+}
+
+// Add function to change set type
+function changeSetType(exerciseIndex, setIndex, newType) {
+    workoutData.exercises[exerciseIndex].sets[setIndex].set_type = newType;
+    renderExercises();
 }
 
 function loadPreviousValues(exerciseIndex, setIndex) {
@@ -66,23 +140,19 @@ function toggleSetCompletion(exerciseIndex, setIndex) {
 
 // Handle adding a new set to an exercise
 function addSet(exerciseIndex) {
-    const exercise = workoutData.exercises[exerciseIndex];
-    const setIndex = exercise.sets.length;
+    const lastSet = workoutData.exercises[exerciseIndex].sets[
+        workoutData.exercises[exerciseIndex].sets.length - 1
+    ];
     
-    // Fetch previous values for this set number
-    fetch(`/api/previous-values/${exercise.id}/${setIndex + 1}`)
-        .then(response => response.json())
-        .then(prevValue => {
-            exercise.sets.push({
-                weight: 0,
-                reps: 0,
-                completed: false,
-                prevWeight: prevValue ? prevValue.weight : null,
-                prevReps: prevValue ? prevValue.reps : null,
-                hasPrevious: !!prevValue
-            });
-            renderExercises();
-        });
+    workoutData.exercises[exerciseIndex].sets.push({
+        weight: 0,
+        reps: 0,
+        completed: false,
+        set_type: 'normal',
+        previousWeight: lastSet ? lastSet.weight : undefined,
+        previousReps: lastSet ? lastSet.reps : undefined
+    });
+    renderExercises();
 }
 
 // Handle updating set data
@@ -131,39 +201,39 @@ function renderExercises() {
         const exerciseDiv = document.createElement('div');
         exerciseDiv.className = 'exercise-entry';
 
-        let setsHtml = exercise.sets.map((set, setIndex) => `
-            <div class="set-entry ${set.completed ? 'checked' : ''}">
-                <div class="set-header">
-                    <span>Set ${setIndex + 1}</span>
-                    ${set.hasPrevious ? `
-                        <span class="previous-values" onclick="loadPreviousValues(${exerciseIndex}, ${setIndex})">
-                            Previous: ${set.prevWeight}kg × ${set.prevReps}
-                        </span>
-                    ` : '<span class="previous-values">No previous data</span>'}
+        let setsHtml = exercise.sets.map((set, setIndex) => {
+            const setType = SET_TYPES[set.set_type || 'normal'];
+            return `
+                <div class="set-entry ${set.completed ? 'checked' : ''}">
+                    <span class="set-label" 
+                          onclick="showSetTypeModal(${exerciseIndex}, ${setIndex})"
+                          style="color: ${setType.color}; cursor: pointer;">
+                        Set ${setIndex + 1}${setType.label}
+                    </span>
+                    <input type="number"
+                        step="0.1"
+                        min="0"
+                        value="${set.weight}"
+                        onchange="updateSet(${exerciseIndex}, ${setIndex}, 'weight', this.value)"
+                        placeholder="Weight (kg)"
+                        class="weight-input">
+                    <input type="number"
+                        min="1"
+                        step="1"
+                        value="${set.reps}"
+                        onchange="updateSet(${exerciseIndex}, ${setIndex}, 'reps', this.value)"
+                        placeholder="Reps"
+                        class="reps-input">
+                    <label class="set-complete-checkbox">
+                        <input type="checkbox"
+                            ${set.completed ? 'checked' : ''}
+                            onchange="toggleSetCompletion(${exerciseIndex}, ${setIndex})">
+                        <span class="checkmark"></span>
+                    </label>
+                    <button onclick="removeSet(${exerciseIndex}, ${setIndex})" class="remove-set-btn">×</button>
                 </div>
-                <input type="number"
-                    step="0.1"
-                    min="0"
-                    value="${set.weight}"
-                    onchange="updateSet(${exerciseIndex}, ${setIndex}, 'weight', this.value)"
-                    placeholder="Weight (kg)"
-                    class="weight-input">
-                <input type="number"
-                    min="1"
-                    step="1"
-                    value="${set.reps}"
-                    onchange="updateSet(${exerciseIndex}, ${setIndex}, 'reps', this.value)"
-                    placeholder="Reps"
-                    class="reps-input">
-                <label class="set-complete-checkbox">
-                    <input type="checkbox"
-                        ${set.completed ? 'checked' : ''}
-                        onchange="toggleSetCompletion(${exerciseIndex}, ${setIndex})">
-                    <span class="checkmark"></span>
-                </label>
-                <button onclick="removeSet(${exerciseIndex}, ${setIndex})" class="remove-set-btn">×</button>
-            </div>
-        `).join('');
+            `;
+        }).join('');
 
         exerciseDiv.innerHTML = `
             <h3>${exercise.name} (${formatSets(exercise.sets)})</h3>
@@ -176,88 +246,36 @@ function renderExercises() {
         `;
 
         container.appendChild(exerciseDiv);
-        
-        // Add input event listeners for decimal point fixing
-        exerciseDiv.querySelectorAll('.weight-input').forEach(input => {
-            input.addEventListener('input', function(e) {
-                const cursorPos = this.selectionStart;
-                const value = this.value;
-
-                // Ensure proper decimal input
-                if (value.includes('.')) {
-                    const parts = value.split('.');
-                    if (parts[0] === '') parts[0] = '0';
-                    this.value = parts[0] + '.' + (parts[1] || '');
-
-                    // Restore cursor position after decimal point
-                    if (cursorPos > parts[0].length) {
-                        this.setSelectionRange(cursorPos, cursorPos);
-                    }
-                }
-            });
-        });
     });
 }
 
-// Handle exercise modal
-document.addEventListener('DOMContentLoaded', function() {
-    const modal = document.getElementById('exercise-modal');
-    const btn = document.getElementById('add-exercise-btn');
-    const span = document.getElementsByClassName('close')[0];
-    const searchInput = document.getElementById('exercise-search');
-    const exerciseList = document.getElementById('exercise-list');
-
-    // Open modal
-    btn.onclick = function() {
-        modal.style.display = 'block';
-    }
-
-    // Close modal only when clicking close button
-    span.onclick = function() {
-        modal.style.display = 'none';
-    }
-
-    // Close modal when clicking outside
-    window.onclick = function(event) {
-        if (event.target == modal) {
-            modal.style.display = 'none';
+// Add this function to show/hide the set type menu
+function showSetTypeMenu(exerciseIndex, setIndex) {
+    const menuId = `set-type-menu-${exerciseIndex}-${setIndex}`;
+    const menu = document.getElementById(menuId);
+    
+    // Hide all other menus first
+    document.querySelectorAll('.set-type-menu').forEach(m => {
+        if (m.id !== menuId) {
+            m.style.display = 'none';
         }
-    }
+    });
+    
+    // Toggle this menu
+    menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+}
 
-    // Handle exercise search
-    searchInput.addEventListener('input', function() {
-        const searchTerm = this.value.toLowerCase();
-        const exercises = exerciseList.getElementsByClassName('exercise-option');
-
-        Array.from(exercises).forEach(exercise => {
-            const name = exercise.getElementsByTagName('h4')[0].textContent.toLowerCase();
-            exercise.style.display = name.includes(searchTerm) ? '' : 'none';
+// Add click event listener to close menus when clicking outside
+document.addEventListener('click', (e) => {
+    if (!e.target.closest('.set-type-label')) {
+        document.querySelectorAll('.set-type-menu').forEach(menu => {
+            menu.style.display = 'none';
         });
-    });
-
-    // Handle exercise selection WITHOUT closing modal
-    exerciseList.addEventListener('click', function(e) {
-        if (e.target.classList.contains('add-btn')) {
-            const exerciseDiv = e.target.closest('.exercise-option');
-            const exerciseId = exerciseDiv.dataset.id;
-            const exerciseName = exerciseDiv.dataset.name;
-            
-            // Add exercise without closing modal
-            addExercise(exerciseId, exerciseName);
-            
-            // Show feedback
-            const addButton = e.target;
-            const originalText = addButton.textContent;
-            addButton.textContent = 'Added!';
-            addButton.style.backgroundColor = '#4CAF50';
-            
-            setTimeout(() => {
-                addButton.textContent = 'Add';
-                addButton.style.backgroundColor = '#007bff';
-            }, 1000);
-        }
-    });
+    }
 });
+
+
+
 
 // Calculate workout duration
 function calculateWorkoutDuration() {

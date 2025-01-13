@@ -26,8 +26,23 @@
         <!-- Exercises will be dynamically added here -->
     </div>
 
+    <!-- Set Type Modal -->
+    <div id="set-type-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Select Set Type</h2>
+                <span class="close">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div id="set-type-list" class="set-type-options">
+                    <!-- Set types will be added here dynamically -->
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Exercise Selection Modal -->
-    <div id="exercise-modal" class="modal" style="display: none;">
+    <div id="exercise-modal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
                 <h2>Select Exercise</h2>
@@ -116,6 +131,7 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ url_for('static', filename='js/modal-handlers.js') }}"></script>
 <script src="{{ url_for('static', filename='js/workout.js') }}"></script>
 <script src="{{ url_for('static', filename='js/workout-timer.js') }}"></script>
 {% endblock %}

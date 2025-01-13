@@ -117,3 +117,59 @@
 .add-btn:hover {
     background-color: #0056b3;
 }
+
+/* File: app/static/css/modal.css */
+
+/* Add these styles to your existing modal.css file */
+
+.set-type-option {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px;
+    border-bottom: 1px solid #eee;
+}
+
+.set-type-info {
+    flex: 1;
+}
+
+.set-type-info h4 {
+    margin: 0;
+    padding: 0;
+}
+
+.select-btn {
+    width: 70px;  /* Fixed width for all buttons */
+    padding: 6px 12px;
+    font-size: 14px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-left: 10px;
+}
+
+.select-btn:hover {
+    background-color: #0056b3;
+}
+
+/* Make sure modal content doesn't stretch too wide on larger screens */
+.modal-content {
+    max-width: 600px;
+    width: 90%;
+    margin: 15% auto;
+    background-color: #fefefe;
+    padding: 20px;
+    border-radius: 5px;
+    position: relative;
+}
+
+/* Ensure modal takes full width on mobile */
+@media (max-width: 600px) {
+    .modal-content {
+        width: 95%;
+        margin: 10% auto;
+    }
+}

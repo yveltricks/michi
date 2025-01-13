@@ -167,6 +167,7 @@ class Set(db.Model):
     prev_weight = db.Column(db.Float)  # New column for previous weight
     prev_reps = db.Column(db.Integer)  # New column for previous reps
     has_previous = db.Column(db.Boolean, default=False)  # Flag to indicate if previous values exist
+    set_type = db.Column(db.String(20), default='normal')
 
     # Add relationships
     exercise = db.relationship('Exercise', backref='sets')

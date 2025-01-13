@@ -704,5 +704,141 @@ textarea.form-control {
 .set-header {
     display: flex;
     align-items: center;
+    gap: 10px;
     margin-bottom: 5px;
 }
+
+.set-type-selector {
+    position: relative;
+}
+
+.set-type-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    background: white;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    z-index: 1000;
+    min-width: 150px;
+}
+
+.set-type-option {
+    padding: 8px 12px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.set-type-option:hover {
+    background: #f5f5f5;
+}
+
+.previous-values {
+    font-size: 0.9em;
+    color: #666;
+    cursor: pointer;
+}
+
+.previous-values:hover {
+    text-decoration: underline;
+}
+
+.set-type-options {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 10px;
+}
+
+.set-type-option {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.set-type-option:hover {
+    background-color: #f5f5f5;
+}
+
+.set-type-info h4 {
+    margin: 0;
+    font-size: 16px;
+}
+
+.select-btn {
+    padding: 6px 12px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.select-btn:hover {
+    background-color: #0056b3;
+}
+
+.set-label {
+    font-weight: 500;
+    padding: 4px 8px;
+    border-radius: 4px;
+}
+
+.set-label:hover {
+    background-color: #f0f0f0;
+}
+
+.set-type-options {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 10px;
+}
+
+.set-type-option {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.set-type-option:hover {
+    background-color: #f5f5f5;
+}
+
+.set-type-info h4 {
+    margin: 0;
+    font-size: 16px;
+}
+
+.select-btn {
+    padding: 6px 12px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.select-btn:hover {
+    background-color: #0056b3;
+}
+
+.set-label {
+    padding: 4px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.set-label:hover {
+    background-color: #f0f0f0;
+}
+
