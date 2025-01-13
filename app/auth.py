@@ -1,11 +1,12 @@
 # This handles all my authentication routes (login, register, etc.)
 from flask import Blueprint, render_template, redirect, url_for, request, flash
 from flask_login import login_user, logout_user, login_required, current_user
-from werkzeug.security import generate_password_hash
+from werkzeug.security import generate_password_hash, check_password_hash
 from .models import User, Session, BodyweightLog 
 from sqlalchemy import desc
 from . import db
 from datetime import datetime  # Added this for utcnow()
+import re
 
 auth = Blueprint('auth', __name__)
 
@@ -136,3 +137,141 @@ def register_post():
 
     return redirect(url_for('auth.login'))
 
+@auth.route('/settings')
+@login_required
+def settings():
+    return render_template('settings.html')
+
+@auth.route('/update-preferences', methods=['POST'])
+@login_required
+def update_preferences():
+    if request.form.get('reset') == 'true':
+        # Reset to defaults
+        current_user.preferred_weight_unit = 'kg'
+        current_user.preferred_distance_unit = 'km'
+        current_user.preferred_measurement_unit = 'cm'
+        flash('Preferences reset to defaults!', 'success')
+    else:
+        # Update with new preferences
+        current_user.preferred_weight_unit = request.form.get('preferred_weight_unit', 'kg')
+        current_user.preferred_distance_unit = request.form.get('preferred_distance_unit', 'km')
+        current_user.preferred_measurement_unit = request.form.get('preferred_measurement_unit', 'cm')
+        flash('Preferences updated successfully!', 'success')
+    
+    try:
+        db.session.commit()
+    except:
+        db.session.rollback()
+        flash('Error updating preferences', 'error')
+    
+    return redirect(url_for('auth.settings'))
+
+@auth.route('/update-privacy', methods=['POST'])
+@login_required
+def update_privacy():
+    current_user.privacy_setting = request.form.get('privacy_setting', 'public')
+    
+    try:
+        db.session.commit()
+        flash('Privacy settings updated successfully!', 'success')
+    except:
+        db.session.rollback()
+        flash('Error updating privacy settings', 'error')
+    
+    return redirect(url_for('auth.settings'))
+
+
+    
+USERNAME_PATTERN = re.compile(r'^[a-zA-Z0-9_]{1,20}$')
+
+@auth.route('/change-username', methods=['POST'])
+@login_required
+def change_username():
+    new_username = request.form.get('new_username')
+    
+    # Validate username format
+    if not USERNAME_PATTERN.match(new_username):
+        flash('Username can only contain letters, numbers, and underscores (max 20 characters)')
+        return redirect(url_for('auth.settings'))
+    
+    # Check if username is taken
+    if User.query.filter_by(username=new_username).first():
+        flash('Username already taken')
+        return redirect(url_for('auth.settings'))
+    
+    try:
+        current_user.username = new_username
+        db.session.commit()
+        flash('Username updated successfully!', 'success')
+    except:
+        db.session.rollback()
+        flash('Error updating username', 'error')
+    
+    return redirect(url_for('auth.settings'))
+
+@auth.route('/change-password', methods=['POST'])
+@login_required
+def change_password():
+    current_password = request.form.get('current_password')
+    new_password = request.form.get('new_password')
+    confirm_password = request.form.get('confirm_password')
+    
+    # Verify current password
+    if not current_user.check_password(current_password):
+        flash('Current password is incorrect')
+        return redirect(url_for('auth.settings'))
+    
+    # Validate new password
+    if len(new_password) < 8 or len(new_password) > 60:
+        flash('Password must be between 8 and 60 characters')
+        return redirect(url_for('auth.settings'))
+    
+    # Confirm passwords match
+    if new_password != confirm_password:
+        flash('New passwords do not match')
+        return redirect(url_for('auth.settings'))
+    
+    try:
+        current_user.set_password(new_password)
+        db.session.commit()
+        flash('Password updated successfully!', 'success')
+    except:
+        db.session.rollback()
+        flash('Error updating password', 'error')
+    
+    return redirect(url_for('auth.settings'))
+
+@auth.route('/delete-account', methods=['POST'])
+@login_required
+def delete_account():
+    password = request.form.get('password')
+    
+    # Verify password
+    if not current_user.check_password(password):
+        flash('Incorrect password')
+        return redirect(url_for('auth.settings'))
+    
+    try:
+        # Check if user has more than one bodyweight log
+        if len(current_user.bodyweight_logs) <= 1:
+            flash('You must have at least one weight logged at all times')
+            return redirect(url_for('auth.settings'))
+        
+        # Delete all related data
+        Session.query.filter_by(user_id=current_user.id).delete()
+        BodyweightLog.query.filter_by(user_id=current_user.id).delete()
+        # Add other model deletions here as needed
+        
+        user_id = current_user.id
+        logout_user()  # Log out before deleting
+        
+        # Delete the user
+        User.query.filter_by(id=user_id).delete()
+        db.session.commit()
+        
+        flash('Your account has been deleted successfully', 'success')
+        return redirect(url_for('index'))
+    except Exception as e:
+        db.session.rollback()
+        flash('Error deleting account', 'error')
+        return redirect(url_for('auth.settings'))

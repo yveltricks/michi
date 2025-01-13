@@ -223,16 +223,20 @@ def bodyweight_tracking():
 @workout.route('/delete-weight/<int:log_id>', methods=['DELETE'])
 @login_required
 def delete_weight(log_id):
-    log = BodyweightLog.query.get_or_404(log_id)
+    # Check if this is the user's only weight entry
+    if BodyweightLog.query.filter_by(user_id=current_user.id).count() <= 1:
+        return jsonify({'success': False, 'error': 'You must have at least one weight logged at all times'})
     
-    # Check if the log belongs to the current user
-    if log.user_id != current_user.id:
-        return jsonify({'success': False, 'error': 'Unauthorized'}), 403
+    weight_log = BodyweightLog.query.get_or_404(log_id)
+    
+    # Verify the log belongs to the current user
+    if weight_log.user_id != current_user.id:
+        return jsonify({'success': False, 'error': 'Unauthorized'})
     
     try:
-        db.session.delete(log)
+        db.session.delete(weight_log)
         db.session.commit()
         return jsonify({'success': True})
-    except Exception as e:
+    except:
         db.session.rollback()
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'success': False, 'error': 'You must have at least one weight logged at all times'})

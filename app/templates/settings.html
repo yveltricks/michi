@@ -1,0 +1,127 @@
+{# File: app/templates/settings.html #}
+{% extends "base.html" %}
+
+{% block title %}Settings{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <h1 class="text-2xl font-bold mb-6">Account Settings</h1>
+
+    <!-- Account Information -->
+    <div class="bg-white p-6 rounded-lg shadow mb-6">
+        <h2 class="text-xl font-semibold mb-4">Account Information</h2>
+        
+        <!-- Change Username -->
+        <form method="POST" action="{{ url_for('auth.change_username') }}" class="mb-6">
+            <div class="mb-4">
+                <label class="block mb-2">New Username</label>
+                <input type="text" name="new_username" 
+                       pattern="^[a-zA-Z0-9_]{1,20}$" 
+                       title="Username can only contain letters, numbers, and underscores. Max 20 characters."
+                       class="form-input w-full" required>
+                <p class="text-sm text-gray-600 mt-1">Only letters, numbers, and underscores allowed. Max 20 characters.</p>
+            </div>
+            <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded">Change Username</button>
+        </form>
+
+        <!-- Change Password -->
+        <form method="POST" action="{{ url_for('auth.change_password') }}" class="mb-6">
+            <div class="mb-4">
+                <label class="block mb-2">Current Password</label>
+                <input type="password" name="current_password" class="form-input w-full" required>
+            </div>
+            <div class="mb-4">
+                <label class="block mb-2">New Password</label>
+                <input type="password" name="new_password" 
+                       maxlength="60" 
+                       minlength="8"
+                       class="form-input w-full" required>
+                <p class="text-sm text-gray-600 mt-1">8-60 characters</p>
+            </div>
+            <div class="mb-4">
+                <label class="block mb-2">Confirm New Password</label>
+                <input type="password" name="confirm_password" class="form-input w-full" required>
+            </div>
+            <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded">Change Password</button>
+        </form>
+    </div>
+
+    <!-- Unit Preferences -->
+    <div class="bg-white p-6 rounded-lg shadow mb-6">
+        <h2 class="text-xl font-semibold mb-4">Measurement Preferences</h2>
+        <form method="POST" action="{{ url_for('auth.update_preferences') }}">
+            <div class="grid gap-4">
+                <div>
+                    <label class="block mb-2">Weight Unit</label>
+                    <select name="preferred_weight_unit" class="form-select w-full">
+                        <option value="kg" {% if current_user.preferred_weight_unit == 'kg' %}selected{% endif %}>Kilograms (kg)</option>
+                        <option value="lbs" {% if current_user.preferred_weight_unit == 'lbs' %}selected{% endif %}>Pounds (lbs)</option>
+                    </select>
+                </div>
+                
+                <div>
+                    <label class="block mb-2">Distance Unit</label>
+                    <select name="preferred_distance_unit" class="form-select w-full">
+                        <option value="km" {% if current_user.preferred_distance_unit == 'km' %}selected{% endif %}>Kilometers (km)</option>
+                        <option value="mi" {% if current_user.preferred_distance_unit == 'mi' %}selected{% endif %}>Miles (mi)</option>
+                    </select>
+                </div>
+                
+                <div>
+                    <label class="block mb-2">Body Measurement Unit</label>
+                    <select name="preferred_measurement_unit" class="form-select w-full">
+                        <option value="cm" {% if current_user.preferred_measurement_unit == 'cm' %}selected{% endif %}>Centimeters (cm)</option>
+                        <option value="in" {% if current_user.preferred_measurement_unit == 'in' %}selected{% endif %}>Inches (in)</option>
+                    </select>
+                </div>
+            </div>
+            <div class="flex justify-between mt-4">
+                <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded">Save Preferences</button>
+                <button type="submit" name="reset" value="true" class="bg-gray-500 text-white px-4 py-2 rounded">Reset to Defaults</button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Privacy Settings -->
+    <div class="bg-white p-6 rounded-lg shadow mb-6">
+        <h2 class="text-xl font-semibold mb-4">Privacy Settings</h2>
+        <form method="POST" action="{{ url_for('auth.update_privacy') }}">
+            <div>
+                <label class="block mb-2">Profile Privacy</label>
+                <select name="privacy_setting" class="form-select w-full">
+                    <option value="public" {% if current_user.privacy_setting == 'public' %}selected{% endif %}>Public</option>
+                    <option value="private" {% if current_user.privacy_setting == 'private' %}selected{% endif %}>Private</option>
+                </select>
+            </div>
+            <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded mt-4">Update Privacy</button>
+        </form>
+    </div>
+
+    <!-- Account Actions -->
+    <div class="bg-white p-6 rounded-lg shadow">
+        <h2 class="text-xl font-semibold mb-4">Account Actions</h2>
+        <div class="space-y-4">
+            <a href="{{ url_for('auth.logout') }}" class="block w-full text-center bg-gray-500 text-white px-4 py-2 rounded">Logout</a>
+            
+            <!-- Delete Account Form -->
+            <form method="POST" action="{{ url_for('auth.delete_account') }}" id="deleteAccountForm" class="mt-4">
+                <div class="mb-4">
+                    <label class="block mb-2">Confirm Password to Delete Account</label>
+                    <input type="password" name="password" class="form-input w-full" required>
+                </div>
+                <button type="submit" class="w-full bg-red-500 text-white px-4 py-2 rounded">Delete Account</button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('deleteAccountForm').addEventListener('submit', function(e) {
+    if (!confirm('Are you sure you want to delete your account? This action cannot be undone.')) {
+        e.preventDefault();
+    }
+});
+</script>
+{% endblock %}
