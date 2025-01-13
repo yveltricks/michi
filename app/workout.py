@@ -1,8 +1,7 @@
-# Create this file at "app/workout.py"
+# File: app/workout.py
 
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import login_required, current_user
-from .models import Exercise, Session, User
 from .models import Exercise, Session, User, BodyweightLog, Set
 from . import db
 import json
@@ -27,6 +26,11 @@ def log_workout():
     data = request.get_json()
     exercises_data = data.get('exercises', [])
 
+    # Get user's latest bodyweight for volume calculations
+    latest_bodyweight = BodyweightLog.query.filter_by(user_id=current_user.id)\
+        .order_by(BodyweightLog.date.desc()).first()
+    bodyweight = latest_bodyweight.weight if latest_bodyweight else None
+
     # Create new session
     new_session = Session(
         user_id=current_user.id,
@@ -37,38 +41,47 @@ def log_workout():
         session_rating=data.get('rating', 5),
         photo=data.get('photo_url', None)
     )
-    
+
     db.session.add(new_session)
-    db.session.flush()  # This gets us the new_session.id
+    db.session.flush()  # Get new_session.id
 
     total_volume = 0
     formatted_exercises = []
 
     # Process each exercise and its sets
-    for exercise_idx, exercise in enumerate(exercises_data):
-        exercise_sets = [set for set in exercise['sets'] if set.get('completed', False)]
-        if exercise_sets:  # Only process exercises with completed sets
-            formatted_exercises.append({
-                'name': exercise['name'],
-                'sets': len(exercise_sets)
-            })
+    for exercise_data in exercises_data:
+        exercise = Exercise.query.get(exercise_data['id'])
+        if not exercise:
+            continue
 
-            # Create Set records for each completed set
-            for set_idx, set_data in enumerate(exercise_sets):
-                # Calculate volume for this set
-                set_volume = set_data.get('weight', 0) * set_data.get('reps', 0)
-                total_volume += set_volume
+        completed_sets = [set for set in exercise_data['sets'] if set.get('completed', False)]
+        if not completed_sets:
+            continue
 
-                # Create new Set record
-                new_set = Set(
-                    exercise_id=int(exercise['id']),
-                    session_id=new_session.id,
-                    weight=set_data.get('weight', 0),
-                    reps=set_data.get('reps', 0),
-                    completed=True,
-                    order=set_idx  # Store the order of the set
-                )
-                db.session.add(new_set)
+        formatted_exercises.append({
+            'name': exercise.name,
+            'sets': len(completed_sets)
+        })
+
+        # Create Set records and calculate volume
+        for set_idx, set_data in enumerate(completed_sets):
+            set_volume = exercise.calculate_volume(set_data, bodyweight)
+            total_volume += set_volume
+
+            # Create new Set record with all fields
+            new_set = Set(
+                exercise_id=exercise.id,
+                session_id=new_session.id,
+                completed=True,
+                order=set_idx,
+                set_type=set_data.get('set_type', 'normal')
+            )
+
+            # Add all relevant fields based on exercise type
+            for field in exercise.get_input_fields():
+                setattr(new_set, field, set_data.get(field, 0))
+
+            db.session.add(new_set)
 
     # Update session with total volume and exercise data
     new_session.volume = total_volume
@@ -192,6 +205,38 @@ def get_exercises():
         'muscles_worked': e.muscles_worked
     } for e in exercises])
 
+@workout.route('/api/exercise-details/<int:exercise_id>')
+@login_required
+def get_exercise_details(exercise_id):
+    exercise = Exercise.query.get_or_404(exercise_id)
+    
+    # Get user's latest bodyweight if needed for calculations
+    latest_bodyweight = None
+    if exercise.input_type in ['bodyweight_reps', 'weighted_bodyweight', 'assisted_bodyweight']:
+        bodyweight_log = BodyweightLog.query.filter_by(user_id=current_user.id)\
+            .order_by(BodyweightLog.date.desc()).first()
+        if bodyweight_log:
+            latest_bodyweight = bodyweight_log.weight
+
+    # Get previous values
+    previous_set = Set.query\
+        .join(Session)\
+        .filter(
+            Session.user_id == current_user.id,
+            Set.exercise_id == exercise_id,
+            Set.completed == True
+        )\
+        .order_by(Session.session_date.desc())\
+        .first()
+
+    return jsonify({
+        'input_type': exercise.input_type,
+        'units': exercise.get_units(),
+        'fields': exercise.get_input_fields(),
+        'latest_bodyweight': latest_bodyweight,
+        'previousValues': previous_set.to_dict() if previous_set else None
+    })
+
 @workout.route('/log-bodyweight', methods=['POST'])
 @login_required
 def log_bodyweight():
@@ -239,4 +284,4 @@ def delete_weight(log_id):
         return jsonify({'success': True})
     except:
         db.session.rollback()
-        return jsonify({'success': False, 'error': 'You must have at least one weight logged at all times'})
+        return jsonify({'success': False, 'error': 'Error deleting weight entry'})

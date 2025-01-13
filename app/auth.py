@@ -2,13 +2,23 @@
 from flask import Blueprint, render_template, redirect, url_for, request, flash
 from flask_login import login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
-from .models import User, Session, BodyweightLog 
+from .models import User, Session, BodyweightLog
 from sqlalchemy import desc
 from . import db
-from datetime import datetime  # Added this for utcnow()
+from datetime import datetime, timedelta
+from dataclasses import dataclass
 import re
 
+@dataclass
+class YearRange:
+    start: int
+    end: int
+
 auth = Blueprint('auth', __name__)
+
+# Add this after USERNAME_PATTERN:
+PASSWORD_PATTERN = re.compile(r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,200}$')
+USERNAME_PATTERN = re.compile(r'^[a-zA-Z0-9_]{1,20}$')
 
 @auth.route('/home')
 @login_required
@@ -54,7 +64,15 @@ def logout():
 
 @auth.route('/register')
 def register():
-    return render_template('register.html')
+    current_year = datetime.utcnow().year
+    # Calculate year range for the dropdown
+    # Start from current_year - 150 (oldest possible age)
+    # End at current_year - 5 (minimum age requirement)
+    year_range = YearRange(
+        start=current_year - 150,
+        end=current_year - 5
+    )
+    return render_template('register.html', year_range=year_range)
 
 @auth.route('/register', methods=['POST'])
 def register_post():
@@ -63,50 +81,84 @@ def register_post():
     email = request.form.get('email')
     username = request.form.get('username')
     password = request.form.get('password')
-    privacy_setting = request.form.get('privacy_setting', 'public')
+    gender = request.form.get('gender')
     
-    # Get unit preferences
-    preferred_weight_unit = request.form.get('preferred_weight_unit', 'kg')
-    preferred_distance_unit = request.form.get('preferred_distance_unit', 'km')
-    preferred_measurement_unit = request.form.get('preferred_measurement_unit', 'cm')
-    
-    # Get bodyweight and its unit
-    bodyweight = request.form.get('bodyweight')
-    weight_unit = request.form.get('weight_unit', 'kg')
-
-    # Validate the bodyweight
+    # Get bodyweight data
     try:
-        bodyweight = float(bodyweight)
-        if bodyweight <= 0:
-            flash('Please enter a valid body weight')
-            return redirect(url_for('auth.register'))
-            
-        # Convert weight to kg if entered in lbs
+        bodyweight = float(request.form.get('bodyweight'))
+        weight_unit = request.form.get('weight_unit')
+        # Convert to kg if in lbs
         if weight_unit == 'lbs':
-            bodyweight = bodyweight * 0.45359237  # Convert lbs to kg
-            
+            bodyweight = bodyweight * 0.45359237
     except (ValueError, TypeError):
         flash('Please enter a valid body weight')
         return redirect(url_for('auth.register'))
+    
+    # Get birthday components
+    birth_day = request.form.get('birth_day')
+    birth_month = request.form.get('birth_month')
+    birth_year = request.form.get('birth_year')
+    
+    try:
+        birthday = datetime(int(birth_year), int(birth_month), int(birth_day))
+    except (ValueError, TypeError):
+        flash('Please enter a valid birth date')
+        return redirect(url_for('auth.register'))
 
+    # Validate username format
+    if not USERNAME_PATTERN.match(username):
+        flash('Username can only contain letters, numbers, and underscores (max 20 characters)')
+        return redirect(url_for('auth.register'))
+
+    # Validate password format
+    if not PASSWORD_PATTERN.match(password):
+        flash('Password must be between 8 and 200 characters and contain at least one uppercase letter, one lowercase letter, and one number')
+        return redirect(url_for('auth.register'))
+
+    # Validate gender
+    if gender not in ['male', 'female']:
+        flash('Please select a valid gender')
+        return redirect(url_for('auth.register'))
+
+    # Validate birthday
+    today = datetime.utcnow()
+    age = today.year - birthday.year - ((today.month, today.day) < (birthday.month, birthday.day))
+    
+    if age < 5:
+        flash('You must be at least 5 years old to register')
+        return redirect(url_for('auth.register'))
+    
+    if age > 150:
+        flash('Please enter a valid birth date')
+        return redirect(url_for('auth.register'))
+    
+    if birthday > today:
+        flash('Birth date cannot be in the future')
+        return redirect(url_for('auth.register'))
+
+    # Get preferences
+    privacy_setting = request.form.get('privacy_setting', 'public')
+    preferred_weight_unit = request.form.get('preferred_weight_unit', 'kg')
+    preferred_distance_unit = request.form.get('preferred_distance_unit', 'km')
+    preferred_measurement_unit = request.form.get('preferred_measurement_unit', 'cm')
+
+    # Check if email or username already exists
     if User.query.filter_by(email=email).first():
-        flash('Email already exists')
+        flash('Email address is already registered')
         return redirect(url_for('auth.register'))
-        
+    
     if User.query.filter_by(username=username).first():
-        flash('Username already exists')
-        return redirect(url_for('auth.register'))
-        
-    if len(password) < 8:
-        flash('Password must be at least 8 characters long')
+        flash('Username is already taken')
         return redirect(url_for('auth.register'))
 
-    # Create new user with unit preferences
+    # Create new user
     new_user = User(
         first_name=first_name,
         last_name=last_name,
         email=email,
         username=username,
+        gender=gender,
+        birthday=birthday,
         privacy_setting=privacy_setting,
         level=1,
         exp=0,
@@ -116,26 +168,26 @@ def register_post():
     )
     new_user.set_password(password)
 
-    # Add the user first
-    db.session.add(new_user)
-    db.session.flush()  # This gets us the user.id
-
-    # Create initial bodyweight log (always stored in kg)
-    initial_weight = BodyweightLog(
-        user_id=new_user.id,
-        weight=bodyweight,  # Already converted to kg if needed
-        date=datetime.utcnow()
-    )
-    db.session.add(initial_weight)
-
     try:
+        # Add the user first
+        db.session.add(new_user)
+        db.session.flush()  # This gets us the user.id
+
+        # Create initial bodyweight log
+        initial_weight = BodyweightLog(
+            user_id=new_user.id,
+            weight=bodyweight,
+            date=datetime.utcnow()
+        )
+        db.session.add(initial_weight)
         db.session.commit()
+        
+        flash('Registration successful! Please log in.')
+        return redirect(url_for('auth.login'))
     except Exception as e:
         db.session.rollback()
-        flash('An error occurred. Please try again.')
+        flash('An error occurred during registration. Please try again.')
         return redirect(url_for('auth.register'))
-
-    return redirect(url_for('auth.login'))
 
 @auth.route('/settings')
 @login_required
@@ -180,10 +232,6 @@ def update_privacy():
     
     return redirect(url_for('auth.settings'))
 
-
-    
-USERNAME_PATTERN = re.compile(r'^[a-zA-Z0-9_]{1,20}$')
-
 @auth.route('/change-username', methods=['POST'])
 @login_required
 def change_username():
@@ -196,16 +244,21 @@ def change_username():
     
     # Check if username is taken
     if User.query.filter_by(username=new_username).first():
-        flash('Username already taken')
+        flash('This username is already taken')
+        return redirect(url_for('auth.settings'))
+    
+    # Check if it's the same as current username
+    if current_user.username == new_username:
+        flash('This is already your current username')
         return redirect(url_for('auth.settings'))
     
     try:
         current_user.username = new_username
         db.session.commit()
-        flash('Username updated successfully!', 'success')
+        flash('Username successfully updated to: ' + new_username, 'success')
     except:
         db.session.rollback()
-        flash('Error updating username', 'error')
+        flash('An error occurred while updating username', 'error')
     
     return redirect(url_for('auth.settings'))
 
@@ -215,22 +268,22 @@ def change_password():
     current_password = request.form.get('current_password')
     new_password = request.form.get('new_password')
     confirm_password = request.form.get('confirm_password')
-    
+
     # Verify current password
     if not current_user.check_password(current_password):
         flash('Current password is incorrect')
         return redirect(url_for('auth.settings'))
-    
-    # Validate new password
-    if len(new_password) < 8 or len(new_password) > 60:
-        flash('Password must be between 8 and 60 characters')
+
+    # Validate new password format
+    if not PASSWORD_PATTERN.match(new_password):
+        flash('Password must be between 8 and 200 characters and contain at least one uppercase letter, one lowercase letter, and one number')
         return redirect(url_for('auth.settings'))
-    
+
     # Confirm passwords match
     if new_password != confirm_password:
         flash('New passwords do not match')
         return redirect(url_for('auth.settings'))
-    
+
     try:
         current_user.set_password(new_password)
         db.session.commit()
@@ -238,7 +291,7 @@ def change_password():
     except:
         db.session.rollback()
         flash('Error updating password', 'error')
-    
+
     return redirect(url_for('auth.settings'))
 
 @auth.route('/delete-account', methods=['POST'])
@@ -252,26 +305,24 @@ def delete_account():
         return redirect(url_for('auth.settings'))
     
     try:
-        # Check if user has more than one bodyweight log
-        if len(current_user.bodyweight_logs) <= 1:
-            flash('You must have at least one weight logged at all times')
-            return redirect(url_for('auth.settings'))
-        
-        # Delete all related data
-        Session.query.filter_by(user_id=current_user.id).delete()
-        BodyweightLog.query.filter_by(user_id=current_user.id).delete()
-        # Add other model deletions here as needed
-        
         user_id = current_user.id
-        logout_user()  # Log out before deleting
         
-        # Delete the user
-        User.query.filter_by(id=user_id).delete()
+        # Delete all related data first
+        BodyweightLog.query.filter_by(user_id=user_id).delete()
+        Session.query.filter_by(user_id=user_id).delete()
+        # Add any other related data deletions here
+        
+        # Now delete the user
+        db.session.delete(current_user)
         db.session.commit()
         
-        flash('Your account has been deleted successfully', 'success')
+        # Log out the user
+        logout_user()
+        
+        flash('Your account has been permanently deleted')
         return redirect(url_for('index'))
     except Exception as e:
+        print(f"Error deleting account: {str(e)}")  # For debugging
         db.session.rollback()
-        flash('Error deleting account', 'error')
+        flash('An error occurred while deleting your account')
         return redirect(url_for('auth.settings'))

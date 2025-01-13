@@ -27,6 +27,8 @@ class User(UserMixin, db.Model):
     streak = db.Column(db.Integer, default=0)
     exp = db.Column(db.Integer, default=0)
     profile_pic = db.Column(db.String(200))
+    gender = db.Column(db.String(10))
+    birthday = db.Column(db.DateTime)
     
     # Updated unit preferences
     preferred_weight_unit = db.Column(db.String(10), default='kg')
@@ -95,10 +97,92 @@ class Exercise(db.Model):
     name = db.Column(db.String(100), nullable=False)
     equipment = db.Column(db.String(100))
     muscles_worked = db.Column(db.String(200))
-    exercise_type = db.Column(db.String(20))
+    exercise_type = db.Column(db.String(20))  # Updated to include more specific types
+    input_type = db.Column(db.String(20), nullable=False)  # New field
     user_created = db.Column(db.Boolean, default=False)
     created_by = db.Column(db.Integer, db.ForeignKey('user.id'))
     photo = db.Column(db.String(200))
+
+    # Constants for exercise input types
+    INPUT_TYPES = {
+        'weight_reps': {
+            'fields': ['weight', 'reps'],
+            'volume_formula': 'weight * reps',
+            'units': {'weight': 'kg', 'reps': 'reps'}
+        },
+        'bodyweight_reps': {
+            'fields': ['reps'],
+            'volume_formula': 'bodyweight * reps',
+            'units': {'reps': 'reps'}
+        },
+        'weighted_bodyweight': {
+            'fields': ['additional_weight', 'reps'],
+            'volume_formula': '(bodyweight + additional_weight) * reps',
+            'units': {'additional_weight': 'kg', 'reps': 'reps'}
+        },
+        'assisted_bodyweight': {
+            'fields': ['assistance_weight', 'reps'],
+            'volume_formula': '(bodyweight - assistance_weight) * reps',
+            'units': {'assistance_weight': 'kg', 'reps': 'reps'}
+        },
+        'duration': {
+            'fields': ['time'],
+            'volume_formula': None,
+            'units': {'time': 'seconds'}
+        },
+        'duration_weight': {
+            'fields': ['weight', 'time'],
+            'volume_formula': None,
+            'units': {'weight': 'kg', 'time': 'seconds'}
+        },
+        'distance_duration': {
+            'fields': ['distance', 'time'],
+            'volume_formula': None,
+            'units': {'distance': 'km', 'time': 'seconds'}
+        },
+        'weight_distance': {
+            'fields': ['weight', 'distance'],
+            'volume_formula': 'weight * distance',
+            'units': {'weight': 'kg', 'distance': 'km'}
+        }
+    }
+
+    def get_input_fields(self):
+        """Return the required input fields for this exercise type"""
+        return self.INPUT_TYPES.get(self.input_type, {}).get('fields', [])
+
+    def get_units(self):
+        """Return the units for each field"""
+        return self.INPUT_TYPES.get(self.input_type, {}).get('units', {})
+
+    def calculate_volume(self, set_data, bodyweight=None):
+        """Calculate volume based on exercise type and set data"""
+        input_type = self.INPUT_TYPES.get(self.input_type)
+        if not input_type or not input_type['volume_formula']:
+            return 0
+
+        if self.input_type == 'bodyweight_reps':
+            if not bodyweight:
+                return 0
+            return bodyweight * set_data.get('reps', 0)
+            
+        elif self.input_type == 'weighted_bodyweight':
+            if not bodyweight:
+                return 0
+            return (bodyweight + set_data.get('additional_weight', 0)) * set_data.get('reps', 0)
+            
+        elif self.input_type == 'assisted_bodyweight':
+            if not bodyweight:
+                return 0
+            return (bodyweight - set_data.get('assistance_weight', 0)) * set_data.get('reps', 0)
+            
+        elif self.input_type == 'weight_reps':
+            return set_data.get('weight', 0) * set_data.get('reps', 0)
+            
+        elif self.input_type == 'weight_distance':
+            return set_data.get('weight', 0) * set_data.get('distance', 0)
+            
+        return 0
 
 class Routine(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -160,15 +244,40 @@ class Set(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     exercise_id = db.Column(db.Integer, db.ForeignKey('exercise.id'), nullable=False)
     session_id = db.Column(db.Integer, db.ForeignKey('session.id'), nullable=False)
-    weight = db.Column(db.Float)
-    reps = db.Column(db.Integer)
     completed = db.Column(db.Boolean, default=False)
-    order = db.Column(db.Integer)  # To maintain set order
-    prev_weight = db.Column(db.Float)  # New column for previous weight
-    prev_reps = db.Column(db.Integer)  # New column for previous reps
-    has_previous = db.Column(db.Boolean, default=False)  # Flag to indicate if previous values exist
+    order = db.Column(db.Integer)
     set_type = db.Column(db.String(20), default='normal')
 
-    # Add relationships
+    # Fields for weight_reps
+    weight = db.Column(db.Float)
+    reps = db.Column(db.Integer)
+
+    # Fields for weighted_bodyweight
+    additional_weight = db.Column(db.Float)
+
+    # Fields for assisted_bodyweight
+    assistance_weight = db.Column(db.Float)
+
+    # Fields for duration-based exercises
+    time = db.Column(db.Integer)  # Duration in seconds
+
+    # Fields for distance-based exercises
+    distance = db.Column(db.Float)  # Distance in kilometers
+
+    # Relationships
     exercise = db.relationship('Exercise', backref='sets')
     session = db.relationship('Session', backref='sets')
+
+    def to_dict(self):
+        """Convert set data to dictionary based on exercise type"""
+        exercise = self.exercise
+        data = {
+            'completed': self.completed,
+            'set_type': self.set_type
+        }
+        
+        # Add relevant fields based on exercise type
+        for field in exercise.get_input_fields():
+            data[field] = getattr(self, field)
+            
+        return data

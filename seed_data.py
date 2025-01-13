@@ -14,11 +14,13 @@ from app.models import User, Session, Exercise, Routine, Measurement, Goal, Stat
 def create_sample_exercises():
     """Create a list of common exercises"""
     exercises = [
+        # Existing exercises
         {
             'name': 'Bench Press',
             'equipment': 'Barbell',
             'muscles_worked': 'Chest, Triceps, Shoulders',
             'exercise_type': 'strength',
+            'input_type': 'weight_reps',
             'photo': 'bench_press.jpg'
         },
         {
@@ -26,20 +28,23 @@ def create_sample_exercises():
             'equipment': 'Barbell',
             'muscles_worked': 'Quadriceps, Hamstrings, Glutes',
             'exercise_type': 'strength',
+            'input_type': 'weight_reps',
             'photo': 'squat.jpg'
         },
         {
             'name': 'Deadlift',
             'equipment': 'Barbell',
-            'muscles_worked': 'Back, Hamstrings, Glutes',
+            'muscles_worked': 'Lower Back, Hamstrings, Glutes',
             'exercise_type': 'strength',
+            'input_type': 'weight_reps',
             'photo': 'deadlift.jpg'
         },
         {
             'name': 'Pull-ups',
             'equipment': 'Pull-up Bar',
-            'muscles_worked': 'Back, Biceps',
+            'muscles_worked': 'Lats, Biceps',
             'exercise_type': 'strength',
+            'input_type': 'bodyweight_reps',
             'photo': 'pullups.jpg'
         },
         {
@@ -47,13 +52,15 @@ def create_sample_exercises():
             'equipment': 'None',
             'muscles_worked': 'Full Body',
             'exercise_type': 'cardio',
+            'input_type': 'distance_duration',
             'photo': 'running.jpg'
         },
         {
             'name': 'Dumbbell Rows',
             'equipment': 'Dumbbells',
-            'muscles_worked': 'Back, Biceps',
+            'muscles_worked': 'Upper Back, Biceps',
             'exercise_type': 'strength',
+            'input_type': 'weight_reps',
             'photo': 'dumbbell_rows.jpg'
         },
         {
@@ -61,6 +68,7 @@ def create_sample_exercises():
             'equipment': 'None',
             'muscles_worked': 'Chest, Triceps, Shoulders',
             'exercise_type': 'strength',
+            'input_type': 'bodyweight_reps',
             'photo': 'pushups.jpg'
         },
         {
@@ -68,6 +76,7 @@ def create_sample_exercises():
             'equipment': 'Dumbbells',
             'muscles_worked': 'Shoulders, Triceps',
             'exercise_type': 'strength',
+            'input_type': 'weight_reps',
             'photo': 'shoulder_press.jpg'
         },
         {
@@ -75,6 +84,7 @@ def create_sample_exercises():
             'equipment': 'Machine',
             'muscles_worked': 'Quadriceps, Hamstrings, Glutes',
             'exercise_type': 'strength',
+            'input_type': 'weight_reps',
             'photo': 'leg_press.jpg'
         },
         {
@@ -82,10 +92,92 @@ def create_sample_exercises():
             'equipment': 'Dumbbells',
             'muscles_worked': 'Biceps',
             'exercise_type': 'strength',
+            'input_type': 'weight_reps',
             'photo': 'bicep_curls.jpg'
+        },
+        {
+            'name': 'Lat Pulldown',
+            'equipment': 'Cable Machine',
+            'muscles_worked': 'Lats, Biceps',
+            'exercise_type': 'strength',
+            'input_type': 'weight_reps',
+            'photo': 'lat_pulldown.jpg'
+        },
+        {
+            'name': 'Hip Abduction',
+            'equipment': 'Machine',
+            'muscles_worked': 'Abductors',
+            'exercise_type': 'strength',
+            'input_type': 'weight_reps',
+            'photo': 'hip_abduction.jpg'
+        },
+        {
+            'name': 'Hip Adduction',
+            'equipment': 'Machine',
+            'muscles_worked': 'Adductors',
+            'exercise_type': 'strength',
+            'input_type': 'weight_reps',
+            'photo': 'hip_adduction.jpg'
+        },
+        {
+            'name': 'Back Extension',
+            'equipment': 'Machine',
+            'muscles_worked': 'Lower Back',
+            'exercise_type': 'strength',
+            'input_type': 'weight_reps',
+            'photo': 'back_extension.jpg'
+        },
+        {
+            'name': 'Bent Over Rows',
+            'equipment': 'Barbell',
+            'muscles_worked': 'Upper Back, Lats',
+            'exercise_type': 'strength',
+            'input_type': 'weight_reps',
+            'photo': 'bent_over_rows.jpg'
+        },
+                {
+            'name': 'Weighted Pull-ups',
+            'equipment': 'Pull-up Bar, Weight Belt',
+            'muscles_worked': 'Lats, Biceps',
+            'exercise_type': 'strength',
+            'input_type': 'weighted_bodyweight',
+            'photo': 'weighted_pullups.jpg'
+        },
+        {
+            'name': 'Assisted Pull-ups',
+            'equipment': 'Assisted Pull-up Machine',
+            'muscles_worked': 'Lats, Biceps',
+            'exercise_type': 'strength',
+            'input_type': 'assisted_bodyweight',
+            'photo': 'assisted_pullups.jpg'
+        },
+        {
+            'name': 'Plank',
+            'equipment': 'None',
+            'muscles_worked': 'Abdominals',
+            'exercise_type': 'strength',
+            'input_type': 'duration',
+            'photo': 'plank.jpg'
+        },
+        {
+            'name': 'Weighted Plank',
+            'equipment': 'Weight Plate',
+            'muscles_worked': 'Abdominals',
+            'exercise_type': 'strength',
+            'input_type': 'duration_weight',
+            'photo': 'weighted_plank.jpg'
+        },
+        {
+            'name': 'Farmers Walk',
+            'equipment': 'Dumbbells',
+            'muscles_worked': 'Forearms, Traps, Shoulders',
+            'exercise_type': 'strength',
+            'input_type': 'weight_distance',
+            'photo': 'farmers_walk.jpg'
         }
     ]
-    
+
+
     created_exercises = []
     for exercise_data in exercises:
         exercise = Exercise(
@@ -93,19 +185,20 @@ def create_sample_exercises():
             equipment=exercise_data['equipment'],
             muscles_worked=exercise_data['muscles_worked'],
             exercise_type=exercise_data['exercise_type'],
+            input_type=exercise_data['input_type'],
             photo=exercise_data['photo'],
             user_created=False
         )
         db.session.add(exercise)
         created_exercises.append(exercise)
-    
+
     return created_exercises
 
 def create_sample_users():
     """Create 10 sample users with varied data"""
     first_names = ['John', 'Emma', 'Michael', 'Sarah', 'David', 'Lisa', 'James', 'Anna', 'Robert', 'Maria']
     last_names = ['Smith', 'Johnson', 'Williams', 'Brown', 'Jones', 'Garcia', 'Miller', 'Davis', 'Rodriguez', 'Martinez']
-    
+
     users = []
     for i in range(10):
         exp = random.randint(100, 3000)
@@ -143,7 +236,7 @@ def create_sample_users():
         db.session.add(initial_weight)
 
         users.append(user)
-    
+
     db.session.commit()  # Commit users and bodyweight logs
 
     # Create some follow relationships
@@ -151,15 +244,15 @@ def create_sample_users():
         # Calculate maximum number of users that can be followed (excluding self)
         max_follows = min(7, len(users) - 1)  # Can't follow more users than exist (minus self)
         min_follows = min(3, max_follows)  # Ensure minimum doesn't exceed maximum
-        
+
         # Each user follows a random number of users between min_follows and max_follows
         num_to_follow = random.randint(min_follows, max_follows)
         available_users = [u for u in users if u != user]
         to_follow = random.sample(available_users, num_to_follow)
-        
+
         for followed_user in to_follow:
             user.following.append(followed_user)
-    
+
     return users
 
 def create_sample_routines(users, exercises):
@@ -167,7 +260,7 @@ def create_sample_routines(users, exercises):
     routine_names = ['Push Day', 'Pull Day', 'Leg Day', 'Full Body', 'Upper Body']
     levels = ['beginner', 'intermediate', 'advanced']
     goals = ['strength', 'hypertrophy', 'endurance']
-    
+
     for user in users:
         num_routines = random.randint(1, 3)
         for _ in range(num_routines):
@@ -180,7 +273,7 @@ def create_sample_routines(users, exercises):
                     'reps': f'{random.randint(8, 12)}-{random.randint(12, 15)}',
                     'rest': random.randint(60, 120)
                 })
-            
+
             routine = Routine(
                 user_id=user.id,
                 name=random.choice(routine_names),
@@ -201,20 +294,54 @@ def create_sample_sessions(users, exercises):
                 session_exercises = random.sample(exercises, random.randint(3, 6))
                 exercise_data = []
                 for exercise in session_exercises:
-                    if exercise.exercise_type == 'strength':
+                    if exercise.input_type == 'weight_reps':
                         exercise_data.append({
                             'exercise_id': exercise.id,
                             'sets': random.randint(3, 5),
                             'reps': random.randint(8, 12),
                             'weight': random.randint(20, 100)
                         })
-                    else:  # cardio
+                    elif exercise.input_type == 'bodyweight_reps':
                         exercise_data.append({
                             'exercise_id': exercise.id,
-                            'duration': random.randint(15, 60),
-                            'distance': random.randint(2, 10)
+                            'sets': random.randint(3, 5),
+                            'reps': random.randint(8, 12)
                         })
-                
+                    elif exercise.input_type == 'weighted_bodyweight':
+                        exercise_data.append({
+                            'exercise_id': exercise.id,
+                            'sets': random.randint(3, 5),
+                            'reps': random.randint(8, 12),
+                            'additional_weight': random.randint(5, 20)
+                        })
+                    elif exercise.input_type == 'assisted_bodyweight':
+                        exercise_data.append({
+                            'exercise_id': exercise.id,
+                            'sets': random.randint(3, 5),
+                            'reps': random.randint(8, 12),
+                            'assistance_weight': random.randint(5, 20)
+                        })
+                    elif exercise.input_type == 'duration':
+                        exercise_data.append({
+                            'exercise_id': exercise.id,
+                            'sets': random.randint(3, 5),
+                            'time': random.randint(30, 600)  # Duration in seconds
+                        })
+                    elif exercise.input_type == 'distance_duration':
+                        exercise_data.append({
+                            'exercise_id': exercise.id,
+                            'sets': random.randint(3, 5),
+                            'distance': round(random.uniform(1, 10), 2),  # Distance in km
+                            'time': random.randint(300, 1800)  # Duration in seconds
+                        })
+                    elif exercise.input_type == 'weight_distance':
+                        exercise_data.append({
+                            'exercise_id': exercise.id,
+                            'sets': random.randint(3, 5),
+                            'weight': random.randint(20, 100),
+                            'distance': round(random.uniform(1, 10), 2)  # Distance in km
+                        })
+
                 session = Session(
                     user_id=user.id,
                     session_date=datetime.utcnow() - timedelta(days=days_ago),
@@ -230,7 +357,7 @@ def create_sample_sessions(users, exercises):
 def create_sample_measurements(users):
     """Create measurement history for users"""
     measurement_types = ['Weight', 'Body Fat %', 'Chest', 'Waist', 'Arms']
-    
+
     for user in users:
         for measurement_type in measurement_types:
             base_value = random.uniform(60, 90) if measurement_type == 'Weight' else random.uniform(10, 30)
@@ -254,7 +381,7 @@ def create_sample_goals(users):
         'Lose {target}kg',
         'Complete {target} workouts'
     ]
-    
+
     for user in users:
         num_goals = random.randint(2, 4)
         for _ in range(num_goals):
@@ -272,36 +399,36 @@ def create_sample_goals(users):
 def seed_database():
     """Main function to seed the database with sample data"""
     app = create_app()
-    
+
     with app.app_context():
         # Clear existing data
         db.drop_all()
         db.create_all()
-        
+
         print("Creating exercises...")
         exercises = create_sample_exercises()
         db.session.commit()
-        
+
         print("Creating users...")
         users = create_sample_users()
         db.session.commit()
-        
+
         print("Creating routines...")
         create_sample_routines(users, exercises)
         db.session.commit()
-        
+
         print("Creating sessions...")
         create_sample_sessions(users, exercises)
         db.session.commit()
-        
+
         print("Creating measurements...")
         create_sample_measurements(users)
         db.session.commit()
-        
+
         print("Creating goals...")
         create_sample_goals(users)
         db.session.commit()
-        
+
         print("Database seeded successfully!")
 
 if __name__ == '__main__':
