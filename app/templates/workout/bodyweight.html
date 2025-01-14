@@ -1,61 +1,60 @@
-{# Update this in app/templates/workout/bodyweight.html #}
 {% extends "base.html" %}
-
 {% block title %}Track Bodyweight{% endblock %}
 
 {% block content %}
-<div class="container">
-    <h1 class="text-2xl font-bold mb-4">Track Bodyweight</h1>
+<div class="weight-tracking-container">
+    <h1>Track Bodyweight</h1>
 
     <!-- Alert for messages -->
     <div id="alert-message" class="hidden mb-4 p-4 rounded"></div>
 
     <!-- Log Bodyweight Form -->
-    <div class="card">
-        <div class="card-body">
-            <form id="bodyweight-form" class="mb-4">
-                <div class="form-group">
-                    <label for="weight">Weight (kg):</label>
-                    <input type="number"
-                           id="weight"
-                           step="0.1"
-                           class="form-control"
-                           required>
-                </div>
-                <button type="submit" class="btn btn-primary">Log Weight</button>
-            </form>
+    <form id="bodyweight-form" class="weight-form">
+        <div class="form-group">
+            <div class="weight-input">
+                <input type="number"
+                       id="weight"
+                       name="weight"
+                       step="0.1"
+                       min="5"
+                       max="600"
+                       required
+                       placeholder="Enter weight">
+                <select name="unit" id="unit">
+                    <option value="kg" {% if current_user.preferred_weight_unit == 'kg' %}selected{% endif %}>kg</option>
+                    <option value="lbs" {% if current_user.preferred_weight_unit == 'lbs' %}selected{% endif %}>lbs</option>
+                </select>
+            </div>
+            <small>Enter a weight between 5-600 kg (11-1322 lbs)</small>
         </div>
-    </div>
+        <button type="submit" class="submit-button">Log Weight</button>
+    </form>
 
-    <!-- History Table -->
-    <div class="card mt-4">
-        <div class="card-header">
-            <h2>Weight History</h2>
-        </div>
-        <div class="card-body">
-            <table class="table">
-                <thead>
-                    <tr>
-                        <th>Date</th>
-                        <th>Weight (kg)</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for log in weight_logs %}
-                    <tr>
-                        <td>{{ log.date.strftime('%Y-%m-%d %H:%M') }}</td>
-                        <td>{{ log.weight }}</td>
-                        <td>
-                            <button onclick="deleteWeight({{ log.id }})" class="btn-delete">
-                                🗑️ Delete
-                            </button>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
+    <!-- Weight History Table -->
+    <div class="weight-history">
+        <h2>Weight History</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Weight</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for log in weight_logs %}
+                <tr>
+                    <td>{{ log.date.strftime('%Y-%m-%d %H:%M') }}</td>
+                    <td>{{ log.weight }} {{ current_user.preferred_weight_unit }}</td>
+                    <td>
+                        <button onclick="deleteWeight({{ log.id }})" class="delete-button">
+                            🗑️ Delete
+                        </button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
     </div>
 </div>
 {% endblock %}
@@ -66,13 +65,14 @@ document.getElementById('bodyweight-form').addEventListener('submit', function(e
     e.preventDefault();
 
     const weight = document.getElementById('weight').value;
+    const unit = document.getElementById('unit').value;
 
     fetch('/log-bodyweight', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ weight: parseFloat(weight) })
+        body: JSON.stringify({ weight: parseFloat(weight), unit: unit })
     })
     .then(response => response.json())
     .then(data => {

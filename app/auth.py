@@ -20,6 +20,33 @@ auth = Blueprint('auth', __name__)
 PASSWORD_PATTERN = re.compile(r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,200}$')
 USERNAME_PATTERN = re.compile(r'^[a-zA-Z0-9_]{1,20}$')
 
+def validate_weight(weight_value, unit='kg'):
+    """
+    Validate weight input
+    Returns tuple of (is_valid, message)
+    """
+    try:
+        weight = float(weight_value)
+        
+        # Convert lbs to kg if needed
+        if unit == 'lbs':
+            weight = weight * 0.45359237
+            min_weight = 11  # 5kg in lbs
+            max_weight = 1322  # 600kg in lbs
+        else:
+            min_weight = 5
+            max_weight = 600
+
+        if weight < min_weight:
+            return False, f"Weight must be at least {min_weight} {unit}"
+        if weight > max_weight:
+            return False, f"Weight cannot exceed {max_weight} {unit}"
+            
+        return True, None
+        
+    except (ValueError, TypeError):
+        return False, "Please enter a valid weight"
+
 @auth.route('/home')
 @login_required
 def home():
@@ -84,15 +111,19 @@ def register_post():
     gender = request.form.get('gender')
     
     # Get bodyweight data
-    try:
-        bodyweight = float(request.form.get('bodyweight'))
-        weight_unit = request.form.get('weight_unit')
-        # Convert to kg if in lbs
-        if weight_unit == 'lbs':
-            bodyweight = bodyweight * 0.45359237
-    except (ValueError, TypeError):
-        flash('Please enter a valid body weight')
+    bodyweight = request.form.get('bodyweight')
+    weight_unit = request.form.get('weight_unit', 'kg')
+    
+    # Validate weight
+    is_valid, message = validate_weight(bodyweight, weight_unit)
+    if not is_valid:
+        flash(message)
         return redirect(url_for('auth.register'))
+        
+    # Convert to kg if in lbs
+    weight_value = float(bodyweight)
+    if weight_unit == 'lbs':
+        weight_value = weight_value * 0.45359237
     
     # Get birthday components
     birth_day = request.form.get('birth_day')
@@ -176,7 +207,7 @@ def register_post():
         # Create initial bodyweight log
         initial_weight = BodyweightLog(
             user_id=new_user.id,
-            weight=bodyweight,
+            weight=weight_value,
             date=datetime.utcnow()
         )
         db.session.add(initial_weight)

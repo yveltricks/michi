@@ -1,40 +1,125 @@
-<!-- This is my login page template -->
 <!DOCTYPE html>
 <html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - Michi</title>
-    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/style.css') }}">
+    <title>Login</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f5f5f5;
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 400px;
+            box-sizing: border-box;
+        }
+        h2 {
+            text-align: center;
+            margin-bottom: 30px;
+            color: #333;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #555;
+        }
+        input[type="email"],
+        input[type="password"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+            font-size: 16px;
+        }
+        .remember-me {
+            display: flex;
+            align-items: center;
+            margin: 15px 0;
+        }
+        .remember-me input {
+            margin-right: 8px;
+        }
+        button {
+            width: 100%;
+            padding: 12px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .register-link {
+            text-align: center;
+            margin-top: 20px;
+        }
+        .register-link a {
+            color: #007bff;
+            text-decoration: none;
+        }
+        .register-link a:hover {
+            text-decoration: underline;
+        }
+        .alert {
+            background-color: #f8d7da;
+            color: #721c24;
+            padding: 12px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+    </style>
 </head>
 <body>
-    <div class="auth-container">
-        <h1>Login</h1>
+    <div class="container">
+        <h2>Login</h2>
+        
         {% with messages = get_flashed_messages() %}
         {% if messages %}
-            <div class="notification">
-                {{ messages[0] }}
-            </div>
+        <div class="alert">
+            {{ messages[0] }}
+        </div>
         {% endif %}
         {% endwith %}
-        <form method="POST">
+
+        <form method="POST" action="{{ url_for('auth.login') }}">
             <div class="form-group">
-                <input type="email" name="email" placeholder="Email" required>
+                <label for="email">Email</label>
+                <input type="email" id="email" name="email" required>
             </div>
+            
             <div class="form-group">
-                <input type="password" name="password" placeholder="Password" required>
+                <label for="password">Password</label>
+                <input type="password" id="password" name="password" required>
             </div>
-            <div class="form-group">
-                <label>
-                    <input type="checkbox" name="remember">
-                    Remember me
-                </label>
+
+            <div class="remember-me">
+                <input type="checkbox" id="remember" name="remember">
+                <label for="remember">Remember me</label>
             </div>
-            <div class="form-group">
-                <button type="submit">Login</button>
-            </div>
+
+            <button type="submit">Login</button>
         </form>
-        <p>Don't have an account? <a href="{{ url_for('auth.register') }}">Register</a></p>
+
+        <div class="register-link">
+            Don't have an account? <a href="{{ url_for('auth.register') }}">Register</a>
+        </div>
     </div>
 </body>
 </html>
