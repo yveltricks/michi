@@ -223,7 +223,13 @@ def register_post():
 @auth.route('/settings')
 @login_required
 def settings():
-    return render_template('settings.html')
+    # Calculate year range for the birthday dropdown
+    current_year = datetime.utcnow().year
+    year_range = YearRange(
+        start=current_year - 150,  # Oldest possible age
+        end=current_year - 5       # Minimum age requirement
+    )
+    return render_template('settings.html', year_range=year_range)
 
 @auth.route('/update-preferences', methods=['POST'])
 @login_required
@@ -243,23 +249,29 @@ def update_preferences():
     
     try:
         db.session.commit()
-    except:
+    except Exception as e:
         db.session.rollback()
         flash('Error updating preferences', 'error')
+        print(f"Error updating preferences: {str(e)}")  # For debugging
     
     return redirect(url_for('auth.settings'))
 
 @auth.route('/update-privacy', methods=['POST'])
 @login_required
 def update_privacy():
-    current_user.privacy_setting = request.form.get('privacy_setting', 'public')
-    
+    privacy_setting = request.form.get('privacy_setting')
+    if privacy_setting not in ['public', 'private']:
+        flash('Invalid privacy setting', 'error')
+        return redirect(url_for('auth.settings'))
+
     try:
+        current_user.privacy_setting = privacy_setting
         db.session.commit()
         flash('Privacy settings updated successfully!', 'success')
-    except:
+    except Exception as e:
         db.session.rollback()
         flash('Error updating privacy settings', 'error')
+        print(f"Error updating privacy settings: {str(e)}")  # For debugging
     
     return redirect(url_for('auth.settings'))
 
@@ -270,26 +282,27 @@ def change_username():
     
     # Validate username format
     if not USERNAME_PATTERN.match(new_username):
-        flash('Username can only contain letters, numbers, and underscores (max 20 characters)')
+        flash('Username can only contain letters, numbers, and underscores (max 20 characters)', 'error')
         return redirect(url_for('auth.settings'))
     
     # Check if username is taken
     if User.query.filter_by(username=new_username).first():
-        flash('This username is already taken')
+        flash('This username is already taken', 'error')
         return redirect(url_for('auth.settings'))
     
     # Check if it's the same as current username
     if current_user.username == new_username:
-        flash('This is already your current username')
+        flash('This is already your current username', 'error')
         return redirect(url_for('auth.settings'))
     
     try:
         current_user.username = new_username
         db.session.commit()
         flash('Username successfully updated to: ' + new_username, 'success')
-    except:
+    except Exception as e:
         db.session.rollback()
         flash('An error occurred while updating username', 'error')
+        print(f"Error updating username: {str(e)}")  # For debugging
     
     return redirect(url_for('auth.settings'))
 
@@ -302,26 +315,27 @@ def change_password():
 
     # Verify current password
     if not current_user.check_password(current_password):
-        flash('Current password is incorrect')
+        flash('Current password is incorrect', 'error')
         return redirect(url_for('auth.settings'))
 
     # Validate new password format
     if not PASSWORD_PATTERN.match(new_password):
-        flash('Password must be between 8 and 200 characters and contain at least one uppercase letter, one lowercase letter, and one number')
+        flash('Password must be between 8 and 200 characters and contain at least one uppercase letter, one lowercase letter, and one number', 'error')
         return redirect(url_for('auth.settings'))
 
     # Confirm passwords match
     if new_password != confirm_password:
-        flash('New passwords do not match')
+        flash('New passwords do not match', 'error')
         return redirect(url_for('auth.settings'))
 
     try:
         current_user.set_password(new_password)
         db.session.commit()
         flash('Password updated successfully!', 'success')
-    except:
+    except Exception as e:
         db.session.rollback()
         flash('Error updating password', 'error')
+        print(f"Error updating password: {str(e)}")  # For debugging
 
     return redirect(url_for('auth.settings'))
 
@@ -332,7 +346,7 @@ def delete_account():
     
     # Verify password
     if not current_user.check_password(password):
-        flash('Incorrect password')
+        flash('Incorrect password', 'error')
         return redirect(url_for('auth.settings'))
     
     try:
@@ -350,10 +364,68 @@ def delete_account():
         # Log out the user
         logout_user()
         
-        flash('Your account has been permanently deleted')
+        flash('Your account has been permanently deleted', 'success')
         return redirect(url_for('index'))
     except Exception as e:
         print(f"Error deleting account: {str(e)}")  # For debugging
         db.session.rollback()
-        flash('An error occurred while deleting your account')
+        flash('An error occurred while deleting your account', 'error')
         return redirect(url_for('auth.settings'))
+
+# New route for updating personal information
+@auth.route('/update-personal-info', methods=['POST'])
+@login_required
+def update_personal_info():
+    first_name = request.form.get('first_name')
+    last_name = request.form.get('last_name')
+    gender = request.form.get('gender')
+    
+    # Get birthday components
+    try:
+        birth_day = int(request.form.get('birth_day'))
+        birth_month = int(request.form.get('birth_month'))
+        birth_year = int(request.form.get('birth_year'))
+    except (ValueError, TypeError):
+        flash('Please enter valid date values', 'error')
+        return redirect(url_for('auth.settings'))
+
+    # Validate gender
+    if gender not in ['male', 'female']:
+        flash('Please select a valid gender', 'error')
+        return redirect(url_for('auth.settings'))
+
+    # Validate birthday
+    try:
+        birthday = datetime(birth_year, birth_month, birth_day)
+        
+        # Validate age range
+        today = datetime.utcnow()
+        age = today.year - birthday.year - ((today.month, today.day) < (birthday.month, birthday.day))
+        
+        if age < 5:
+            flash('You must be at least 5 years old', 'error')
+            return redirect(url_for('auth.settings'))
+        if age > 150:
+            flash('Please enter a valid birth date', 'error')
+            return redirect(url_for('auth.settings'))
+        if birthday > today:
+            flash('Birth date cannot be in the future', 'error')
+            return redirect(url_for('auth.settings'))
+            
+    except ValueError:
+        flash('Invalid date. Please check the day matches the selected month.', 'error')
+        return redirect(url_for('auth.settings'))
+
+    try:
+        current_user.first_name = first_name
+        current_user.last_name = last_name
+        current_user.gender = gender
+        current_user.birthday = birthday
+        db.session.commit()
+        flash('Personal information updated successfully!', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash('Error updating personal information', 'error')
+        print(f"Error updating personal info: {str(e)}")  # For debugging
+    
+    return redirect(url_for('auth.settings'))

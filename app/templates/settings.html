@@ -1,166 +1,216 @@
 {% extends "base.html" %}
-
 {% block title %}Settings{% endblock %}
-
+{% block extra_head %}
+<style>
+    select {
+        width: 100%;
+        min-width: 200px;
+    }
+</style>
+{% endblock %}
 {% block content %}
-<div class="container mx-auto px-4 py-8">
+<div class="container mx-auto px-4 py-6">
     <h1 class="text-2xl font-bold mb-6">Account Settings</h1>
 
-    <!-- Flash Messages -->
     {% with messages = get_flashed_messages(with_categories=true) %}
-    {% if messages %}
-        {% for category, message in messages %}
-        <div class="alert alert-{{ category if category != 'message' else 'info' }} mb-6">
-            {{ message }}
-        </div>
-        {% endfor %}
-    {% endif %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert {% if category == 'error' %}alert-error{% else %}alert-success{% endif %} mb-4">
+                    {{ message }}
+                </div>
+            {% endfor %}
+        {% endif %}
     {% endwith %}
 
-    <!-- Account Information -->
+    <!-- Personal Information Section -->
     <div class="bg-white p-6 rounded-lg shadow mb-6">
-        <h2 class="text-xl font-semibold mb-4">Account Information</h2>
+        <h2 class="text-xl font-semibold mb-4">Personal Information</h2>
+        <form action="{{ url_for('auth.update_personal_info') }}" method="POST">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
+                    <label class="block mb-2">First Name</label>
+                    <input type="text" name="first_name" value="{{ current_user.first_name }}" class="w-full p-2 border rounded" required>
+                </div>
+                <div>
+                    <label class="block mb-2">Last Name</label>
+                    <input type="text" name="last_name" value="{{ current_user.last_name }}" class="w-full p-2 border rounded">
+                </div>
+            </div>
 
-        <!-- Change Username -->
-        <div>
-            <h3>Change Username</h3>
-            <form method="POST" action="{{ url_for('auth.change_username') }}" class="mb-6" id="changeUsernameForm">
-                <div class="mb-4">
-                    <label for="new_username" class="block mb-2">New Username</label>
-                    <input type="text" id="new_username" name="new_username" 
-                           pattern="^[a-zA-Z0-9_]{1,20}$" 
-                           title="Username can only contain letters, numbers, and underscores. Max 20 characters."
-                           class="form-input w-full" required>
-                    <p class="text-sm text-gray-600 mt-1">Only letters, numbers, and underscores allowed. Max 20 characters.</p>
-                    <p id="usernameAvailability" class="text-sm text-gray-600 mt-1"></p>
-                </div>
-                <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded">Change Username</button>
-            </form>
-        </div>
+            <div class="mb-4">
+                <label class="block mb-2">Gender</label>
+                <select name="gender" class="w-full p-2 border rounded" required>
+                    <option value="male" {% if current_user.gender == 'male' %}selected{% endif %}>Male</option>
+                    <option value="female" {% if current_user.gender == 'female' %}selected{% endif %}>Female</option>
+                </select>
+            </div>
 
-        <!-- Change Password -->
-        <div>
-            <h3>Change Password</h3>
-            <form method="POST" action="{{ url_for('auth.change_password') }}" class="mb-6">
-                <div class="mb-4">
-                    <label for="current_password" class="block mb-2">Current Password</label>
-                    <input type="password" id="current_password" name="current_password" class="form-input w-full" required>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                <div>
+                    <label class="block mb-2">Birth Month</label>
+                    <select name="birth_month" class="w-full p-2 border rounded" required>
+                        <option value="1" {% if current_user.birthday.month == 1 %}selected{% endif %}>January</option>
+                        <option value="2" {% if current_user.birthday.month == 2 %}selected{% endif %}>February</option>
+                        <option value="3" {% if current_user.birthday.month == 3 %}selected{% endif %}>March</option>
+                        <option value="4" {% if current_user.birthday.month == 4 %}selected{% endif %}>April</option>
+                        <option value="5" {% if current_user.birthday.month == 5 %}selected{% endif %}>May</option>
+                        <option value="6" {% if current_user.birthday.month == 6 %}selected{% endif %}>June</option>
+                        <option value="7" {% if current_user.birthday.month == 7 %}selected{% endif %}>July</option>
+                        <option value="8" {% if current_user.birthday.month == 8 %}selected{% endif %}>August</option>
+                        <option value="9" {% if current_user.birthday.month == 9 %}selected{% endif %}>September</option>
+                        <option value="10" {% if current_user.birthday.month == 10 %}selected{% endif %}>October</option>
+                        <option value="11" {% if current_user.birthday.month == 11 %}selected{% endif %}>November</option>
+                        <option value="12" {% if current_user.birthday.month == 12 %}selected{% endif %}>December</option>
+                    </select>
                 </div>
-                <div class="mb-4">
-                    <label for="new_password" class="block mb-2">New Password</label>
-                    <input type="password" id="new_password" name="new_password" 
-                           maxlength="200" 
-                           minlength="8"
-                           class="form-input w-full" required>
-                    <p class="text-sm text-gray-600 mt-1">Password must be between 8 and 200 characters, contain at least one uppercase letter, one lowercase letter, and one number.</p>
+                <div>
+                    <label class="block mb-2">Birth Day</label>
+                    <select name="birth_day" class="w-full p-2 border rounded" required>
+                        {% for day in range(1, 32) %}
+                            <option value="{{ day }}" {% if current_user.birthday.day == day %}selected{% endif %}>
+                                {{ day }}
+                            </option>
+                        {% endfor %}
+                    </select>
                 </div>
-                <div class="mb-4">
-                    <label for="confirm_password" class="block mb-2">Confirm New Password</label>
-                    <input type="password" id="confirm_password" name="confirm_password" class="form-input w-full" required>
+                <div>
+                    <label class="block mb-2">Birth Year</label>
+                    <select name="birth_year" class="w-full p-2 border rounded" required>
+                        {% for year in range(year_range.end, year_range.start - 1, -1) %}
+                            <option value="{{ year }}" {% if current_user.birthday.year == year %}selected{% endif %}>
+                                {{ year }}
+                            </option>
+                        {% endfor %}
+                    </select>
                 </div>
-                <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded">Change Password</button>
-            </form>
-        </div>
+            </div>
+
+            <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
+                Update Personal Information
+            </button>
+        </form>
     </div>
 
-    <!-- Unit Preferences -->
+    <!-- Account Information Section -->
+    <div class="bg-white p-6 rounded-lg shadow mb-6">
+        <h2 class="text-xl font-semibold mb-4">Account Information</h2>
+        
+        <!-- Username Change Form -->
+        <form action="{{ url_for('auth.change_username') }}" method="POST" class="mb-6">
+            <h3 class="text-lg font-medium mb-3">Change Username</h3>
+            <div class="mb-4">
+                <label class="block mb-2">New Username</label>
+                <input type="text" name="new_username" class="w-full p-2 border rounded" 
+                       pattern="[a-zA-Z0-9_]{1,20}" 
+                       title="Only letters, numbers, and underscores allowed. Max 20 characters."
+                       required>
+                <p class="text-sm text-gray-600 mt-1">Only letters, numbers, and underscores allowed. Max 20 characters.</p>
+            </div>
+            <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
+                Change Username
+            </button>
+        </form>
+
+        <!-- Password Change Form -->
+        <form action="{{ url_for('auth.change_password') }}" method="POST" class="mb-6">
+            <h3 class="text-lg font-medium mb-3">Change Password</h3>
+            <div class="mb-4">
+                <label class="block mb-2">Current Password</label>
+                <input type="password" name="current_password" class="w-full p-2 border rounded" required>
+            </div>
+            <div class="mb-4">
+                <label class="block mb-2">New Password</label>
+                <input type="password" name="new_password" class="w-full p-2 border rounded" 
+                       pattern="^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,200}$"
+                       title="Must be between 8 and 200 characters, contain at least one uppercase letter, one lowercase letter, and one number"
+                       required>
+                <p class="text-sm text-gray-600 mt-1">Must be between 8 and 200 characters, contain at least one uppercase letter, one lowercase letter, and one number.</p>
+            </div>
+            <div class="mb-4">
+                <label class="block mb-2">Confirm New Password</label>
+                <input type="password" name="confirm_password" class="w-full p-2 border rounded" required>
+            </div>
+            <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
+                Change Password
+            </button>
+        </form>
+    </div>
+
+    <!-- Measurement Preferences Section -->
     <div class="bg-white p-6 rounded-lg shadow mb-6">
         <h2 class="text-xl font-semibold mb-4">Measurement Preferences</h2>
-        <form method="POST" action="{{ url_for('auth.update_preferences') }}">
-            <div class="grid gap-4">
+        <form action="{{ url_for('auth.update_preferences') }}" method="POST" class="mb-4">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                     <label class="block mb-2">Weight Unit</label>
-                    <select name="preferred_weight_unit" class="form-select w-full">
+                    <select name="preferred_weight_unit" class="w-full p-2 border rounded">
                         <option value="kg" {% if current_user.preferred_weight_unit == 'kg' %}selected{% endif %}>Kilograms (kg)</option>
                         <option value="lbs" {% if current_user.preferred_weight_unit == 'lbs' %}selected{% endif %}>Pounds (lbs)</option>
                     </select>
                 </div>
-                
                 <div>
                     <label class="block mb-2">Distance Unit</label>
-                    <select name="preferred_distance_unit" class="form-select w-full">
+                    <select name="preferred_distance_unit" class="w-full p-2 border rounded">
                         <option value="km" {% if current_user.preferred_distance_unit == 'km' %}selected{% endif %}>Kilometers (km)</option>
                         <option value="mi" {% if current_user.preferred_distance_unit == 'mi' %}selected{% endif %}>Miles (mi)</option>
                     </select>
                 </div>
-                
                 <div>
                     <label class="block mb-2">Body Measurement Unit</label>
-                    <select name="preferred_measurement_unit" class="form-select w-full">
+                    <select name="preferred_measurement_unit" class="w-full p-2 border rounded">
                         <option value="cm" {% if current_user.preferred_measurement_unit == 'cm' %}selected{% endif %}>Centimeters (cm)</option>
                         <option value="in" {% if current_user.preferred_measurement_unit == 'in' %}selected{% endif %}>Inches (in)</option>
                     </select>
                 </div>
             </div>
-            <div class="flex justify-between mt-4">
-                <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded">Save Preferences</button>
-                <button type="submit" name="reset" value="true" class="bg-gray-500 text-white px-4 py-2 rounded">Reset to Defaults</button>
+            <div class="mt-4 space-x-4">
+                <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
+                    Save Preferences
+                </button>
+                <button type="submit" name="reset" value="true" class="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600">
+                    Reset to Defaults
+                </button>
             </div>
         </form>
     </div>
 
-    <!-- Privacy Settings -->
+    <!-- Privacy Settings Section -->
     <div class="bg-white p-6 rounded-lg shadow mb-6">
         <h2 class="text-xl font-semibold mb-4">Privacy Settings</h2>
-        <form method="POST" action="{{ url_for('auth.update_privacy') }}">
-            <div>
+        <form action="{{ url_for('auth.update_privacy') }}" method="POST">
+            <div class="mb-4">
                 <label class="block mb-2">Profile Privacy</label>
-                <select name="privacy_setting" class="form-select w-full">
+                <select name="privacy_setting" class="w-full p-2 border rounded">
                     <option value="public" {% if current_user.privacy_setting == 'public' %}selected{% endif %}>Public</option>
                     <option value="private" {% if current_user.privacy_setting == 'private' %}selected{% endif %}>Private</option>
                 </select>
             </div>
-            <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded mt-4">Update Privacy</button>
+            <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
+                Update Privacy
+            </button>
         </form>
     </div>
 
-    <!-- Account Actions -->
+    <!-- Account Actions Section -->
     <div class="bg-white p-6 rounded-lg shadow">
         <h2 class="text-xl font-semibold mb-4">Account Actions</h2>
         <div class="space-y-4">
-            <a href="{{ url_for('auth.logout') }}" class="block w-full text-center bg-gray-500 text-white px-4 py-2 rounded">Logout</a>
+            <a href="{{ url_for('auth.logout') }}" class="inline-block bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600">
+                Logout
+            </a>
             
-            <!-- Delete Account Form -->
-            <form method="POST" action="{{ url_for('auth.delete_account') }}" id="deleteAccountForm" class="mt-4">
+            <form action="{{ url_for('auth.delete_account') }}" method="POST" class="border-t pt-4">
+                <h3 class="text-lg font-medium mb-3 text-red-600">Delete Account</h3>
                 <div class="mb-4">
                     <label class="block mb-2">Confirm Password to Delete Account</label>
-                    <input type="password" name="password" class="form-input w-full" required>
+                    <input type="password" name="password" class="w-full p-2 border rounded" required>
                 </div>
-                <button type="submit" class="w-full bg-red-500 text-white px-4 py-2 rounded">Delete Account</button>
+                <button type="submit" class="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600" 
+                        onclick="return confirm('Are you sure you want to delete your account? This action cannot be undone.')">
+                    Delete Account
+                </button>
             </form>
         </div>
     </div>
 </div>
-{% endblock %}
-
-{% block scripts %}
-<script>
-document.getElementById('deleteAccountForm').addEventListener('submit', function(e) {
-    if (!confirm('Are you sure you want to delete your account? This action cannot be undone.')) {
-        e.preventDefault();
-    }
-});
-
-document.getElementById('changeUsernameForm').addEventListener('submit', function(e) {
-    e.preventDefault();
-    const newUsername = document.querySelector('input[name="new_username"]').value;
-
-    fetch('/check-username', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ username: newUsername })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.available) {
-            document.getElementById('usernameAvailability').textContent = 'Username is available!';
-            document.getElementById('changeUsernameForm').submit();
-        } else {
-            document.getElementById('usernameAvailability').textContent = 'Username is already taken.';
-        }
-    });
-});
-</script>
 {% endblock %}

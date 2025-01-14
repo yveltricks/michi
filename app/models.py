@@ -18,8 +18,9 @@ followers = db.Table('followers',
 
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    first_name = db.Column(db.String(100), nullable=False)
-    last_name = db.Column(db.String(100))  # Optional
+    # Updated first_name and last_name to be nullable
+    first_name = db.Column(db.String(100))
+    last_name = db.Column(db.String(100))
     username = db.Column(db.String(100), unique=True, nullable=False)
     email = db.Column(db.String(100), unique=True, nullable=False)
     password_hash = db.Column(db.String(100), nullable=False)
@@ -27,17 +28,17 @@ class User(UserMixin, db.Model):
     streak = db.Column(db.Integer, default=0)
     exp = db.Column(db.Integer, default=0)
     profile_pic = db.Column(db.String(200))
-    gender = db.Column(db.String(10))
-    birthday = db.Column(db.DateTime)
-    
+    # Updated gender to be nullable with specific choices
+    gender = db.Column(db.String(10), nullable=True)
+    # Updated birthday to be nullable
+    birthday = db.Column(db.DateTime, nullable=True)
     # Updated unit preferences
     preferred_weight_unit = db.Column(db.String(10), default='kg')
     preferred_distance_unit = db.Column(db.String(10), default='km')
     preferred_measurement_unit = db.Column(db.String(10), default='cm')
-    
     privacy_setting = db.Column(db.String(20), default='public')
-    
-    # Relationships
+
+    # Relationships remain the same
     sessions = db.relationship('Session', backref='user', lazy=True)
     routines = db.relationship('Routine', backref='user', lazy=True)
     measurements = db.relationship('Measurement', backref='user', lazy=True)
@@ -45,10 +46,9 @@ class User(UserMixin, db.Model):
     statistics = db.relationship('Statistic', backref='user', lazy=True)
     saved_items = db.relationship('SavedItem', backref='user', lazy=True)
     notifications = db.relationship('Notification', backref='user', lazy=True)
-    
-    # New relationships for following system
     following = db.relationship(
-        'User', secondary='followers',
+        'User', 
+        secondary='followers',
         primaryjoin='User.id==followers.c.follower_id',
         secondaryjoin='User.id==followers.c.followed_id',
         backref=db.backref('followers', lazy='dynamic'),
@@ -57,7 +57,7 @@ class User(UserMixin, db.Model):
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
-        
+
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
 
@@ -69,11 +69,11 @@ class User(UserMixin, db.Model):
             return "Intermediate"
         else:
             return "Beginner"
-            
+
     @property
     def next_level_exp(self):
         return (self.level + 1) * 100
-        
+
     def update_level(self):
         self.level = self.exp // 100
         if self.level == 0:

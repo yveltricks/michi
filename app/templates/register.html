@@ -1,180 +1,101 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Register</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #f5f5f5;
-            margin: 0;
-            padding: 20px;
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .container {
-            background: white;
-            padding: 40px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-            width: 100%;
-            max-width: 500px;
-            box-sizing: border-box;
-        }
-        h2 {
-            text-align: center;
-            margin-bottom: 30px;
-            color: #333;
-        }
-        .form-group {
-            margin-bottom: 20px;
-        }
-        .form-row {
-            display: flex;
-            gap: 15px;
-            margin-bottom: 20px;
-        }
-        .form-column {
-            flex: 1;
-        }
-        label {
-            display: block;
-            margin-bottom: 5px;
-            color: #555;
-        }
-        input[type="text"],
-        input[type="email"],
-        input[type="password"],
-        input[type="number"],
-        select {
-            width: 100%;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            box-sizing: border-box;
-            font-size: 16px;
-        }
-        .help-text {
-            font-size: 12px;
-            color: #666;
-            margin-top: 4px;
-        }
-        button {
-            width: 100%;
-            padding: 12px;
-            background-color: #007bff;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 16px;
-            margin-top: 20px;
-        }
-        button:hover {
-            background-color: #0056b3;
-        }
-        .login-link {
-            text-align: center;
-            margin-top: 20px;
-        }
-        .login-link a {
-            color: #007bff;
-            text-decoration: none;
-        }
-        .login-link a:hover {
-            text-decoration: underline;
-        }
-        .alert {
-            background-color: #f8d7da;
-            color: #721c24;
-            padding: 12px;
-            border-radius: 4px;
-            margin-bottom: 20px;
-            text-align: center;
-        }
-        .preferences-section {
-            margin-top: 30px;
-        }
-        .preferences-section h3 {
-            margin-bottom: 15px;
-            color: #333;
-        }
-    </style>
+    <title>Register for Michi</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
 </head>
-<body>
-    <div class="container">
-        <h2>Register for Michi</h2>
-        
-        {% with messages = get_flashed_messages() %}
-        {% if messages %}
-        <div class="alert">
-            {{ messages[0] }}
-        </div>
-        {% endif %}
-        {% endwith %}
+<body class="bg-gray-100">
+    <div class="min-h-screen flex items-center justify-center">
+        <div class="bg-white p-8 rounded-lg shadow-md w-96">
+            <h2 class="text-2xl font-bold mb-6 text-center">Register for Michi</h2>
+            
+            {% with messages = get_flashed_messages() %}
+            {% if messages %}
+            <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4">
+                {{ messages[0] }}
+            </div>
+            {% endif %}
+            {% endwith %}
 
-        <form method="POST" action="{{ url_for('auth.register') }}">
-            <!-- Personal Information -->
-            <div class="form-row">
-                <div class="form-column">
-                    <label>First Name</label>
-                    <input type="text" name="first_name" required>
+            <form method="POST" class="space-y-4">
+                <!-- First Name -->
+                <div>
+                    <label class="block text-gray-700 text-sm font-bold mb-2">First Name</label>
+                    <input type="text" name="first_name" maxlength="85" required 
+                           class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500">
                 </div>
-                <div class="form-column">
-                    <label>Last Name</label>
-                    <input type="text" name="last_name" required>
+
+                <!-- Last Name -->
+                <div>
+                    <label class="block text-gray-700 text-sm font-bold mb-2">Last Name</label>
+                    <input type="text" name="last_name" maxlength="85" required 
+                           class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500">
                 </div>
-            </div>
 
-            <div class="form-group">
-                <label>Email</label>
-                <input type="email" name="email" required>
-            </div>
+                <!-- Email -->
+                <div>
+                    <label class="block text-gray-700 text-sm font-bold mb-2">Email</label>
+                    <input type="email" name="email" required 
+                           class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500">
+                </div>
 
-            <div class="form-group">
-                <label>Username</label>
-                <input type="text" name="username" required>
-                <div class="help-text">Only letters, numbers, and underscores allowed. Max 20 characters.</div>
-            </div>
+                <!-- Username -->
+                <div>
+                    <label class="block text-gray-700 text-sm font-bold mb-2">Username</label>
+                    <input type="text" name="username" required pattern="[a-zA-Z0-9_]{1,20}"
+                           class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500">
+                    <p class="text-sm text-gray-500 mt-1">Only letters, numbers, and underscores allowed. Max 20 characters.</p>
+                </div>
 
-            <div class="form-group">
-                <label>Password</label>
-                <input type="password" name="password" required>
-                <div class="help-text">Must be between 8 and 200 characters, contain at least one uppercase letter, one lowercase letter, and one number.</div>
-            </div>
+                <!-- Password -->
+                <div>
+                    <label class="block text-gray-700 text-sm font-bold mb-2">Password</label>
+                    <input type="password" name="password" required
+                           class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500">
+                    <p class="text-sm text-gray-500 mt-1">Must be between 8 and 200 characters, contain at least one uppercase letter, one lowercase letter, and one number.</p>
+                </div>
 
-            <div class="form-group">
-                <label>Gender</label>
-                <select name="gender" required>
-                    <option value="">Select Gender</option>
-                    <option value="male">Male</option>
-                    <option value="female">Female</option>
-                </select>
-            </div>
+                <!-- Gender -->
+                <div>
+                    <label class="block text-gray-700 text-sm font-bold mb-2">Gender</label>
+                    <select name="gender" required class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500">
+                        <option value="">Select Gender</option>
+                        <option value="male">Male</option>
+                        <option value="female">Female</option>
+                    </select>
+                </div>
 
-            <!-- Birthday -->
-            <div class="form-group">
-                <label>Birthday</label>
-                <div class="form-row">
-                    <div class="form-column">
-                        <select name="birth_month" required>
-                            <option value="">Month</option>
-                            {% for month in range(1, 13) %}
-                            <option value="{{ month }}">{{ month }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="form-column">
-                        <select name="birth_day" required>
+                <!-- Birthday -->
+                <div>
+                    <label class="block text-gray-700 text-sm font-bold mb-2">Birthday</label>
+                    <div class="grid grid-cols-3 gap-2">
+                        <!-- Day -->
+                        <select name="birth_day" required class="px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500">
                             <option value="">Day</option>
                             {% for day in range(1, 32) %}
                             <option value="{{ day }}">{{ day }}</option>
                             {% endfor %}
                         </select>
-                    </div>
-                    <div class="form-column">
-                        <select name="birth_year" required>
+                        
+                        <!-- Month -->
+                        <select name="birth_month" required class="px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500">
+                            <option value="">Month</option>
+                            <option value="1">January</option>
+                            <option value="2">February</option>
+                            <option value="3">March</option>
+                            <option value="4">April</option>
+                            <option value="5">May</option>
+                            <option value="6">June</option>
+                            <option value="7">July</option>
+                            <option value="8">August</option>
+                            <option value="9">September</option>
+                            <option value="10">October</option>
+                            <option value="11">November</option>
+                            <option value="12">December</option>
+                        </select>
+                        
+                        <!-- Year -->
+                        <select name="birth_year" required class="px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500">
                             <option value="">Year</option>
                             {% for year in range(year_range.end, year_range.start - 1, -1) %}
                             <option value="{{ year }}">{{ year }}</option>
@@ -182,59 +103,121 @@
                         </select>
                     </div>
                 </div>
-            </div>
 
-            <!-- Weight Input -->
-            <div class="form-row">
-                <div class="form-column">
-                    <label>Bodyweight</label>
-                    <input type="number" name="bodyweight" step="0.1" required>
+                <!-- Bodyweight -->
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-gray-700 text-sm font-bold mb-2">Bodyweight</label>
+                        <input type="number" name="bodyweight" required step="0.1" min="5" max="600"
+                               class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-gray-700 text-sm font-bold mb-2">Weight Unit</label>
+                        <select name="weight_unit" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500">
+                            <option value="kg">kg</option>
+                            <option value="lbs">lbs</option>
+                        </select>
+                    </div>
                 </div>
-                <div class="form-column">
-                    <label>Weight Unit</label>
-                    <select name="weight_unit">
-                        <option value="kg">kg</option>
-                        <option value="lbs">lbs</option>
-                    </select>
+                <p class="text-sm text-gray-500 mt-1">Enter a weight between 5-600 kg (11-1322 lbs)</p>
+
+                <!-- Measurement Preferences -->
+                <div class="space-y-4">
+                    <h3 class="font-bold text-lg">Measurement Preferences</h3>
+                    
+                    <!-- Weight Unit -->
+                    <div>
+                        <label class="block text-gray-700 text-sm font-bold mb-2">Weight Unit</label>
+                        <select name="preferred_weight_unit" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500">
+                            <option value="kg">Kilograms (kg)</option>
+                            <option value="lbs">Pounds (lbs)</option>
+                        </select>
+                    </div>
+
+                    <!-- Distance Unit -->
+                    <div>
+                        <label class="block text-gray-700 text-sm font-bold mb-2">Distance Unit</label>
+                        <select name="preferred_distance_unit" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500">
+                            <option value="km">Kilometers (km)</option>
+                            <option value="mi">Miles (mi)</option>
+                        </select>
+                    </div>
+
+                    <!-- Body Measurement Unit -->
+                    <div>
+                        <label class="block text-gray-700 text-sm font-bold mb-2">Body Measurement Unit</label>
+                        <select name="preferred_measurement_unit" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500">
+                            <option value="cm">Centimeters (cm)</option>
+                            <option value="in">Inches (in)</option>
+                        </select>
+                    </div>
                 </div>
-            </div>
-            <div class="help-text">Enter a weight between 5-600 kg (11-1322 lbs)</div>
 
-            <!-- Measurement Preferences -->
-            <div class="preferences-section">
-                <h3>Measurement Preferences</h3>
-                
-                <div class="form-group">
-                    <label>Weight Unit</label>
-                    <select name="preferred_weight_unit">
-                        <option value="kg">Kilograms (kg)</option>
-                        <option value="lbs">Pounds (lbs)</option>
-                    </select>
-                </div>
+                <!-- Register Button -->
+                <button type="submit" class="w-full bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600 transition-colors">
+                    Register
+                </button>
 
-                <div class="form-group">
-                    <label>Distance Unit</label>
-                    <select name="preferred_distance_unit">
-                        <option value="km">Kilometers (km)</option>
-                        <option value="mi">Miles (mi)</option>
-                    </select>
-                </div>
-
-                <div class="form-group">
-                    <label>Body Measurement Unit</label>
-                    <select name="preferred_measurement_unit">
-                        <option value="cm">Centimeters (cm)</option>
-                        <option value="in">Inches (in)</option>
-                    </select>
-                </div>
-            </div>
-
-            <button type="submit">Register</button>
-        </form>
-
-        <div class="login-link">
-            Already have an account? <a href="{{ url_for('auth.login') }}">Login</a>
+                <!-- Login Link -->
+                <p class="text-center text-gray-600 mt-4">
+                    Already have an account? <a href="{{ url_for('auth.login') }}" class="text-blue-500 hover:underline">Login</a>
+                </p>
+            </form>
         </div>
     </div>
+
+    <!-- JavaScript for dynamic day dropdown -->
+    <script>
+    function updateDays() {
+        const daySelect = document.querySelector('select[name="birth_day"]');
+        const monthSelect = document.querySelector('select[name="birth_month"]');
+        const yearSelect = document.querySelector('select[name="birth_year"]');
+        
+        const selectedDay = daySelect.value;
+        const month = parseInt(monthSelect.value);
+        const year = parseInt(yearSelect.value);
+        
+        // Clear existing days
+        while (daySelect.options.length > 1) {
+            daySelect.remove(1);
+        }
+        
+        // Get number of days in selected month
+        let daysInMonth = 31;
+        if (month === 2) {
+            // Check for leap year
+            if (year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0)) {
+                daysInMonth = 29;
+            } else {
+                daysInMonth = 28;
+            }
+        } else if ([4, 6, 9, 11].includes(month)) {
+            daysInMonth = 30;
+        }
+        
+        // Add appropriate number of days
+        for (let i = 1; i <= daysInMonth; i++) {
+            const option = document.createElement('option');
+            option.value = i;
+            option.textContent = i;
+            if (i === parseInt(selectedDay) && i <= daysInMonth) {
+                option.selected = true;
+            }
+            daySelect.appendChild(option);
+        }
+    }
+
+    // Add event listeners
+    document.addEventListener('DOMContentLoaded', function() {
+        const monthSelect = document.querySelector('select[name="birth_month"]');
+        const yearSelect = document.querySelector('select[name="birth_year"]');
+        
+        monthSelect.addEventListener('change', updateDays);
+        yearSelect.addEventListener('change', updateDays);
+        
+        // Initial update
+        updateDays();
+    });
+    </script>
 </body>
 </html>
