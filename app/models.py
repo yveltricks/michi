@@ -198,6 +198,14 @@ class Measurement(db.Model):
     date = db.Column(db.DateTime, default=datetime.utcnow)
     unit = db.Column(db.String(10))  # e.g., 'kg', 'lbs', 'cm', 'in', etc.
 
+    @classmethod
+    def get_latest_measurement(cls, user_id, measurement_type):
+        """Fetch the most recent measurement for a given user and measurement type."""
+        return cls.query.filter_by(
+            user_id=user_id,
+            type=measurement_type
+        ).order_by(cls.date.desc()).first()
+
 class Goal(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)

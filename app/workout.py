@@ -236,7 +236,8 @@ def get_exercise_details(exercise_id):
 @login_required
 def measurements():
     """Render the measurements landing page."""
-    return render_template('workout/measurements.html')
+    # Pass the Measurement class to the template context
+    return render_template('workout/measurements.html', Measurement=Measurement)
 
 @workout.route('/measurements/<measurement_type>', methods=['GET'])
 @login_required
@@ -287,8 +288,9 @@ def get_weight_data():
         start_date = now - timedelta(days=90)
     elif range_param == '6m':
         start_date = now - timedelta(days=180)
-    elif range_param == '1y':
-        start_date = now - timedelta(days=365)
+    elif range_param == 'cy':
+        # Get first day of current year
+        start_date = datetime(now.year, 1, 1)
     else:  # all time
         start_date = datetime.min
     
@@ -319,8 +321,9 @@ def get_measurement_data(measurement_type):
         start_date = now - timedelta(days=90)
     elif range_param == '6m':
         start_date = now - timedelta(days=180)
-    elif range_param == '1y':
-        start_date = now - timedelta(days=365)
+    elif range_param == 'cy':
+        # Get first day of current year
+        start_date = datetime(now.year, 1, 1)
     else:  # all time
         start_date = datetime.min
     
@@ -345,6 +348,7 @@ def get_measurement_data(measurement_type):
 def log_measurement(measurement_type):
     data = request.get_json()
     value = data.get('value')
+    unit = data.get('unit')
     
     valid_types = {
         'weight': {'unit': 'kg', 'min': 5, 'max': 600},
@@ -365,12 +369,21 @@ def log_measurement(measurement_type):
     
     if measurement_type not in valid_types:
         return jsonify({'success': False, 'error': 'Invalid measurement type'}), 400
-    
-    # Validate value
+        
+    # Convert value based on unit
     try:
         value = float(value)
+        if unit == 'lbs':
+            value = value * 0.45359237  # Convert to kg
+        elif unit == 'in':
+            value = value * 2.54  # Convert to cm
+            
+        # Validate converted value
         if value < valid_types[measurement_type]['min'] or value > valid_types[measurement_type]['max']:
-            return jsonify({'success': False, 'error': f"Value must be between {valid_types[measurement_type]['min']} and {valid_types[measurement_type]['max']}"}), 400
+            return jsonify({
+                'success': False, 
+                'error': f"Value must be between {valid_types[measurement_type]['min']} and {valid_types[measurement_type]['max']} {valid_types[measurement_type]['unit']}"
+            }), 400
     except (TypeError, ValueError):
         return jsonify({'success': False, 'error': 'Invalid value'}), 400
     

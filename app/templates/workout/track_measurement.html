@@ -2,14 +2,118 @@
 {% block title %}Track {{ measurement_type|title }}{% endblock %}
 
 {% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <style>
-  .chart-container {
-    background-color: white;
-    padding: 20px;
-    border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    margin-bottom: 20px;
-  }
+    .chart-container {
+        background-color: white;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        margin-bottom: 20px;
+        position: relative;
+        height: 400px; /* Fixed height to prevent graph from growing */
+    }
+
+    .no-data-message {
+        text-align: center;
+        padding: 20px;
+        color: #666;
+    }
+
+    .measurement-history {
+        background-color: white;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        margin-top: 20px;
+    }
+
+    .measurement-history table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .measurement-history th,
+    .measurement-history td {
+        padding: 12px;
+        text-align: left;
+        border-bottom: 1px solid #ddd;
+    }
+
+    .measurement-history th {
+        background-color: #f8f9fa;
+    }
+
+    .measurement-history tr:hover {
+        background-color: #f1f1f1;
+    }
+
+    .delete-button {
+        color: #dc3545;
+        cursor: pointer;
+    }
+
+    .delete-button:hover {
+        text-decoration: underline;
+    }
+
+    .form-container {
+        background-color: white;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        margin-bottom: 20px;
+    }
+
+    .form-container h2 {
+        margin-bottom: 16px;
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: #1a202c;
+    }
+
+    .form-container label {
+        display: block;
+        margin-bottom: 8px;
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: #4a5568;
+    }
+
+    .form-container input,
+    .form-container select {
+        width: 100%;
+        padding: 8px;
+        border: 1px solid #e2e8f0;
+        border-radius: 4px;
+        font-size: 0.875rem;
+        color: #4a5568;
+    }
+
+    .form-container button {
+        width: 100%;
+        padding: 10px;
+        background-color: #4299e1;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        font-size: 0.875rem;
+        font-weight: 500;
+        cursor: pointer;
+    }
+
+    .form-container button:hover {
+        background-color: #3182ce;
+    }
+
+    .time-range-selector {
+        background-color: #f8f9fa;
+        border: 1px solid #e2e8f0;
+        border-radius: 4px;
+        padding: 6px 12px;
+        font-size: 0.875rem;
+        color: #4a5568;
+    }
 </style>
 {% endblock %}
 
@@ -18,24 +122,26 @@
     <h1 class="text-2xl font-bold mb-6">Track {{ measurement_type|title|replace('_', ' ') }}</h1>
     
     <!-- Input Form -->
-    <div class="bg-white p-6 rounded-lg shadow-md mb-8">
-        <h2 class="text-xl font-semibold mb-4">Log New {{ measurement_type|title|replace('_', ' ') }}</h2>
+    <div class="form-container">
+        <h2>Log New {{ measurement_type|title|replace('_', ' ') }}</h2>
         <form id="measurement-form" class="space-y-4">
             <div class="flex space-x-4">
                 <div class="flex-1">
-                    <label class="block text-sm font-medium text-gray-700">Value</label>
-                    <input type="number" step="0.1" name="value" id="measurement-value" 
-                           class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                           required>
+                    <label for="measurement-value">Value</label>
+                    <input type="number" step="0.1" name="value" id="measurement-value" required>
                 </div>
                 
-                {% if measurement_type == 'weight' %}
+                {% if measurement_type in ['weight', 'chest', 'waist', 'hips', 'bicep', 'forearm', 'thigh', 'calf'] %}
                 <div class="w-32">
-                    <label class="block text-sm font-medium text-gray-700">Unit</label>
-                    <select name="unit" id="unit-selector" 
-                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
-                        <option value="kg">kg</option>
-                        <option value="lbs">lbs</option>
+                    <label for="unit-selector">Unit</label>
+                    <select name="unit" id="unit-selector">
+                        {% if measurement_type == 'weight' %}
+                            <option value="kg">kg</option>
+                            <option value="lbs">lbs</option>
+                        {% else %}
+                            <option value="cm">cm</option>
+                            <option value="in">in</option>
+                        {% endif %}
                     </select>
                 </div>
                 {% endif %}
@@ -45,55 +151,53 @@
                 Valid range: {{ limits.min }}-{{ limits.max }} {{ limits.unit }}
             </div>
             
-            <button type="submit" 
-                    class="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
-                Log Measurement
-            </button>
+            <button type="submit">Log Measurement</button>
         </form>
     </div>
 
     <!-- Chart -->
     <div class="chart-container">
+        <div class="flex justify-between items-center mb-4">
+            <h2 class="text-xl font-semibold">Progress Chart</h2>
+            <select id="timeRange" class="time-range-selector">
+                <option value="3m">Last 3 Months</option>
+                <option value="6m">Last 6 Months</option>
+                <option value="cy">Current Year</option>
+                <option value="all">All Time</option>
+            </select>
+        </div>
         <canvas id="measurementChart"></canvas>
+        <div id="chart-no-data" class="no-data-message hidden">
+            <p class="text-gray-500">No data available for this time period</p>
+        </div>
     </div>
 
-    <!-- History -->
-    <div class="bg-white rounded-lg shadow-md">
-        <h2 class="text-xl font-semibold p-6 border-b">History</h2>
+    <!-- Measurement History -->
+    <div class="measurement-history">
+        <h2 class="text-xl font-semibold mb-4">Measurement History</h2>
         {% if logs %}
-        <div class="overflow-x-auto">
-            <table class="w-full">
-                <thead class="bg-gray-50">
-                    <tr>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Value</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-gray-200">
-                    {% for log in logs %}
-                    <tr id="log-row-{{ log.id }}">
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {{ log.date.strftime('%B %d, %Y %H:%M') }}
-                        </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {{ "%.1f"|format(log.value) }} {{ log.unit }}
-                        </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm">
-                            <button onclick="deleteMeasurement({{ log.id }})"
-                                    class="text-red-600 hover:text-red-900">
-                                Delete
-                            </button>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Value</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for log in logs %}
+                <tr>
+                    <td>{{ log.date.strftime('%B %d, %Y %H:%M') }}</td>
+                    <td>{{ "%.2f"|format(log.value) }} {{ log.unit }}</td>
+                    <td>
+                        <button onclick="deleteMeasurement({{ log.id }})" class="delete-button">Delete</button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
         {% else %}
-        <div class="p-6 text-center text-gray-500">
-            No entries yet. Start tracking your {{ measurement_type|title|replace('_', ' ') }} to see your progress here.
-        </div>
+        <p class="text-gray-500 text-center">No measurements recorded yet.</p>
         {% endif %}
     </div>
 </div>
@@ -104,16 +208,26 @@
 // Unit conversion functions
 const kgToLbs = kg => kg * 2.20462;
 const lbsToKg = lbs => lbs / 2.20462;
+const cmToIn = cm => cm * 0.393701;
+const inToCm = inches => inches * 2.54;
 
-// Chart initialization
 let measurementChart = null;
 
-// Initialize the chart
+// Initialize the chart with proper configuration
 function initChart(data) {
     const ctx = document.getElementById('measurementChart').getContext('2d');
     
     if (measurementChart) {
         measurementChart.destroy();
+    }
+
+    // Show/hide no data message
+    const noDataMessage = document.getElementById('chart-no-data');
+    if (data.labels.length === 0) {
+        noDataMessage.classList.remove('hidden');
+        return;
+    } else {
+        noDataMessage.classList.add('hidden');
     }
 
     measurementChart = new Chart(ctx, {
@@ -134,7 +248,7 @@ function initChart(data) {
             maintainAspectRatio: false,
             plugins: {
                 legend: {
-                    display: true
+                    display: false
                 }
             },
             scales: {
@@ -142,6 +256,11 @@ function initChart(data) {
                     beginAtZero: false,
                     grid: {
                         color: 'rgba(0, 0, 0, 0.1)'
+                    },
+                    ticks: {
+                        callback: function(value) {
+                            return value.toFixed(1);
+                        }
                     }
                 },
                 x: {
@@ -149,41 +268,31 @@ function initChart(data) {
                         display: false
                     }
                 }
+            },
+            interaction: {
+                mode: 'index',
+                intersect: false
             }
         }
     });
 }
 
-// Load chart data
+// Load chart data with time range
 function loadChartData() {
-    fetch(`/api/measurement-data/{{ measurement_type }}`)
+    const timeRange = document.getElementById('timeRange').value;
+    fetch(`/api/measurement-data/{{ measurement_type }}?range=${timeRange}`)
         .then(response => response.json())
         .then(data => {
             initChart(data);
         })
-        .catch(error => console.error('Error loading chart data:', error));
+        .catch(error => {
+            console.error('Error loading chart data:', error);
+            document.getElementById('chart-no-data').classList.remove('hidden');
+        });
 }
 
-// Delete measurement
-function deleteMeasurement(logId) {
-    if (!confirm('Are you sure you want to delete this measurement?')) {
-        return;
-    }
-
-    fetch(`/delete-measurement/${logId}`, {
-        method: 'DELETE',
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            document.getElementById(`log-row-${logId}`).remove();
-            loadChartData();  // Refresh the chart
-        } else {
-            alert(data.error || 'Error deleting measurement');
-        }
-    })
-    .catch(error => console.error('Error:', error));
-}
+// Handle time range changes
+document.getElementById('timeRange').addEventListener('change', loadChartData);
 
 // Handle form submission
 document.getElementById('measurement-form').addEventListener('submit', function(e) {
@@ -192,9 +301,13 @@ document.getElementById('measurement-form').addEventListener('submit', function(
     let value = parseFloat(document.getElementById('measurement-value').value);
     const unitSelector = document.getElementById('unit-selector');
     
-    // Convert to kg if needed
-    if (unitSelector && unitSelector.value === 'lbs') {
-        value = lbsToKg(value);
+    // Convert to base units if needed
+    if (unitSelector) {
+        if (unitSelector.value === 'lbs') {
+            value = lbsToKg(value);
+        } else if (unitSelector.value === 'in') {
+            value = inToCm(value);
+        }
     }
 
     fetch(`/measurements/{{ measurement_type }}`, {
@@ -215,24 +328,25 @@ document.getElementById('measurement-form').addEventListener('submit', function(
     .catch(error => console.error('Error:', error));
 });
 
+// Delete measurement
+function deleteMeasurement(logId) {
+    if (confirm('Are you sure you want to delete this measurement?')) {
+        fetch(`/delete-measurement/${logId}`, {
+            method: 'DELETE'
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                window.location.reload();
+            } else {
+                alert(data.error || 'Error deleting measurement');
+            }
+        })
+        .catch(error => console.error('Error:', error));
+    }
+}
+
 // Initialize chart on page load
 document.addEventListener('DOMContentLoaded', loadChartData);
-
-// Handle unit conversion if unit selector exists
-const unitSelector = document.getElementById('unit-selector');
-const valueInput = document.getElementById('measurement-value');
-
-if (unitSelector && valueInput) {
-    unitSelector.addEventListener('change', function() {
-        if (valueInput.value) {
-            const currentValue = parseFloat(valueInput.value);
-            if (this.value === 'lbs') {
-                valueInput.value = (currentValue * 2.20462).toFixed(1);
-            } else {
-                valueInput.value = (currentValue / 2.20462).toFixed(1);
-            }
-        }
-    });
-}
 </script>
 {% endblock %}

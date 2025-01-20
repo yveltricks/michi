@@ -10,36 +10,105 @@
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <!-- Weight Card -->
         <a href="{{ url_for('workout.track_measurement', measurement_type='weight') }}" 
-           class="block bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-200">
+           class="block bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-200 relative overflow-hidden">
+            <div class="absolute top-0 right-0 bg-blue-500 text-white px-3 py-1 rounded-bl-lg text-sm">
+                Most Recent
+            </div>
             <div class="p-6">
                 <h2 class="text-xl font-semibold mb-2">Weight</h2>
-                <p class="text-gray-600">Track your body weight progress</p>
+                <p class="text-gray-600 mb-3">Track your body weight progress</p>
+                {% set latest_weight = Measurement.get_latest_measurement(current_user.id, 'weight') %}
+                {% if latest_weight %}
+                <div class="mt-4 text-center">
+                    <span class="text-2xl font-bold text-blue-600">{{ "%.1f"|format(latest_weight.value) }}</span>
+                    <span class="text-gray-500">{{ latest_weight.unit }}</span>
+                    <div class="text-xs text-gray-400 mt-1">
+                        {{ latest_weight.date.strftime('%B %d, %Y') }}
+                    </div>
+                </div>
+                {% else %}
+                <div class="mt-4 text-center">
+                    <span class="text-gray-500">No data available</span>
+                </div>
+                {% endif %}
             </div>
         </a>
 
         <!-- Body Fat Card -->
         <a href="{{ url_for('workout.track_measurement', measurement_type='body_fat') }}"
-           class="block bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-200">
+           class="block bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-200 relative overflow-hidden">
+            <div class="absolute top-0 right-0 bg-blue-500 text-white px-3 py-1 rounded-bl-lg text-sm">
+                Most Recent
+            </div>
             <div class="p-6">
                 <h2 class="text-xl font-semibold mb-2">Body Fat</h2>
-                <p class="text-gray-600">Monitor your body fat percentage</p>
+                <p class="text-gray-600 mb-3">Monitor your body fat percentage</p>
+                {% set latest_bf = Measurement.get_latest_measurement(current_user.id, 'body_fat') %}
+                {% if latest_bf %}
+                <div class="mt-4 text-center">
+                    <span class="text-2xl font-bold text-blue-600">{{ "%.1f"|format(latest_bf.value) }}</span>
+                    <span class="text-gray-500">%</span>
+                    <div class="text-xs text-gray-400 mt-1">
+                        {{ latest_bf.date.strftime('%B %d, %Y') }}
+                    </div>
+                </div>
+                {% else %}
+                <div class="mt-4 text-center">
+                    <span class="text-gray-500">No data available</span>
+                </div>
+                {% endif %}
             </div>
         </a>
 
-        <!-- Upper Body Measurements -->
+        <!-- Chest Card -->
         <a href="{{ url_for('workout.track_measurement', measurement_type='chest') }}"
-           class="block bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-200">
+           class="block bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-200 relative overflow-hidden">
+            <div class="absolute top-0 right-0 bg-blue-500 text-white px-3 py-1 rounded-bl-lg text-sm">
+                Most Recent
+            </div>
             <div class="p-6">
                 <h2 class="text-xl font-semibold mb-2">Chest</h2>
-                <p class="text-gray-600">Track your chest circumference</p>
+                <p class="text-gray-600 mb-3">Track your chest circumference</p>
+                {% set latest_chest = Measurement.get_latest_measurement(current_user.id, 'chest') %}
+                {% if latest_chest %}
+                <div class="mt-4 text-center">
+                    <span class="text-2xl font-bold text-blue-600">{{ "%.1f"|format(latest_chest.value) }}</span>
+                    <span class="text-gray-500">{{ latest_chest.unit }}</span>
+                    <div class="text-xs text-gray-400 mt-1">
+                        {{ latest_chest.date.strftime('%B %d, %Y') }}
+                    </div>
+                </div>
+                {% else %}
+                <div class="mt-4 text-center">
+                    <span class="text-gray-500">No data available</span>
+                </div>
+                {% endif %}
             </div>
         </a>
 
+        <!-- Waist Card -->
         <a href="{{ url_for('workout.track_measurement', measurement_type='waist') }}"
-           class="block bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-200">
+           class="block bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-200 relative overflow-hidden">
+            <div class="absolute top-0 right-0 bg-blue-500 text-white px-3 py-1 rounded-bl-lg text-sm">
+                Most Recent
+            </div>
             <div class="p-6">
                 <h2 class="text-xl font-semibold mb-2">Waist</h2>
-                <p class="text-gray-600">Monitor your waist measurements</p>
+                <p class="text-gray-600 mb-3">Monitor your waist measurements</p>
+                {% set latest_waist = Measurement.get_latest_measurement(current_user.id, 'waist') %}
+                {% if latest_waist %}
+                <div class="mt-4 text-center">
+                    <span class="text-2xl font-bold text-blue-600">{{ "%.1f"|format(latest_waist.value) }}</span>
+                    <span class="text-gray-500">{{ latest_waist.unit }}</span>
+                    <div class="text-xs text-gray-400 mt-1">
+                        {{ latest_waist.date.strftime('%B %d, %Y') }}
+                    </div>
+                </div>
+                {% else %}
+                <div class="mt-4 text-center">
+                    <span class="text-gray-500">No data available</span>
+                </div>
+                {% endif %}
             </div>
         </a>
 
@@ -50,18 +119,34 @@
                 <a href="{{ url_for('workout.track_measurement', measurement_type='left_bicep') }}"
                    class="block hover:bg-gray-50 p-2 rounded">
                     <span class="font-medium">Left Bicep</span>
+                    {% set latest_left_bicep = Measurement.get_latest_measurement(current_user.id, 'left_bicep') %}
+                    {% if latest_left_bicep %}
+                    <span class="float-right text-gray-500">{{ "%.1f"|format(latest_left_bicep.value) }} {{ latest_left_bicep.unit }}</span>
+                    {% endif %}
                 </a>
                 <a href="{{ url_for('workout.track_measurement', measurement_type='right_bicep') }}"
                    class="block hover:bg-gray-50 p-2 rounded">
                     <span class="font-medium">Right Bicep</span>
+                    {% set latest_right_bicep = Measurement.get_latest_measurement(current_user.id, 'right_bicep') %}
+                    {% if latest_right_bicep %}
+                    <span class="float-right text-gray-500">{{ "%.1f"|format(latest_right_bicep.value) }} {{ latest_right_bicep.unit }}</span>
+                    {% endif %}
                 </a>
                 <a href="{{ url_for('workout.track_measurement', measurement_type='left_forearm') }}"
                    class="block hover:bg-gray-50 p-2 rounded">
                     <span class="font-medium">Left Forearm</span>
+                    {% set latest_left_forearm = Measurement.get_latest_measurement(current_user.id, 'left_forearm') %}
+                    {% if latest_left_forearm %}
+                    <span class="float-right text-gray-500">{{ "%.1f"|format(latest_left_forearm.value) }} {{ latest_left_forearm.unit }}</span>
+                    {% endif %}
                 </a>
                 <a href="{{ url_for('workout.track_measurement', measurement_type='right_forearm') }}"
                    class="block hover:bg-gray-50 p-2 rounded">
                     <span class="font-medium">Right Forearm</span>
+                    {% set latest_right_forearm = Measurement.get_latest_measurement(current_user.id, 'right_forearm') %}
+                    {% if latest_right_forearm %}
+                    <span class="float-right text-gray-500">{{ "%.1f"|format(latest_right_forearm.value) }} {{ latest_right_forearm.unit }}</span>
+                    {% endif %}
                 </a>
             </div>
         </div>
@@ -73,18 +158,34 @@
                 <a href="{{ url_for('workout.track_measurement', measurement_type='left_thigh') }}"
                    class="block hover:bg-gray-50 p-2 rounded">
                     <span class="font-medium">Left Thigh</span>
+                    {% set latest_left_thigh = Measurement.get_latest_measurement(current_user.id, 'left_thigh') %}
+                    {% if latest_left_thigh %}
+                    <span class="float-right text-gray-500">{{ "%.1f"|format(latest_left_thigh.value) }} {{ latest_left_thigh.unit }}</span>
+                    {% endif %}
                 </a>
                 <a href="{{ url_for('workout.track_measurement', measurement_type='right_thigh') }}"
                    class="block hover:bg-gray-50 p-2 rounded">
                     <span class="font-medium">Right Thigh</span>
+                    {% set latest_right_thigh = Measurement.get_latest_measurement(current_user.id, 'right_thigh') %}
+                    {% if latest_right_thigh %}
+                    <span class="float-right text-gray-500">{{ "%.1f"|format(latest_right_thigh.value) }} {{ latest_right_thigh.unit }}</span>
+                    {% endif %}
                 </a>
                 <a href="{{ url_for('workout.track_measurement', measurement_type='left_calf') }}"
                    class="block hover:bg-gray-50 p-2 rounded">
                     <span class="font-medium">Left Calf</span>
+                    {% set latest_left_calf = Measurement.get_latest_measurement(current_user.id, 'left_calf') %}
+                    {% if latest_left_calf %}
+                    <span class="float-right text-gray-500">{{ "%.1f"|format(latest_left_calf.value) }} {{ latest_left_calf.unit }}</span>
+                    {% endif %}
                 </a>
                 <a href="{{ url_for('workout.track_measurement', measurement_type='right_calf') }}"
                    class="block hover:bg-gray-50 p-2 rounded">
                     <span class="font-medium">Right Calf</span>
+                    {% set latest_right_calf = Measurement.get_latest_measurement(current_user.id, 'right_calf') %}
+                    {% if latest_right_calf %}
+                    <span class="float-right text-gray-500">{{ "%.1f"|format(latest_right_calf.value) }} {{ latest_right_calf.unit }}</span>
+                    {% endif %}
                 </a>
             </div>
         </div>
