@@ -94,14 +94,14 @@
     <!-- Account Information Section -->
     <div class="bg-white p-6 rounded-lg shadow mb-6">
         <h2 class="text-xl font-semibold mb-4">Account Information</h2>
-        
+
         <!-- Username Change Form -->
         <form action="{{ url_for('auth.change_username') }}" method="POST" class="mb-6">
             <h3 class="text-lg font-medium mb-3">Change Username</h3>
             <div class="mb-4">
                 <label class="block mb-2">New Username</label>
-                <input type="text" name="new_username" class="w-full p-2 border rounded" 
-                       pattern="[a-zA-Z0-9_]{1,20}" 
+                <input type="text" name="new_username" class="w-full p-2 border rounded"
+                       pattern="[a-zA-Z0-9_]{1,20}"
                        title="Only letters, numbers, and underscores allowed. Max 20 characters."
                        required>
                 <p class="text-sm text-gray-600 mt-1">Only letters, numbers, and underscores allowed. Max 20 characters.</p>
@@ -120,7 +120,7 @@
             </div>
             <div class="mb-4">
                 <label class="block mb-2">New Password</label>
-                <input type="password" name="new_password" class="w-full p-2 border rounded" 
+                <input type="password" name="new_password" class="w-full p-2 border rounded"
                        pattern="^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,200}$"
                        title="Must be between 8 and 200 characters, contain at least one uppercase letter, one lowercase letter, and one number"
                        required>
@@ -198,14 +198,14 @@
             <a href="{{ url_for('auth.logout') }}" class="inline-block bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600">
                 Logout
             </a>
-            
+
             <form action="{{ url_for('auth.delete_account') }}" method="POST" class="border-t pt-4">
                 <h3 class="text-lg font-medium mb-3 text-red-600">Delete Account</h3>
                 <div class="mb-4">
                     <label class="block mb-2">Confirm Password to Delete Account</label>
                     <input type="password" name="password" class="w-full p-2 border rounded" required>
                 </div>
-                <button type="submit" class="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600" 
+                <button type="submit" class="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600"
                         onclick="return confirm('Are you sure you want to delete your account? This action cannot be undone.')">
                     Delete Account
                 </button>

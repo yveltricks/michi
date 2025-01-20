@@ -1,0 +1,27 @@
+<!-- measurement_history.html -->
+{% extends "base.html" %}
+
+{% block title %}{{ measurement_type|title }} History{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1>{{ measurement_type|title }} History</h1>
+    {% if logs %}
+    <div class="current-measurement">
+        <h2>Current {{ measurement_type|title }}</h2>
+        <div class="value">{{ logs[0].value }} {{ logs[0].unit }}</div>
+        <div class="date">{{ logs[0].date.strftime('%B %d, %Y') }}</div>
+    </div>
+    <div class="history-list">
+        {% for log in logs[1:] %}
+        <div class="history-item">
+            <div class="date">{{ log.date.strftime('%B %d, %Y') }}</div>
+            <div class="value">{{ log.value }} {{ log.unit }}</div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p>No {{ measurement_type }} entries yet.</p>
+    {% endif %}
+</div>
+{% endblock %}

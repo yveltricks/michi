@@ -14,7 +14,6 @@ from app.models import User, Session, Exercise, Routine, Measurement, Goal, Stat
 def create_sample_exercises():
     """Create a list of common exercises"""
     exercises = [
-        # Existing exercises
         {
             'name': 'Bench Press',
             'equipment': 'Barbell',
@@ -135,7 +134,7 @@ def create_sample_exercises():
             'input_type': 'weight_reps',
             'photo': 'bent_over_rows.jpg'
         },
-                {
+        {
             'name': 'Weighted Pull-ups',
             'equipment': 'Pull-up Bar, Weight Belt',
             'muscles_worked': 'Lats, Biceps',
@@ -176,7 +175,6 @@ def create_sample_exercises():
             'photo': 'farmers_walk.jpg'
         }
     ]
-
 
     created_exercises = []
     for exercise_data in exercises:
@@ -228,9 +226,11 @@ def create_sample_users():
         db.session.flush()  # Ensure user.id is available
 
         # Create initial bodyweight log (always stored in kg)
-        initial_weight = BodyweightLog(
+        initial_weight = Measurement(
             user_id=user.id,
-            weight=bodyweight,  # Already in kg
+            type='weight',
+            value=bodyweight,  # Already in kg
+            unit='kg',
             date=datetime.utcnow()
         )
         db.session.add(initial_weight)

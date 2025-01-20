@@ -1,8 +1,7 @@
-# This handles all my authentication routes (login, register, etc.)
 from flask import Blueprint, render_template, redirect, url_for, request, flash
 from flask_login import login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
-from .models import User, Session, BodyweightLog
+from .models import User, Session, Measurement
 from sqlalchemy import desc
 from . import db
 from datetime import datetime, timedelta
@@ -27,7 +26,7 @@ def validate_weight(weight_value, unit='kg'):
     """
     try:
         weight = float(weight_value)
-        
+
         # Convert lbs to kg if needed
         if unit == 'lbs':
             weight = weight * 0.45359237
@@ -41,9 +40,9 @@ def validate_weight(weight_value, unit='kg'):
             return False, f"Weight must be at least {min_weight} {unit}"
         if weight > max_weight:
             return False, f"Weight cannot exceed {max_weight} {unit}"
-            
+
         return True, None
-        
+
     except (ValueError, TypeError):
         return False, "Please enter a valid weight"
 
@@ -53,13 +52,13 @@ def home():
     # Get the current user's sessions and sessions from people they follow
     following_ids = [user.id for user in current_user.following]
     following_ids.append(current_user.id)  # Include current user's sessions
-    
+
     sessions = Session.query\
         .filter(Session.user_id.in_(following_ids))\
         .order_by(desc(Session.session_date))\
         .limit(10)\
         .all()
-        
+
     return render_template('home.html', sessions=sessions)
 
 @auth.route('/login')
@@ -109,27 +108,27 @@ def register_post():
     username = request.form.get('username')
     password = request.form.get('password')
     gender = request.form.get('gender')
-    
+
     # Get bodyweight data
     bodyweight = request.form.get('bodyweight')
     weight_unit = request.form.get('weight_unit', 'kg')
-    
+
     # Validate weight
     is_valid, message = validate_weight(bodyweight, weight_unit)
     if not is_valid:
         flash(message)
         return redirect(url_for('auth.register'))
-        
+
     # Convert to kg if in lbs
     weight_value = float(bodyweight)
     if weight_unit == 'lbs':
         weight_value = weight_value * 0.45359237
-    
+
     # Get birthday components
     birth_day = request.form.get('birth_day')
     birth_month = request.form.get('birth_month')
     birth_year = request.form.get('birth_year')
-    
+
     try:
         birthday = datetime(int(birth_year), int(birth_month), int(birth_day))
     except (ValueError, TypeError):
@@ -154,15 +153,15 @@ def register_post():
     # Validate birthday
     today = datetime.utcnow()
     age = today.year - birthday.year - ((today.month, today.day) < (birthday.month, birthday.day))
-    
+
     if age < 5:
         flash('You must be at least 5 years old to register')
         return redirect(url_for('auth.register'))
-    
+
     if age > 150:
         flash('Please enter a valid birth date')
         return redirect(url_for('auth.register'))
-    
+
     if birthday > today:
         flash('Birth date cannot be in the future')
         return redirect(url_for('auth.register'))
@@ -177,7 +176,7 @@ def register_post():
     if User.query.filter_by(email=email).first():
         flash('Email address is already registered')
         return redirect(url_for('auth.register'))
-    
+
     if User.query.filter_by(username=username).first():
         flash('Username is already taken')
         return redirect(url_for('auth.register'))
@@ -205,14 +204,16 @@ def register_post():
         db.session.flush()  # This gets us the user.id
 
         # Create initial bodyweight log
-        initial_weight = BodyweightLog(
+        initial_weight = Measurement(
             user_id=new_user.id,
-            weight=weight_value,
+            type='weight',
+            value=weight_value,  # Already in kg
+            unit='kg',
             date=datetime.utcnow()
         )
         db.session.add(initial_weight)
         db.session.commit()
-        
+
         flash('Registration successful! Please log in.')
         return redirect(url_for('auth.login'))
     except Exception as e:
@@ -246,14 +247,14 @@ def update_preferences():
         current_user.preferred_distance_unit = request.form.get('preferred_distance_unit', 'km')
         current_user.preferred_measurement_unit = request.form.get('preferred_measurement_unit', 'cm')
         flash('Preferences updated successfully!', 'success')
-    
+
     try:
         db.session.commit()
     except Exception as e:
         db.session.rollback()
         flash('Error updating preferences', 'error')
         print(f"Error updating preferences: {str(e)}")  # For debugging
-    
+
     return redirect(url_for('auth.settings'))
 
 @auth.route('/update-privacy', methods=['POST'])
@@ -272,29 +273,29 @@ def update_privacy():
         db.session.rollback()
         flash('Error updating privacy settings', 'error')
         print(f"Error updating privacy settings: {str(e)}")  # For debugging
-    
+
     return redirect(url_for('auth.settings'))
 
 @auth.route('/change-username', methods=['POST'])
 @login_required
 def change_username():
     new_username = request.form.get('new_username')
-    
+
     # Validate username format
     if not USERNAME_PATTERN.match(new_username):
         flash('Username can only contain letters, numbers, and underscores (max 20 characters)', 'error')
         return redirect(url_for('auth.settings'))
-    
+
     # Check if username is taken
     if User.query.filter_by(username=new_username).first():
         flash('This username is already taken', 'error')
         return redirect(url_for('auth.settings'))
-    
+
     # Check if it's the same as current username
     if current_user.username == new_username:
         flash('This is already your current username', 'error')
         return redirect(url_for('auth.settings'))
-    
+
     try:
         current_user.username = new_username
         db.session.commit()
@@ -303,7 +304,7 @@ def change_username():
         db.session.rollback()
         flash('An error occurred while updating username', 'error')
         print(f"Error updating username: {str(e)}")  # For debugging
-    
+
     return redirect(url_for('auth.settings'))
 
 @auth.route('/change-password', methods=['POST'])
@@ -343,27 +344,27 @@ def change_password():
 @login_required
 def delete_account():
     password = request.form.get('password')
-    
+
     # Verify password
     if not current_user.check_password(password):
         flash('Incorrect password', 'error')
         return redirect(url_for('auth.settings'))
-    
+
     try:
         user_id = current_user.id
-        
+
         # Delete all related data first
-        BodyweightLog.query.filter_by(user_id=user_id).delete()
+        Measurement.query.filter_by(user_id=user_id).delete()
         Session.query.filter_by(user_id=user_id).delete()
         # Add any other related data deletions here
-        
+
         # Now delete the user
         db.session.delete(current_user)
         db.session.commit()
-        
+
         # Log out the user
         logout_user()
-        
+
         flash('Your account has been permanently deleted', 'success')
         return redirect(url_for('index'))
     except Exception as e:
@@ -379,7 +380,7 @@ def update_personal_info():
     first_name = request.form.get('first_name')
     last_name = request.form.get('last_name')
     gender = request.form.get('gender')
-    
+
     # Get birthday components
     try:
         birth_day = int(request.form.get('birth_day'))
@@ -397,11 +398,11 @@ def update_personal_info():
     # Validate birthday
     try:
         birthday = datetime(birth_year, birth_month, birth_day)
-        
+
         # Validate age range
         today = datetime.utcnow()
         age = today.year - birthday.year - ((today.month, today.day) < (birthday.month, birthday.day))
-        
+
         if age < 5:
             flash('You must be at least 5 years old', 'error')
             return redirect(url_for('auth.settings'))
@@ -411,7 +412,7 @@ def update_personal_info():
         if birthday > today:
             flash('Birth date cannot be in the future', 'error')
             return redirect(url_for('auth.settings'))
-            
+
     except ValueError:
         flash('Invalid date. Please check the day matches the selected month.', 'error')
         return redirect(url_for('auth.settings'))
@@ -427,5 +428,5 @@ def update_personal_info():
         db.session.rollback()
         flash('Error updating personal information', 'error')
         print(f"Error updating personal info: {str(e)}")  # For debugging
-    
+
     return redirect(url_for('auth.settings'))

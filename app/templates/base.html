@@ -3,29 +3,62 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}{% endblock %} - Michi</title>
+    <title>Michi - {% block title %}{% endblock %}</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Legacy CSS support -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/modal.css') }}">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    
     {% block extra_head %}{% endblock %}
 </head>
-<body>
-    {% if current_user.is_authenticated %}
-    <nav class="navbar">
-        <ul>
-            <li><a href="{{ url_for('auth.home') }}">Home</a></li>
-            <li><a href="{{ url_for('workout.start_workout') }}">Start Workout</a></li>
-            <li><a href="{{ url_for('workout.bodyweight_tracking') }}">Track Weight</a></li>
-            <li><a href="#">Profile</a></li>
-            <li><a href="{{ url_for('auth.settings') }}">Settings</a></li>
-        </ul>
+<body class="bg-gray-100">
+    <!-- Navigation -->
+    <nav class="bg-white shadow-lg">
+        <div class="max-w-6xl mx-auto px-4">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center">
+                    <a href="{{ url_for('auth.home') }}" class="text-xl font-bold">Michi</a>
+                </div>
+                
+                <div class="flex items-center space-x-4">
+                    {% if current_user.is_authenticated %}
+                        <a href="{{ url_for('auth.home') }}" class="nav-link">Home</a>
+                        <a href="{{ url_for('workout.start_workout') }}" class="nav-link">Start Workout</a>
+                        <a href="{{ url_for('workout.measurements') }}" class="nav-link">Measurements</a>
+                        <a href="{{ url_for('auth.settings') }}" class="nav-link">Settings</a>
+                        <a href="{{ url_for('auth.logout') }}" class="nav-link">Logout</a>
+                    {% else %}
+                        <a href="{{ url_for('auth.login') }}" class="nav-link">Login</a>
+                        <a href="{{ url_for('auth.register') }}" class="nav-link">Register</a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
     </nav>
-    {% endif %}
 
-    <div class="container">
+    <!-- Flash Messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <div class="max-w-6xl mx-auto px-4 mt-4">
+                {% for category, message in messages %}
+                    <div class="p-4 mb-4 rounded-lg {% if category == 'error' %}bg-red-100 text-red-700{% else %}bg-green-100 text-green-700{% endif %}">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+    {% endwith %}
+
+    <!-- Main Content -->
+    <main class="max-w-6xl mx-auto px-4 py-8">
         {% block content %}{% endblock %}
-    </div>
+    </main>
 
+    <!-- Scripts -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.7.0/chart.min.js"></script>
     {% block scripts %}{% endblock %}
 </body>
 </html>

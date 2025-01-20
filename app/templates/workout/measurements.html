@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}Measurements{% endblock %}
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <div class="text-center mb-8">
+        <h1 class="text-3xl font-bold mb-2">Body Measurements</h1>
+        <p class="text-gray-600">Track your body measurements to monitor your progress</p>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <!-- Weight Card -->
+        <a href="{{ url_for('workout.track_measurement', measurement_type='weight') }}" 
+           class="block bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-200">
+            <div class="p-6">
+                <h2 class="text-xl font-semibold mb-2">Weight</h2>
+                <p class="text-gray-600">Track your body weight progress</p>
+            </div>
+        </a>
+
+        <!-- Body Fat Card -->
+        <a href="{{ url_for('workout.track_measurement', measurement_type='body_fat') }}"
+           class="block bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-200">
+            <div class="p-6">
+                <h2 class="text-xl font-semibold mb-2">Body Fat</h2>
+                <p class="text-gray-600">Monitor your body fat percentage</p>
+            </div>
+        </a>
+
+        <!-- Upper Body Measurements -->
+        <a href="{{ url_for('workout.track_measurement', measurement_type='chest') }}"
+           class="block bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-200">
+            <div class="p-6">
+                <h2 class="text-xl font-semibold mb-2">Chest</h2>
+                <p class="text-gray-600">Track your chest circumference</p>
+            </div>
+        </a>
+
+        <a href="{{ url_for('workout.track_measurement', measurement_type='waist') }}"
+           class="block bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-200">
+            <div class="p-6">
+                <h2 class="text-xl font-semibold mb-2">Waist</h2>
+                <p class="text-gray-600">Monitor your waist measurements</p>
+            </div>
+        </a>
+
+        <!-- Arms Section -->
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <h2 class="text-xl font-semibold mb-4">Arms</h2>
+            <div class="space-y-4">
+                <a href="{{ url_for('workout.track_measurement', measurement_type='left_bicep') }}"
+                   class="block hover:bg-gray-50 p-2 rounded">
+                    <span class="font-medium">Left Bicep</span>
+                </a>
+                <a href="{{ url_for('workout.track_measurement', measurement_type='right_bicep') }}"
+                   class="block hover:bg-gray-50 p-2 rounded">
+                    <span class="font-medium">Right Bicep</span>
+                </a>
+                <a href="{{ url_for('workout.track_measurement', measurement_type='left_forearm') }}"
+                   class="block hover:bg-gray-50 p-2 rounded">
+                    <span class="font-medium">Left Forearm</span>
+                </a>
+                <a href="{{ url_for('workout.track_measurement', measurement_type='right_forearm') }}"
+                   class="block hover:bg-gray-50 p-2 rounded">
+                    <span class="font-medium">Right Forearm</span>
+                </a>
+            </div>
+        </div>
+
+        <!-- Legs Section -->
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <h2 class="text-xl font-semibold mb-4">Legs</h2>
+            <div class="space-y-4">
+                <a href="{{ url_for('workout.track_measurement', measurement_type='left_thigh') }}"
+                   class="block hover:bg-gray-50 p-2 rounded">
+                    <span class="font-medium">Left Thigh</span>
+                </a>
+                <a href="{{ url_for('workout.track_measurement', measurement_type='right_thigh') }}"
+                   class="block hover:bg-gray-50 p-2 rounded">
+                    <span class="font-medium">Right Thigh</span>
+                </a>
+                <a href="{{ url_for('workout.track_measurement', measurement_type='left_calf') }}"
+                   class="block hover:bg-gray-50 p-2 rounded">
+                    <span class="font-medium">Left Calf</span>
+                </a>
+                <a href="{{ url_for('workout.track_measurement', measurement_type='right_calf') }}"
+                   class="block hover:bg-gray-50 p-2 rounded">
+                    <span class="font-medium">Right Calf</span>
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

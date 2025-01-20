@@ -18,7 +18,6 @@ followers = db.Table('followers',
 
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    # Updated first_name and last_name to be nullable
     first_name = db.Column(db.String(100))
     last_name = db.Column(db.String(100))
     username = db.Column(db.String(100), unique=True, nullable=False)
@@ -28,17 +27,14 @@ class User(UserMixin, db.Model):
     streak = db.Column(db.Integer, default=0)
     exp = db.Column(db.Integer, default=0)
     profile_pic = db.Column(db.String(200))
-    # Updated gender to be nullable with specific choices
     gender = db.Column(db.String(10), nullable=True)
-    # Updated birthday to be nullable
     birthday = db.Column(db.DateTime, nullable=True)
-    # Updated unit preferences
     preferred_weight_unit = db.Column(db.String(10), default='kg')
     preferred_distance_unit = db.Column(db.String(10), default='km')
     preferred_measurement_unit = db.Column(db.String(10), default='cm')
     privacy_setting = db.Column(db.String(20), default='public')
 
-    # Relationships remain the same
+    # Relationships
     sessions = db.relationship('Session', backref='user', lazy=True)
     routines = db.relationship('Routine', backref='user', lazy=True)
     measurements = db.relationship('Measurement', backref='user', lazy=True)
@@ -47,7 +43,7 @@ class User(UserMixin, db.Model):
     saved_items = db.relationship('SavedItem', backref='user', lazy=True)
     notifications = db.relationship('Notification', backref='user', lazy=True)
     following = db.relationship(
-        'User', 
+        'User',
         secondary='followers',
         primaryjoin='User.id==followers.c.follower_id',
         secondaryjoin='User.id==followers.c.followed_id',
@@ -165,23 +161,23 @@ class Exercise(db.Model):
             if not bodyweight:
                 return 0
             return bodyweight * set_data.get('reps', 0)
-            
+
         elif self.input_type == 'weighted_bodyweight':
             if not bodyweight:
                 return 0
             return (bodyweight + set_data.get('additional_weight', 0)) * set_data.get('reps', 0)
-            
+
         elif self.input_type == 'assisted_bodyweight':
             if not bodyweight:
                 return 0
             return (bodyweight - set_data.get('assistance_weight', 0)) * set_data.get('reps', 0)
-            
+
         elif self.input_type == 'weight_reps':
             return set_data.get('weight', 0) * set_data.get('reps', 0)
-            
+
         elif self.input_type == 'weight_distance':
             return set_data.get('weight', 0) * set_data.get('distance', 0)
-            
+
         return 0
 
 class Routine(db.Model):
@@ -197,9 +193,10 @@ class Routine(db.Model):
 class Measurement(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    type = db.Column(db.String(50))
+    type = db.Column(db.String(50), nullable=False)  # e.g., 'weight', 'body_fat', 'chest', etc.
     value = db.Column(db.Float, nullable=False)
     date = db.Column(db.DateTime, default=datetime.utcnow)
+    unit = db.Column(db.String(10))  # e.g., 'kg', 'lbs', 'cm', 'in', etc.
 
 class Goal(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -237,7 +234,7 @@ class BodyweightLog(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     weight = db.Column(db.Float, nullable=False)
     date = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
-    
+
     user = db.relationship('User', backref=db.backref('bodyweight_logs', lazy=True))
 
 class Set(db.Model):
@@ -275,9 +272,9 @@ class Set(db.Model):
             'completed': self.completed,
             'set_type': self.set_type
         }
-        
+
         # Add relevant fields based on exercise type
         for field in exercise.get_input_fields():
             data[field] = getattr(self, field)
-            
+
         return data

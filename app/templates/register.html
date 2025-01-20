@@ -8,34 +8,34 @@
     <div class="min-h-screen flex items-center justify-center">
         <div class="bg-white p-8 rounded-lg shadow-md w-96">
             <h2 class="text-2xl font-bold mb-6 text-center">Register for Michi</h2>
-            
+
             {% with messages = get_flashed_messages() %}
-            {% if messages %}
-            <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4">
-                {{ messages[0] }}
-            </div>
-            {% endif %}
+                {% if messages %}
+                    <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4">
+                        {{ messages[0] }}
+                    </div>
+                {% endif %}
             {% endwith %}
 
             <form method="POST" class="space-y-4">
                 <!-- First Name -->
                 <div>
                     <label class="block text-gray-700 text-sm font-bold mb-2">First Name</label>
-                    <input type="text" name="first_name" maxlength="85" required 
+                    <input type="text" name="first_name" maxlength="85" required
                            class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500">
                 </div>
 
                 <!-- Last Name -->
                 <div>
                     <label class="block text-gray-700 text-sm font-bold mb-2">Last Name</label>
-                    <input type="text" name="last_name" maxlength="85" required 
+                    <input type="text" name="last_name" maxlength="85" required
                            class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500">
                 </div>
 
                 <!-- Email -->
                 <div>
                     <label class="block text-gray-700 text-sm font-bold mb-2">Email</label>
-                    <input type="email" name="email" required 
+                    <input type="email" name="email" required
                            class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500">
                 </div>
 
@@ -73,10 +73,10 @@
                         <select name="birth_day" required class="px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500">
                             <option value="">Day</option>
                             {% for day in range(1, 32) %}
-                            <option value="{{ day }}">{{ day }}</option>
+                                <option value="{{ day }}">{{ day }}</option>
                             {% endfor %}
                         </select>
-                        
+
                         <!-- Month -->
                         <select name="birth_month" required class="px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500">
                             <option value="">Month</option>
@@ -93,12 +93,12 @@
                             <option value="11">November</option>
                             <option value="12">December</option>
                         </select>
-                        
+
                         <!-- Year -->
                         <select name="birth_year" required class="px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500">
                             <option value="">Year</option>
                             {% for year in range(year_range.end, year_range.start - 1, -1) %}
-                            <option value="{{ year }}">{{ year }}</option>
+                                <option value="{{ year }}">{{ year }}</option>
                             {% endfor %}
                         </select>
                     </div>
@@ -124,7 +124,7 @@
                 <!-- Measurement Preferences -->
                 <div class="space-y-4">
                     <h3 class="font-bold text-lg">Measurement Preferences</h3>
-                    
+
                     <!-- Weight Unit -->
                     <div>
                         <label class="block text-gray-700 text-sm font-bold mb-2">Weight Unit</label>
@@ -168,56 +168,56 @@
 
     <!-- JavaScript for dynamic day dropdown -->
     <script>
-    function updateDays() {
-        const daySelect = document.querySelector('select[name="birth_day"]');
-        const monthSelect = document.querySelector('select[name="birth_month"]');
-        const yearSelect = document.querySelector('select[name="birth_year"]');
-        
-        const selectedDay = daySelect.value;
-        const month = parseInt(monthSelect.value);
-        const year = parseInt(yearSelect.value);
-        
-        // Clear existing days
-        while (daySelect.options.length > 1) {
-            daySelect.remove(1);
-        }
-        
-        // Get number of days in selected month
-        let daysInMonth = 31;
-        if (month === 2) {
-            // Check for leap year
-            if (year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0)) {
-                daysInMonth = 29;
-            } else {
-                daysInMonth = 28;
-            }
-        } else if ([4, 6, 9, 11].includes(month)) {
-            daysInMonth = 30;
-        }
-        
-        // Add appropriate number of days
-        for (let i = 1; i <= daysInMonth; i++) {
-            const option = document.createElement('option');
-            option.value = i;
-            option.textContent = i;
-            if (i === parseInt(selectedDay) && i <= daysInMonth) {
-                option.selected = true;
-            }
-            daySelect.appendChild(option);
-        }
-    }
+        function updateDays() {
+            const daySelect = document.querySelector('select[name="birth_day"]');
+            const monthSelect = document.querySelector('select[name="birth_month"]');
+            const yearSelect = document.querySelector('select[name="birth_year"]');
 
-    // Add event listeners
-    document.addEventListener('DOMContentLoaded', function() {
-        const monthSelect = document.querySelector('select[name="birth_month"]');
-        const yearSelect = document.querySelector('select[name="birth_year"]');
-        
-        monthSelect.addEventListener('change', updateDays);
-        yearSelect.addEventListener('change', updateDays);
-        
-        // Initial update
-        updateDays();
-    });
+            const selectedDay = daySelect.value;
+            const month = parseInt(monthSelect.value);
+            const year = parseInt(yearSelect.value);
+
+            // Clear existing days
+            while (daySelect.options.length > 1) {
+                daySelect.remove(1);
+            }
+
+            // Get number of days in selected month
+            let daysInMonth = 31;
+            if (month === 2) {
+                // Check for leap year
+                if (year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0)) {
+                    daysInMonth = 29;
+                } else {
+                    daysInMonth = 28;
+                }
+            } else if ([4, 6, 9, 11].includes(month)) {
+                daysInMonth = 30;
+            }
+
+            // Add appropriate number of days
+            for (let i = 1; i <= daysInMonth; i++) {
+                const option = document.createElement('option');
+                option.value = i;
+                option.textContent = i;
+                if (i === parseInt(selectedDay) && i <= daysInMonth) {
+                    option.selected = true;
+                }
+                daySelect.appendChild(option);
+            }
+        }
+
+        // Add event listeners
+        document.addEventListener('DOMContentLoaded', function() {
+            const monthSelect = document.querySelector('select[name="birth_month"]');
+            const yearSelect = document.querySelector('select[name="birth_year"]');
+
+            monthSelect.addEventListener('change', updateDays);
+            yearSelect.addEventListener('change', updateDays);
+
+            // Initial update
+            updateDays();
+        });
     </script>
 </body>
 </html>
