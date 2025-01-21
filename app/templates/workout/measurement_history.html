@@ -9,14 +9,46 @@
     {% if logs %}
     <div class="current-measurement">
         <h2>Current {{ measurement_type|title }}</h2>
-        <div class="value">{{ logs[0].value }} {{ logs[0].unit }}</div>
+        <div class="value">
+            {% if measurement_type == 'weight' %}
+                {% if current_user.preferred_weight_unit == 'lbs' %}
+                    {{ "%.2f"|format(logs[0].value * 2.20462) }} lbs
+                {% else %}
+                    {{ "%.2f"|format(logs[0].value) }} kg
+                {% endif %}
+            {% elif measurement_type == 'body_fat' %}
+                {{ "%.2f"|format(logs[0].value) }}% <!-- Body fat in percentage -->
+            {% else %}
+                {% if current_user.preferred_measurement_unit == 'in' %}
+                    {{ "%.2f"|format(logs[0].value * 0.393701) }} in
+                {% else %}
+                    {{ "%.2f"|format(logs[0].value) }} cm
+                {% endif %}
+            {% endif %}
+        </div>
         <div class="date">{{ logs[0].date.strftime('%B %d, %Y') }}</div>
     </div>
     <div class="history-list">
         {% for log in logs[1:] %}
         <div class="history-item">
             <div class="date">{{ log.date.strftime('%B %d, %Y') }}</div>
-            <div class="value">{{ log.value }} {{ log.unit }}</div>
+            <div class="value">
+                {% if measurement_type == 'weight' %}
+                    {% if current_user.preferred_weight_unit == 'lbs' %}
+                        {{ "%.2f"|format(log.value * 2.20462) }} lbs
+                    {% else %}
+                        {{ "%.2f"|format(log.value) }} kg
+                    {% endif %}
+                {% elif measurement_type == 'body_fat' %}
+                    {{ "%.2f"|format(log.value) }}% <!-- Body fat in percentage -->
+                {% else %}
+                    {% if current_user.preferred_measurement_unit == 'in' %}
+                        {{ "%.2f"|format(log.value * 0.393701) }} in
+                    {% else %}
+                        {{ "%.2f"|format(log.value) }} cm
+                    {% endif %}
+                {% endif %}
+            </div>
         </div>
         {% endfor %}
     </div>

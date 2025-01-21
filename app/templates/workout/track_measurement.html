@@ -9,9 +9,14 @@
         padding: 20px;
         border-radius: 8px;
         box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        margin-bottom: 20px;
+        margin-bottom: 40px; /* Increased margin to separate from the table */
         position: relative;
-        height: 400px; /* Fixed height to prevent graph from growing */
+        height: 400px;
+    }
+
+    /* Add this to ensure the x-axis labels have enough space */
+    #measurementChart {
+        margin-bottom: 30px; /* Adds space between the chart and the x-axis labels */
     }
 
     .no-data-message {
@@ -128,19 +133,19 @@
             <div class="flex space-x-4">
                 <div class="flex-1">
                     <label for="measurement-value">Value</label>
-                    <input type="number" step="0.1" name="value" id="measurement-value" required>
+                    <input type="number" step="0.1" name="value" id="measurement-value" required min="0">
                 </div>
                 
-                {% if measurement_type in ['weight', 'chest', 'waist', 'hips', 'bicep', 'forearm', 'thigh', 'calf'] %}
+                {% if measurement_type in ['weight', 'chest', 'waist', 'hips', 'neck', 'left_bicep', 'right_bicep', 'left_forearm', 'right_forearm', 'left_thigh', 'right_thigh', 'left_calf', 'right_calf'] %}
                 <div class="w-32">
                     <label for="unit-selector">Unit</label>
                     <select name="unit" id="unit-selector">
                         {% if measurement_type == 'weight' %}
-                            <option value="kg">kg</option>
-                            <option value="lbs">lbs</option>
+                            <option value="kg" {% if current_user.preferred_weight_unit == 'kg' %}selected{% endif %}>kg</option>
+                            <option value="lbs" {% if current_user.preferred_weight_unit == 'lbs' %}selected{% endif %}>lbs</option>
                         {% else %}
-                            <option value="cm">cm</option>
-                            <option value="in">in</option>
+                            <option value="cm" {% if current_user.preferred_measurement_unit == 'cm' %}selected{% endif %}>cm</option>
+                            <option value="in" {% if current_user.preferred_measurement_unit == 'in' %}selected{% endif %}>in</option>
                         {% endif %}
                     </select>
                 </div>
@@ -148,7 +153,14 @@
             </div>
             
             <div class="text-sm text-gray-600">
-                Valid range: {{ limits.min }}-{{ limits.max }} {{ limits.unit }}
+                Valid range: 
+                {% if measurement_type == 'weight' %}
+                    {{ limits.min }}-{{ limits.max }} kg ({{ "%.1f"|format(limits.min * 2.20462) }}-{{ "%.1f"|format(limits.max * 2.20462) }} lbs)
+                {% elif measurement_type == 'body_fat' %}
+                    {{ limits.min }}-{{ limits.max }}% <!-- Body fat in percentage -->
+                {% else %}
+                    {{ limits.min }}-{{ limits.max }} cm ({{ "%.1f"|format(limits.min * 0.393701) }}-{{ "%.1f"|format(limits.max * 0.393701) }} in)
+                {% endif %}
             </div>
             
             <button type="submit">Log Measurement</button>
@@ -188,7 +200,23 @@
                 {% for log in logs %}
                 <tr>
                     <td>{{ log.date.strftime('%B %d, %Y %H:%M') }}</td>
-                    <td>{{ "%.2f"|format(log.value) }} {{ log.unit }}</td>
+                    <td>
+                        {% if measurement_type == 'weight' %}
+                            {% if current_user.preferred_weight_unit == 'lbs' %}
+                                {{ "%.2f"|format(log.value * 2.20462) }} lbs
+                            {% else %}
+                                {{ "%.2f"|format(log.value) }} kg
+                            {% endif %}
+                        {% elif measurement_type == 'body_fat' %}
+                            {{ "%.2f"|format(log.value) }}% <!-- Body fat in percentage -->
+                        {% else %}
+                            {% if current_user.preferred_measurement_unit == 'in' %}
+                                {{ "%.2f"|format(log.value * 0.393701) }} in
+                            {% else %}
+                                {{ "%.2f"|format(log.value) }} cm
+                            {% endif %}
+                        {% endif %}
+                    </td>
                     <td>
                         <button onclick="deleteMeasurement({{ log.id }})" class="delete-button">Delete</button>
                     </td>
@@ -230,6 +258,16 @@ function initChart(data) {
         noDataMessage.classList.add('hidden');
     }
 
+    // Determine the unit for the y-axis label
+    let unit;
+    if ('{{ measurement_type }}' === 'weight') {
+        unit = '{{ current_user.preferred_weight_unit }}';
+    } else if ('{{ measurement_type }}' === 'body_fat') {
+        unit = '%'; // Body fat always in percentage
+    } else {
+        unit = '{{ current_user.preferred_measurement_unit }}';
+    }
+
     measurementChart = new Chart(ctx, {
         type: 'line',
         data: {
@@ -259,8 +297,12 @@ function initChart(data) {
                     },
                     ticks: {
                         callback: function(value) {
-                            return value.toFixed(1);
+                            return value.toFixed(2); // Format to 2 decimal places
                         }
+                    },
+                    title: {
+                        display: true,
+                        text: unit
                     }
                 },
                 x: {
@@ -348,5 +390,36 @@ function deleteMeasurement(logId) {
 
 // Initialize chart on page load
 document.addEventListener('DOMContentLoaded', loadChartData);
+
+// Prevent arrow keys from exceeding limits
+document.getElementById('measurement-value').addEventListener('input', function(e) {
+    const max = parseFloat(this.max);
+    const min = parseFloat(this.min);
+    let value = parseFloat(this.value);
+
+    // Handle manual input
+    if (value > max) {
+        this.value = max;
+    } else if (value < min) {
+        this.value = min;
+    }
+});
+
+// Add event listener for arrow keys
+document.getElementById('measurement-value').addEventListener('keydown', function(e) {
+    const max = parseFloat(this.max);
+    const min = parseFloat(this.min);
+    let value = parseFloat(this.value);
+
+    // Prevent arrow keys from exceeding limits
+    if (e.key === 'ArrowUp' && value >= max) {
+        e.preventDefault();
+        this.value = max;
+    }
+    if (e.key === 'ArrowDown' && value <= min) {
+        e.preventDefault();
+        this.value = min;
+    }
+});
 </script>
 {% endblock %}

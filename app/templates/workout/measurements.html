@@ -20,8 +20,13 @@
                 {% set latest_weight = Measurement.get_latest_measurement(current_user.id, 'weight') %}
                 {% if latest_weight %}
                 <div class="mt-4 text-center">
-                    <span class="text-2xl font-bold text-blue-600">{{ "%.1f"|format(latest_weight.value) }}</span>
-                    <span class="text-gray-500">{{ latest_weight.unit }}</span>
+                    {% if current_user.preferred_weight_unit == 'lbs' %}
+                        <span class="text-2xl font-bold text-blue-600">{{ "%.1f"|format(latest_weight.value * 2.20462) }}</span>
+                        <span class="text-gray-500">lbs</span>
+                    {% else %}
+                        <span class="text-2xl font-bold text-blue-600">{{ "%.1f"|format(latest_weight.value) }}</span>
+                        <span class="text-gray-500">kg</span>
+                    {% endif %}
                     <div class="text-xs text-gray-400 mt-1">
                         {{ latest_weight.date.strftime('%B %d, %Y') }}
                     </div>
@@ -72,8 +77,13 @@
                 {% set latest_chest = Measurement.get_latest_measurement(current_user.id, 'chest') %}
                 {% if latest_chest %}
                 <div class="mt-4 text-center">
-                    <span class="text-2xl font-bold text-blue-600">{{ "%.1f"|format(latest_chest.value) }}</span>
-                    <span class="text-gray-500">{{ latest_chest.unit }}</span>
+                    {% if current_user.preferred_measurement_unit == 'in' %}
+                        <span class="text-2xl font-bold text-blue-600">{{ "%.1f"|format(latest_chest.value * 0.393701) }}</span>
+                        <span class="text-gray-500">in</span>
+                    {% else %}
+                        <span class="text-2xl font-bold text-blue-600">{{ "%.1f"|format(latest_chest.value) }}</span>
+                        <span class="text-gray-500">cm</span>
+                    {% endif %}
                     <div class="text-xs text-gray-400 mt-1">
                         {{ latest_chest.date.strftime('%B %d, %Y') }}
                     </div>
@@ -98,8 +108,13 @@
                 {% set latest_waist = Measurement.get_latest_measurement(current_user.id, 'waist') %}
                 {% if latest_waist %}
                 <div class="mt-4 text-center">
-                    <span class="text-2xl font-bold text-blue-600">{{ "%.1f"|format(latest_waist.value) }}</span>
-                    <span class="text-gray-500">{{ latest_waist.unit }}</span>
+                    {% if current_user.preferred_measurement_unit == 'in' %}
+                        <span class="text-2xl font-bold text-blue-600">{{ "%.1f"|format(latest_waist.value * 0.393701) }}</span>
+                        <span class="text-gray-500">in</span>
+                    {% else %}
+                        <span class="text-2xl font-bold text-blue-600">{{ "%.1f"|format(latest_waist.value) }}</span>
+                        <span class="text-gray-500">cm</span>
+                    {% endif %}
                     <div class="text-xs text-gray-400 mt-1">
                         {{ latest_waist.date.strftime('%B %d, %Y') }}
                     </div>
@@ -121,7 +136,13 @@
                     <span class="font-medium">Left Bicep</span>
                     {% set latest_left_bicep = Measurement.get_latest_measurement(current_user.id, 'left_bicep') %}
                     {% if latest_left_bicep %}
-                    <span class="float-right text-gray-500">{{ "%.1f"|format(latest_left_bicep.value) }} {{ latest_left_bicep.unit }}</span>
+                    <span class="float-right text-gray-500">
+                        {% if current_user.preferred_measurement_unit == 'in' %}
+                            {{ "%.1f"|format(latest_left_bicep.value * 0.393701) }} in
+                        {% else %}
+                            {{ "%.1f"|format(latest_left_bicep.value) }} cm
+                        {% endif %}
+                    </span>
                     {% endif %}
                 </a>
                 <a href="{{ url_for('workout.track_measurement', measurement_type='right_bicep') }}"
@@ -129,7 +150,13 @@
                     <span class="font-medium">Right Bicep</span>
                     {% set latest_right_bicep = Measurement.get_latest_measurement(current_user.id, 'right_bicep') %}
                     {% if latest_right_bicep %}
-                    <span class="float-right text-gray-500">{{ "%.1f"|format(latest_right_bicep.value) }} {{ latest_right_bicep.unit }}</span>
+                    <span class="float-right text-gray-500">
+                        {% if current_user.preferred_measurement_unit == 'in' %}
+                            {{ "%.1f"|format(latest_right_bicep.value * 0.393701) }} in
+                        {% else %}
+                            {{ "%.1f"|format(latest_right_bicep.value) }} cm
+                        {% endif %}
+                    </span>
                     {% endif %}
                 </a>
                 <a href="{{ url_for('workout.track_measurement', measurement_type='left_forearm') }}"
@@ -137,7 +164,13 @@
                     <span class="font-medium">Left Forearm</span>
                     {% set latest_left_forearm = Measurement.get_latest_measurement(current_user.id, 'left_forearm') %}
                     {% if latest_left_forearm %}
-                    <span class="float-right text-gray-500">{{ "%.1f"|format(latest_left_forearm.value) }} {{ latest_left_forearm.unit }}</span>
+                    <span class="float-right text-gray-500">
+                        {% if current_user.preferred_measurement_unit == 'in' %}
+                            {{ "%.1f"|format(latest_left_forearm.value * 0.393701) }} in
+                        {% else %}
+                            {{ "%.1f"|format(latest_left_forearm.value) }} cm
+                        {% endif %}
+                    </span>
                     {% endif %}
                 </a>
                 <a href="{{ url_for('workout.track_measurement', measurement_type='right_forearm') }}"
@@ -145,7 +178,13 @@
                     <span class="font-medium">Right Forearm</span>
                     {% set latest_right_forearm = Measurement.get_latest_measurement(current_user.id, 'right_forearm') %}
                     {% if latest_right_forearm %}
-                    <span class="float-right text-gray-500">{{ "%.1f"|format(latest_right_forearm.value) }} {{ latest_right_forearm.unit }}</span>
+                    <span class="float-right text-gray-500">
+                        {% if current_user.preferred_measurement_unit == 'in' %}
+                            {{ "%.1f"|format(latest_right_forearm.value * 0.393701) }} in
+                        {% else %}
+                            {{ "%.1f"|format(latest_right_forearm.value) }} cm
+                        {% endif %}
+                    </span>
                     {% endif %}
                 </a>
             </div>
@@ -160,7 +199,13 @@
                     <span class="font-medium">Left Thigh</span>
                     {% set latest_left_thigh = Measurement.get_latest_measurement(current_user.id, 'left_thigh') %}
                     {% if latest_left_thigh %}
-                    <span class="float-right text-gray-500">{{ "%.1f"|format(latest_left_thigh.value) }} {{ latest_left_thigh.unit }}</span>
+                    <span class="float-right text-gray-500">
+                        {% if current_user.preferred_measurement_unit == 'in' %}
+                            {{ "%.1f"|format(latest_left_thigh.value * 0.393701) }} in
+                        {% else %}
+                            {{ "%.1f"|format(latest_left_thigh.value) }} cm
+                        {% endif %}
+                    </span>
                     {% endif %}
                 </a>
                 <a href="{{ url_for('workout.track_measurement', measurement_type='right_thigh') }}"
@@ -168,7 +213,13 @@
                     <span class="font-medium">Right Thigh</span>
                     {% set latest_right_thigh = Measurement.get_latest_measurement(current_user.id, 'right_thigh') %}
                     {% if latest_right_thigh %}
-                    <span class="float-right text-gray-500">{{ "%.1f"|format(latest_right_thigh.value) }} {{ latest_right_thigh.unit }}</span>
+                    <span class="float-right text-gray-500">
+                        {% if current_user.preferred_measurement_unit == 'in' %}
+                            {{ "%.1f"|format(latest_right_thigh.value * 0.393701) }} in
+                        {% else %}
+                            {{ "%.1f"|format(latest_right_thigh.value) }} cm
+                        {% endif %}
+                    </span>
                     {% endif %}
                 </a>
                 <a href="{{ url_for('workout.track_measurement', measurement_type='left_calf') }}"
@@ -176,7 +227,13 @@
                     <span class="font-medium">Left Calf</span>
                     {% set latest_left_calf = Measurement.get_latest_measurement(current_user.id, 'left_calf') %}
                     {% if latest_left_calf %}
-                    <span class="float-right text-gray-500">{{ "%.1f"|format(latest_left_calf.value) }} {{ latest_left_calf.unit }}</span>
+                    <span class="float-right text-gray-500">
+                        {% if current_user.preferred_measurement_unit == 'in' %}
+                            {{ "%.1f"|format(latest_left_calf.value * 0.393701) }} in
+                        {% else %}
+                            {{ "%.1f"|format(latest_left_calf.value) }} cm
+                        {% endif %}
+                    </span>
                     {% endif %}
                 </a>
                 <a href="{{ url_for('workout.track_measurement', measurement_type='right_calf') }}"
@@ -184,7 +241,13 @@
                     <span class="font-medium">Right Calf</span>
                     {% set latest_right_calf = Measurement.get_latest_measurement(current_user.id, 'right_calf') %}
                     {% if latest_right_calf %}
-                    <span class="float-right text-gray-500">{{ "%.1f"|format(latest_right_calf.value) }} {{ latest_right_calf.unit }}</span>
+                    <span class="float-right text-gray-500">
+                        {% if current_user.preferred_measurement_unit == 'in' %}
+                            {{ "%.1f"|format(latest_right_calf.value * 0.393701) }} in
+                        {% else %}
+                            {{ "%.1f"|format(latest_right_calf.value) }} cm
+                        {% endif %}
+                    </span>
                     {% endif %}
                 </a>
             </div>

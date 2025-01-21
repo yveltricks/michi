@@ -336,7 +336,18 @@ def get_measurement_data(measurement_type):
     
     # Format data for Chart.js
     labels = [log.date.strftime('%Y-%m-%d') for log in logs]
-    values = [float(log.value) for log in logs]
+    
+    # Convert values to preferred units and round to 2 decimal places
+    if measurement_type == 'weight':
+        if current_user.preferred_weight_unit == 'lbs':
+            values = [round(float(log.value * 2.20462), 2) for log in logs]  # Round to 2 decimal places
+        else:
+            values = [round(float(log.value), 2) for log in logs]  # Round to 2 decimal places
+    else:
+        if current_user.preferred_measurement_unit == 'in':
+            values = [round(float(log.value * 0.393701), 2) for log in logs]  # Round to 2 decimal places
+        else:
+            values = [round(float(log.value), 2) for log in logs]  # Round to 2 decimal places
     
     return jsonify({
         'labels': labels,
