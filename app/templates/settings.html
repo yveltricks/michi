@@ -163,6 +163,13 @@
                     </select>
                 </div>
             </div>
+            <div class="mt-4">
+                <label class="flex items-center space-x-2">
+                    <input type="checkbox" name="range_enabled" class="form-checkbox h-5 w-5 text-blue-600"
+                           {% if current_user.range_enabled %}checked{% endif %}>
+                    <span>Enable rep/duration ranges by default for new exercises</span>
+                </label>
+            </div>
             <div class="mt-4 space-x-4">
                 <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
                     Save Preferences

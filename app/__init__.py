@@ -32,7 +32,7 @@ def create_app():
 
     # Add this after registering the auth blueprint
     from .workout import workout as workout_blueprint
-    app.register_blueprint(workout_blueprint)
+    app.register_blueprint(workout_blueprint, url_prefix='/workout')
 
     # Load the user loader function
     from .models import User
@@ -46,5 +46,6 @@ def create_app():
     def index():
         return 'Welcome to Michi! <a href="/login">Login</a> or <a href="/register">Register</a>'
     
+    # Initialize filters
     init_filters(app)
     return app

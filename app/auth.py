@@ -240,12 +240,15 @@ def update_preferences():
         current_user.preferred_weight_unit = 'kg'
         current_user.preferred_distance_unit = 'km'
         current_user.preferred_measurement_unit = 'cm'
+        current_user.range_enabled = True
         flash('Preferences reset to defaults!', 'success')
     else:
         # Update with new preferences
         current_user.preferred_weight_unit = request.form.get('preferred_weight_unit', 'kg')
         current_user.preferred_distance_unit = request.form.get('preferred_distance_unit', 'km')
         current_user.preferred_measurement_unit = request.form.get('preferred_measurement_unit', 'cm')
+        # Handle checkbox - if not checked, it won't be in the form data
+        current_user.range_enabled = 'range_enabled' in request.form
         flash('Preferences updated successfully!', 'success')
 
     try:

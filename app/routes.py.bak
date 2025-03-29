@@ -1,0 +1,161 @@
+from flask import jsonify, request, current_app
+from flask_login import login_required, current_user
+from app.models import Exercise, Set
+from app import db
+
+@current_app.route('/api/exercise-details/<int:exercise_id>')
+@login_required
+def get_exercise_details(exercise_id):
+    exercise = Exercise.query.get_or_404(exercise_id)
+    
+    # Get previous values from the last completed set
+    previous_set = Set.query.filter_by(
+        exercise_id=exercise_id,
+        completed=True
+    ).order_by(Set.created_at.desc()).first()
+    
+    previous_values = None
+    if previous_set:
+        previous_values = {
+            'weight': previous_set.weight,
+            'reps': previous_set.reps,
+            'duration': previous_set.duration,
+            'distance': previous_set.distance,
+            'within_range': previous_set.within_range
+        }
+    
+    return jsonify({
+        'input_type': exercise.input_type,
+        'range_enabled': exercise.range_enabled,
+        'min_reps': exercise.min_reps,
+        'max_reps': exercise.max_reps,
+        'min_duration': exercise.min_duration,
+        'max_duration': exercise.max_duration,
+        'min_distance': exercise.min_distance,
+        'max_distance': exercise.max_distance,
+        'previousValues': previous_values
+    })
+
+@current_app.route('/api/exercise-ranges/<int:exercise_id>', methods=['POST'])
+@login_required
+def update_exercise_ranges(exercise_id):
+    exercise = Exercise.query.get_or_404(exercise_id)
+    data = request.get_json()
+    
+    try:
+        # Update range values
+        if 'min_reps' in data and 'max_reps' in data:
+            min_reps = data.get('min_reps')
+            max_reps = data.get('max_reps')
+            
+            # Convert to integers if not None
+            if min_reps is not None:
+                exercise.min_reps = int(min_reps) 
+            if max_reps is not None:
+                exercise.max_reps = int(max_reps)
+                
+        if 'min_duration' in data and 'max_duration' in data:
+            min_duration = data.get('min_duration')
+            max_duration = data.get('max_duration')
+            
+            # Convert to integers if not None
+            if min_duration is not None:
+                exercise.min_duration = int(min_duration)
+            if max_duration is not None:
+                exercise.max_duration = int(max_duration)
+                
+        if 'min_distance' in data and 'max_distance' in data:
+            min_distance = data.get('min_distance')
+            max_distance = data.get('max_distance')
+            
+            # Convert to float if not None
+            if min_distance is not None:
+                exercise.min_distance = float(min_distance)
+            if max_distance is not None:
+                exercise.max_distance = float(max_distance)
+        
+        # Get the user's range_enabled setting
+        exercise.range_enabled = current_user.range_enabled
+        
+        # Validate ranges
+        if exercise.range_enabled:
+            if exercise.min_reps is not None and exercise.max_reps is not None:
+                if exercise.min_reps > exercise.max_reps:
+                    return jsonify({'success': False, 'error': 'Minimum reps cannot be greater than maximum reps'})
+                    
+            if exercise.min_duration is not None and exercise.max_duration is not None:
+                if exercise.min_duration > exercise.max_duration:
+                    return jsonify({'success': False, 'error': 'Minimum duration cannot be greater than maximum duration'})
+                    
+            if exercise.min_distance is not None and exercise.max_distance is not None:
+                if exercise.min_distance > exercise.max_distance:
+                    return jsonify({'success': False, 'error': 'Minimum distance cannot be greater than maximum distance'})
+        
+        db.session.commit()
+        return jsonify({
+            'success': True,
+            'range_enabled': exercise.range_enabled,
+            'min_reps': exercise.min_reps,
+            'max_reps': exercise.max_reps,
+            'min_duration': exercise.min_duration,
+            'max_duration': exercise.max_duration,
+            'min_distance': exercise.min_distance,
+            'max_distance': exercise.max_distance
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error updating exercise ranges: {str(e)}")  # Add logging
+        return jsonify({'success': False, 'error': str(e)})
+
+@current_app.route('/api/exercise-recommendation/<int:exercise_id>')
+@login_required
+def get_exercise_recommendation(exercise_id):
+    exercise = Exercise.query.get_or_404(exercise_id)
+    
+    if not exercise.range_enabled:
+        return jsonify({'success': False, 'error': 'Range settings not enabled for this exercise'})
+    
+    # Get the last 3 completed sets
+    recent_sets = Set.query.filter_by(
+        exercise_id=exercise_id,
+        completed=True
+    ).order_by(Set.created_at.desc()).limit(3).all()
+    
+    if not recent_sets:
+        return jsonify({'success': False, 'error': 'No completed sets found'})
+    
+    # Calculate average performance
+    total_weight = 0
+    total_reps = 0
+    sets_in_range = 0
+    
+    for set in recent_sets:
+        if set.within_range:
+            total_weight += set.weight
+            total_reps += set.reps
+            sets_in_range += 1
+    
+    if sets_in_range == 0:
+        return jsonify({'success': False, 'error': 'No sets completed within range'})
+    
+    avg_weight = total_weight / sets_in_range
+    avg_reps = total_reps / sets_in_range
+    
+    # Calculate recommended weight based on performance
+    if avg_reps > exercise.max_reps:
+        # If consistently above max reps, increase weight
+        recommended_weight = avg_weight * 1.1
+    elif avg_reps < exercise.min_reps:
+        # If consistently below min reps, decrease weight
+        recommended_weight = avg_weight * 0.9
+    else:
+        # If within range, maintain current weight
+        recommended_weight = avg_weight
+    
+    return jsonify({
+        'success': True,
+        'recommended_weight': round(recommended_weight, 1),
+        'avg_reps': round(avg_reps, 1),
+        'sets_in_range': sets_in_range
+    }) 

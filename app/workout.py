@@ -204,32 +204,33 @@ def get_exercises():
 @login_required
 def get_exercise_details(exercise_id):
     exercise = Exercise.query.get_or_404(exercise_id)
-
-    # Get user's latest bodyweight if needed for calculations
-    latest_bodyweight = None
-    if exercise.input_type in ['bodyweight_reps', 'weighted_bodyweight', 'assisted_bodyweight']:
-        bodyweight_log = Measurement.query.filter_by(user_id=current_user.id, type='weight')\
-            .order_by(Measurement.date.desc()).first()
-        if bodyweight_log:
-            latest_bodyweight = bodyweight_log.value
-
-    # Get previous values
-    previous_set = Set.query\
-        .join(Session)\
-        .filter(
-            Session.user_id == current_user.id,
-            Set.exercise_id == exercise_id,
-            Set.completed == True
-        )\
-        .order_by(Session.session_date.desc())\
-        .first()
-
+    
+    # Get previous values from the last completed set
+    previous_set = Set.query.join(Session).filter(
+        Set.exercise_id == exercise_id,
+        Set.completed == True
+    ).order_by(Session.session_date.desc()).first()
+    
+    previous_values = None
+    if previous_set:
+        previous_values = {
+            'weight': previous_set.weight,
+            'reps': previous_set.reps,
+            'duration': previous_set.time,  # Using time field instead of duration
+            'distance': previous_set.distance,
+            'within_range': previous_set.within_range
+        }
+    
     return jsonify({
         'input_type': exercise.input_type,
-        'units': exercise.get_units(),
-        'fields': exercise.get_input_fields(),
-        'latest_bodyweight': latest_bodyweight,
-        'previousValues': previous_set.to_dict() if previous_set else None
+        'range_enabled': exercise.range_enabled,
+        'min_reps': exercise.min_reps,
+        'max_reps': exercise.max_reps,
+        'min_duration': exercise.min_duration,
+        'max_duration': exercise.max_duration,
+        'min_distance': exercise.min_distance,
+        'max_distance': exercise.max_distance,
+        'previousValues': previous_values
     })
 
 @workout.route('/measurements')
@@ -435,3 +436,94 @@ def delete_measurement(log_id):
     except Exception as e:
         db.session.rollback()
         return jsonify({'success': False, 'error': str(e)}), 500
+
+@workout.route('/api/exercise-ranges/<int:exercise_id>', methods=['POST'])
+@login_required
+def update_exercise_ranges(exercise_id):
+    exercise = Exercise.query.get_or_404(exercise_id)
+    data = request.get_json()
+    
+    try:
+        print(f"Received data: {data}")  # Add debug logging
+        
+        # Update range values
+        if 'min_reps' in data and 'max_reps' in data:
+            min_reps = data.get('min_reps')
+            max_reps = data.get('max_reps')
+            
+            # Convert to integers if not None
+            if min_reps is not None:
+                exercise.min_reps = int(min_reps) 
+            else:
+                exercise.min_reps = None
+                
+            if max_reps is not None:
+                exercise.max_reps = int(max_reps)
+            else:
+                exercise.max_reps = None
+                
+        if 'min_duration' in data and 'max_duration' in data:
+            min_duration = data.get('min_duration')
+            max_duration = data.get('max_duration')
+            
+            # Convert to integers if not None
+            if min_duration is not None:
+                exercise.min_duration = int(min_duration)
+            else:
+                exercise.min_duration = None
+                
+            if max_duration is not None:
+                exercise.max_duration = int(max_duration)
+            else:
+                exercise.max_duration = None
+                
+        if 'min_distance' in data and 'max_distance' in data:
+            min_distance = data.get('min_distance')
+            max_distance = data.get('max_distance')
+            
+            # Convert to float if not None
+            if min_distance is not None:
+                exercise.min_distance = float(min_distance)
+            else:
+                exercise.min_distance = None
+                
+            if max_distance is not None:
+                exercise.max_distance = float(max_distance)
+            else:
+                exercise.max_distance = None
+        
+        # Get the user's range_enabled setting
+        exercise.range_enabled = current_user.range_enabled
+        
+        # Validate ranges
+        if exercise.range_enabled:
+            if exercise.min_reps is not None and exercise.max_reps is not None:
+                if exercise.min_reps > exercise.max_reps:
+                    return jsonify({'success': False, 'error': 'Minimum reps cannot be greater than maximum reps'})
+                    
+            if exercise.min_duration is not None and exercise.max_duration is not None:
+                if exercise.min_duration > exercise.max_duration:
+                    return jsonify({'success': False, 'error': 'Minimum duration cannot be greater than maximum duration'})
+                    
+            if exercise.min_distance is not None and exercise.max_distance is not None:
+                if exercise.min_distance > exercise.max_distance:
+                    return jsonify({'success': False, 'error': 'Minimum distance cannot be greater than maximum distance'})
+        
+        db.session.commit()
+        print(f"Updated exercise ranges for {exercise.id}: min_reps={exercise.min_reps}, max_reps={exercise.max_reps}")
+        
+        return jsonify({
+            'success': True,
+            'range_enabled': exercise.range_enabled,
+            'min_reps': exercise.min_reps,
+            'max_reps': exercise.max_reps,
+            'min_duration': exercise.min_duration,
+            'max_duration': exercise.max_duration,
+            'min_distance': exercise.min_distance,
+            'max_distance': exercise.max_distance
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error updating exercise ranges: {str(e)}")  # Add logging
+        return jsonify({'success': False, 'error': str(e)})

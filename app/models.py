@@ -33,6 +33,7 @@ class User(UserMixin, db.Model):
     preferred_distance_unit = db.Column(db.String(10), default='km')
     preferred_measurement_unit = db.Column(db.String(10), default='cm')
     privacy_setting = db.Column(db.String(20), default='public')
+    range_enabled = db.Column(db.Boolean, default=True)
 
     # Relationships
     sessions = db.relationship('Session', backref='user', lazy=True)
@@ -93,53 +94,70 @@ class Exercise(db.Model):
     name = db.Column(db.String(100), nullable=False)
     equipment = db.Column(db.String(100))
     muscles_worked = db.Column(db.String(200))
-    exercise_type = db.Column(db.String(20))  # Updated to include more specific types
-    input_type = db.Column(db.String(20), nullable=False)  # New field
+    exercise_type = db.Column(db.String(20))
+    input_type = db.Column(db.String(50), nullable=False)
     user_created = db.Column(db.Boolean, default=False)
     created_by = db.Column(db.Integer, db.ForeignKey('user.id'))
     photo = db.Column(db.String(200))
+    
+    # New fields for rep ranges
+    min_reps = db.Column(db.Integer, nullable=True)
+    max_reps = db.Column(db.Integer, nullable=True)
+    min_duration = db.Column(db.Integer, nullable=True)
+    max_duration = db.Column(db.Integer, nullable=True)
+    min_distance = db.Column(db.Float, nullable=True)
+    max_distance = db.Column(db.Float, nullable=True)
+    range_enabled = db.Column(db.Boolean, default=True)
 
     # Constants for exercise input types
     INPUT_TYPES = {
         'weight_reps': {
             'fields': ['weight', 'reps'],
             'volume_formula': 'weight * reps',
-            'units': {'weight': 'kg', 'reps': 'reps'}
+            'units': {'weight': 'kg', 'reps': 'reps'},
+            'range_fields': ['min_reps', 'max_reps']
         },
         'bodyweight_reps': {
             'fields': ['reps'],
             'volume_formula': 'bodyweight * reps',
-            'units': {'reps': 'reps'}
+            'units': {'reps': 'reps'},
+            'range_fields': ['min_reps', 'max_reps']
         },
         'weighted_bodyweight': {
             'fields': ['additional_weight', 'reps'],
             'volume_formula': '(bodyweight + additional_weight) * reps',
-            'units': {'additional_weight': 'kg', 'reps': 'reps'}
+            'units': {'additional_weight': 'kg', 'reps': 'reps'},
+            'range_fields': ['min_reps', 'max_reps']
         },
         'assisted_bodyweight': {
             'fields': ['assistance_weight', 'reps'],
             'volume_formula': '(bodyweight - assistance_weight) * reps',
-            'units': {'assistance_weight': 'kg', 'reps': 'reps'}
+            'units': {'assistance_weight': 'kg', 'reps': 'reps'},
+            'range_fields': ['min_reps', 'max_reps']
         },
         'duration': {
             'fields': ['time'],
             'volume_formula': None,
-            'units': {'time': 'seconds'}
+            'units': {'time': 'seconds'},
+            'range_fields': ['min_duration', 'max_duration']
         },
         'duration_weight': {
             'fields': ['weight', 'time'],
             'volume_formula': None,
-            'units': {'weight': 'kg', 'time': 'seconds'}
+            'units': {'weight': 'kg', 'time': 'seconds'},
+            'range_fields': ['min_duration', 'max_duration']
         },
         'distance_duration': {
             'fields': ['distance', 'time'],
             'volume_formula': None,
-            'units': {'distance': 'km', 'time': 'seconds'}
+            'units': {'distance': 'km', 'time': 'seconds'},
+            'range_fields': ['min_distance', 'max_distance', 'min_duration', 'max_duration']
         },
         'weight_distance': {
             'fields': ['weight', 'distance'],
             'volume_formula': 'weight * distance',
-            'units': {'weight': 'kg', 'distance': 'km'}
+            'units': {'weight': 'kg', 'distance': 'km'},
+            'range_fields': ['min_distance', 'max_distance']
         }
     }
 
@@ -150,6 +168,10 @@ class Exercise(db.Model):
     def get_units(self):
         """Return the units for each field"""
         return self.INPUT_TYPES.get(self.input_type, {}).get('units', {})
+
+    def get_range_fields(self):
+        """Return the range fields for this exercise type"""
+        return self.INPUT_TYPES.get(self.input_type, {}).get('range_fields', [])
 
     def calculate_volume(self, set_data, bodyweight=None):
         """Calculate volume based on exercise type and set data"""
@@ -179,6 +201,55 @@ class Exercise(db.Model):
             return set_data.get('weight', 0) * set_data.get('distance', 0)
 
         return 0
+
+    def get_recommended_weight(self, previous_sets):
+        """Calculate recommended weight based on previous performance"""
+        if not self.range_enabled or not previous_sets:
+            return None
+
+        # Get the last 3 completed sets
+        recent_sets = [s for s in previous_sets if s.completed][-3:]
+        if not recent_sets:
+            return None
+
+        # Check if all sets were at the upper range
+        all_upper_range = True
+        all_lower_range = True
+        last_weight = None
+
+        for set_data in recent_sets:
+            if self.input_type in ['weight_reps', 'weighted_bodyweight', 'duration_weight', 'weight_distance']:
+                weight = set_data.get('weight', 0)
+                last_weight = weight
+                
+                if self.input_type in ['weight_reps', 'weighted_bodyweight']:
+                    reps = set_data.get('reps', 0)
+                    if reps < self.max_reps:
+                        all_upper_range = False
+                    if reps > self.min_reps:
+                        all_lower_range = False
+                elif self.input_type == 'duration_weight':
+                    time = set_data.get('time', 0)
+                    if time < self.max_duration:
+                        all_upper_range = False
+                    if time > self.min_duration:
+                        all_lower_range = False
+                elif self.input_type == 'weight_distance':
+                    distance = set_data.get('distance', 0)
+                    if distance < self.max_distance:
+                        all_upper_range = False
+                    if distance > self.min_distance:
+                        all_lower_range = False
+
+        if all_upper_range and last_weight is not None:
+            # Increase weight by 2.5kg
+            return last_weight + 2.5
+        elif all_lower_range and last_weight is not None:
+            # Decrease weight by 2.5kg
+            return last_weight - 2.5
+        else:
+            # Keep the same weight
+            return last_weight
 
 class Routine(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -269,6 +340,9 @@ class Set(db.Model):
     # Fields for distance-based exercises
     distance = db.Column(db.Float)  # Distance in kilometers
 
+    # New field to track if the set was within range
+    within_range = db.Column(db.Boolean)
+
     # Relationships
     exercise = db.relationship('Exercise', backref='sets')
     session = db.relationship('Session', backref='sets')
@@ -278,7 +352,8 @@ class Set(db.Model):
         exercise = self.exercise
         data = {
             'completed': self.completed,
-            'set_type': self.set_type
+            'set_type': self.set_type,
+            'within_range': self.within_range
         }
 
         # Add relevant fields based on exercise type
@@ -286,3 +361,19 @@ class Set(db.Model):
             data[field] = getattr(self, field)
 
         return data
+
+    def check_within_range(self):
+        """Check if the set was within the exercise's range"""
+        if not self.exercise.range_enabled:
+            return None
+
+        if self.exercise.input_type in ['weight_reps', 'bodyweight_reps', 'weighted_bodyweight', 'assisted_bodyweight']:
+            reps = self.reps
+            return self.exercise.min_reps <= reps <= self.exercise.max_reps
+        elif self.exercise.input_type in ['duration', 'duration_weight']:
+            time = self.time
+            return self.exercise.min_duration <= time <= self.exercise.max_duration
+        elif self.exercise.input_type in ['distance_duration', 'weight_distance']:
+            distance = self.distance
+            return self.exercise.min_distance <= distance <= self.exercise.max_distance
+        return None
