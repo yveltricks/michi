@@ -105,5 +105,5 @@ document.addEventListener('click', function(event) {
 
 // Get actual duration when completing workout
 function getWorkoutDuration() {
-    return Math.floor(elapsedTime / (1000 * 60)); // Convert to minutes
+    return Math.floor(elapsedTime / 1000); // Convert to seconds, not minutes
 }

@@ -67,6 +67,28 @@ let workoutData = {
         })
         .then(data => {
             console.log('Received exercise data:', data);
+            
+            // Create the first set
+            const firstSet = {
+                completed: false,
+                set_type: 'normal',
+                ...generateDefaultSetValues(data.input_type),
+                hasPrevious: false,
+                prevValues: null
+            };
+            
+            // If there are previous sets, add the first one as previous values
+            if (data.previousSets && data.previousSets.length > 0) {
+                const firstPrevSet = data.previousSets[0];
+                firstSet.prevValues = firstPrevSet;
+                firstSet.hasPrevious = true;
+                
+                // Apply previous set type immediately
+                if (firstPrevSet.set_type) {
+                    firstSet.set_type = firstPrevSet.set_type;
+                }
+            }
+            
             const exercise = {
                 id: exerciseId,
                 name: exerciseName,
@@ -78,21 +100,45 @@ let workoutData = {
                 max_duration: data.max_duration,
                 min_distance: data.min_distance,
                 max_distance: data.max_distance,
-                sets: [{
-                    completed: false,
-                    set_type: 'normal',
-                    ...generateDefaultSetValues(data.input_type),
-                    prevValues: data.previousValues,
-                    hasPrevious: data.previousValues !== null
-                }]
+                previousSets: data.previousSets || [],
+                sets: [firstSet]
             };
+            
             workoutData.exercises.push(exercise);
+            
+            // If there were more than one previous set, add those too
+            if (data.previousSets && data.previousSets.length > 1) {
+                for (let i = 1; i < data.previousSets.length; i++) {
+                    addSetWithPrevious(workoutData.exercises.length - 1, data.previousSets[i]);
+                }
+            }
+            
             renderExercises();
         })
         .catch(error => {
             console.error('Error fetching exercise details:', error);
             alert('Error loading exercise: ' + error.message);
         });
+  }
+  
+  function addSetWithPrevious(exerciseIndex, previousSet) {
+    const exercise = workoutData.exercises[exerciseIndex];
+    
+    // Create new set with default values
+    const newSet = {
+        ...generateDefaultSetValues(exercise.input_type),
+        completed: false,
+        set_type: 'normal',
+        hasPrevious: previousSet ? true : false,
+        prevValues: previousSet || null
+    };
+    
+    // Apply previous set type immediately if available
+    if (previousSet && previousSet.set_type) {
+        newSet.set_type = previousSet.set_type;
+    }
+    
+    exercise.sets.push(newSet);
   }
   
   function generateDefaultSetValues(inputType) {
@@ -120,12 +166,20 @@ let workoutData = {
     const configs = INPUT_CONFIGS[exercise.input_type] || [];
     return configs.map(config => {
         if (config.type === 'time') {
+            const seconds = set[config.field] || 0;
+            // Only show formatted time if there's a non-zero value, otherwise leave empty
+            const displayValue = seconds > 0 ? formatTime(seconds) : '';
+            
             return `
                 <div class="${config.class}">
-                    <input type="number" min="0" value="${set[config.field] || 0}"
-                           onchange="updateSet(${exerciseIndex}, ${setIndex}, '${config.field}', this.value)"
-                           placeholder="Duration (sec)" class="time-input">
-                    <span class="formatted-time">${formatTime(set[config.field] || 0)}</span>
+                    <label class="input-label">Duration</label>
+                    <input type="text"
+                           value="${displayValue}"
+                           placeholder="hh:mm:ss"
+                           class="time-input"
+                           pattern="[0-9:]*"
+                           oninput="handleTimeInput(this, ${exerciseIndex}, ${setIndex}, '${config.field}')"
+                           onkeydown="handleTimeKeyDown(this, event)">
                 </div>
             `;
         }
@@ -193,29 +247,15 @@ let workoutData = {
   
   function addSet(exerciseIndex) {
     const exercise = workoutData.exercises[exerciseIndex];
-    const lastSet = exercise.sets[exercise.sets.length - 1];
+    const setIndex = exercise.sets.length;
     
-    // Create new set with default values
-    const newSet = {
-        ...generateDefaultSetValues(exercise.input_type),
-        completed: false,
-        set_type: 'normal',
-        hasPrevious: false,
-        prevValues: null
-    };
-
-    // If there's a last set, copy its values as previous values
-    if (lastSet) {
-        newSet.prevValues = {};
-        Object.entries(lastSet).forEach(([key, value]) => {
-            if (key !== 'completed' && key !== 'set_type' && key !== 'hasPrevious' && key !== 'prevValues') {
-                newSet.prevValues[key] = value;
-            }
-        });
-        newSet.hasPrevious = true;
+    // Check if there's a previous set with this index from the last workout
+    let previousSet = null;
+    if (exercise.previousSets && setIndex < exercise.previousSets.length) {
+        previousSet = exercise.previousSets[setIndex];
     }
-
-    exercise.sets.push(newSet);
+    
+    addSetWithPrevious(exerciseIndex, previousSet);
     renderExercises();
   }
   
@@ -240,14 +280,36 @@ let workoutData = {
     }
 
     const prevValues = set.prevValues;
-    const exercise = workoutData.exercises[exerciseIndex];
     
     // Update all fields with previous values
-    Object.entries(prevValues).forEach(([field, value]) => {
-        if (field !== 'completed' && field !== 'set_type' && field !== 'within_range') {
-            updateSet(exerciseIndex, setIndex, field, value);
-        }
-    });
+    if (prevValues.weight !== undefined && prevValues.weight !== null) {
+        updateSet(exerciseIndex, setIndex, 'weight', prevValues.weight);
+    }
+    
+    if (prevValues.reps !== undefined && prevValues.reps !== null) {
+        updateSet(exerciseIndex, setIndex, 'reps', prevValues.reps);
+    }
+    
+    if (prevValues.time !== undefined && prevValues.time !== null) {
+        updateSet(exerciseIndex, setIndex, 'time', prevValues.time);
+    }
+    
+    if (prevValues.distance !== undefined && prevValues.distance !== null) {
+        updateSet(exerciseIndex, setIndex, 'distance', prevValues.distance);
+    }
+    
+    if (prevValues.additional_weight !== undefined && prevValues.additional_weight !== null) {
+        updateSet(exerciseIndex, setIndex, 'additional_weight', prevValues.additional_weight);
+    }
+    
+    if (prevValues.assistance_weight !== undefined && prevValues.assistance_weight !== null) {
+        updateSet(exerciseIndex, setIndex, 'assistance_weight', prevValues.assistance_weight);
+    }
+    
+    // Also set the set type if available
+    if (prevValues.set_type) {
+        workoutData.exercises[exerciseIndex].sets[setIndex].set_type = prevValues.set_type;
+    }
   }
   
   function showRangeSettings(exerciseIndex) {
@@ -451,6 +513,14 @@ let workoutData = {
         parts.push(`${values.weight}kg`);
     }
     
+    if (values.additional_weight !== undefined && values.additional_weight !== null) {
+        parts.push(`+${values.additional_weight}kg`);
+    }
+    
+    if (values.assistance_weight !== undefined && values.assistance_weight !== null) {
+        parts.push(`-${values.assistance_weight}kg`);
+    }
+    
     if (values.reps !== undefined && values.reps !== null) {
         parts.push(`${values.reps} reps`);
     }
@@ -618,5 +688,140 @@ let workoutData = {
   
   // Calculate workout duration
   function calculateWorkoutDuration() {
-    return getWorkoutDuration(); // This uses the actual timer duration
+    // Get timer duration in seconds
+    const timerDurationSeconds = getWorkoutDuration();
+    
+    // Find the longest exercise duration in seconds
+    let maxExerciseDurationSeconds = 0;
+    workoutData.exercises.forEach(exercise => {
+        exercise.sets.forEach(set => {
+            if (set.time && set.time > maxExerciseDurationSeconds) {
+                maxExerciseDurationSeconds = set.time;
+            }
+        });
+    });
+    
+    console.log('Timer duration (s):', timerDurationSeconds, 'Longest exercise (s):', maxExerciseDurationSeconds);
+    
+    // Get the maximum between timer and exercise duration (in seconds)
+    const maxDurationSeconds = Math.max(timerDurationSeconds, maxExerciseDurationSeconds);
+    
+    // Convert seconds to minutes before returning (to maintain compatibility with existing code)
+    const durationMinutes = Math.ceil(maxDurationSeconds / 60);
+    console.log('Final duration (min):', durationMinutes);
+    
+    return durationMinutes; // Return minutes for database storage
+  }
+
+  // Add this function above the handleTimeInput function
+  function handleTimeKeyDown(input, event) {
+    // Only allow digits, backspace, delete, tab, arrows
+    const allowedKeys = ['Backspace', 'Delete', 'Tab', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'];
+    if (!/^\d$/.test(event.key) && !allowedKeys.includes(event.key)) {
+        event.preventDefault();
+    }
+  }
+
+  function handleTimeInput(input, exerciseIndex, setIndex, field) {
+    // Check if this is a digit being entered
+    if (/^\d$/.test(event.data)) {
+        // Store raw digits in a data attribute
+        if (!input.dataset.rawDigits) {
+            input.dataset.rawDigits = '';
+        }
+        
+        // Add the new digit
+        input.dataset.rawDigits += event.data;
+        
+        // Limit to 6 digits
+        if (input.dataset.rawDigits.length > 6) {
+            input.dataset.rawDigits = input.dataset.rawDigits.slice(-6);
+        }
+    } 
+    // Handle backspace/delete
+    else if (event.inputType === 'deleteContentBackward' || event.inputType === 'deleteContentForward') {
+        if (input.dataset.rawDigits) {
+            input.dataset.rawDigits = input.dataset.rawDigits.slice(0, -1);
+        }
+    }
+    
+    // Format the time based on raw digits
+    let formattedValue = '';
+    let totalSeconds = 0;
+    const rawDigits = input.dataset.rawDigits || '';
+    
+    if (rawDigits.length > 0) {
+        // Calculate seconds, minutes, hours from right to left
+        const len = rawDigits.length;
+        
+        // Right-align the digits (for values like seconds, minutes, hours)
+        let seconds = 0, minutes = 0, hours = 0;
+        
+        // Process from right to left (least significant to most significant)
+        if (len >= 1) seconds += parseInt(rawDigits.charAt(len-1));  // 1s place
+        if (len >= 2) seconds += parseInt(rawDigits.charAt(len-2)) * 10;  // 10s place
+        
+        if (len >= 3) minutes += parseInt(rawDigits.charAt(len-3));  // 1s place
+        if (len >= 4) minutes += parseInt(rawDigits.charAt(len-4)) * 10;  // 10s place
+        
+        if (len >= 5) hours += parseInt(rawDigits.charAt(len-5));  // 1s place
+        if (len >= 6) hours += parseInt(rawDigits.charAt(len-6)) * 10;  // 10s place
+        
+        formattedValue = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        totalSeconds = hours * 3600 + minutes * 60 + seconds;
+    }
+    
+    // Update the input value
+    input.value = formattedValue;
+    
+    // Update data model
+    workoutData.exercises[exerciseIndex].sets[setIndex][field] = totalSeconds;
+    
+    // Sync with workout timer if needed
+    syncWorkoutTimer();
+  }
+
+  // Function to synchronize the workout timer with the longest exercise duration
+  function syncWorkoutTimer() {
+    // Find the longest duration across all exercises
+    let maxDuration = 0;
+    
+    workoutData.exercises.forEach(exercise => {
+        exercise.sets.forEach(set => {
+            if (set.time && set.time > maxDuration) {
+                maxDuration = set.time;
+            }
+        });
+    });
+    
+    console.log('Longest exercise duration:', maxDuration);
+    
+    // Skip if no significant duration found
+    if (maxDuration <= 0) return;
+    
+    // Get the current timer value
+    const timerElement = document.getElementById('workout-timer');
+    if (!timerElement) return;
+    
+    // Always use the longest duration from exercises as the minimum workout time
+    const currentTimerValue = parseInt(timerElement.dataset.seconds || 0);
+    
+    // Update the timer if exercise duration is longer than current timer
+    if (maxDuration > currentTimerValue) {
+        console.log('Updating workout timer to match longest exercise:', formatTime(maxDuration));
+        
+        // Update the timer value in the global scope
+        if (typeof window.seconds !== 'undefined') {
+            window.seconds = maxDuration;
+        }
+        
+        // Update the display
+        if (typeof updateTimerDisplay === 'function') {
+            updateTimerDisplay();
+        } else {
+            // Fallback if the function isn't available
+            timerElement.textContent = formatTime(maxDuration);
+            timerElement.dataset.seconds = maxDuration;
+        }
+    }
   }

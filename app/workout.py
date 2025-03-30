@@ -205,21 +205,41 @@ def get_exercises():
 def get_exercise_details(exercise_id):
     exercise = Exercise.query.get_or_404(exercise_id)
     
-    # Get previous values from the last completed set
-    previous_set = Set.query.join(Session).filter(
-        Set.exercise_id == exercise_id,
-        Set.completed == True
-    ).order_by(Session.session_date.desc()).first()
+    # Get the most recent session ID that contains this exercise
+    latest_session_id = db.session.query(Session.id)\
+        .join(Set)\
+        .filter(
+            Session.user_id == current_user.id,
+            Set.exercise_id == exercise_id,
+            Set.completed == True
+        )\
+        .order_by(Session.session_date.desc())\
+        .first()
     
-    previous_values = None
-    if previous_set:
-        previous_values = {
-            'weight': previous_set.weight,
-            'reps': previous_set.reps,
-            'duration': previous_set.time,  # Using time field instead of duration
-            'distance': previous_set.distance,
-            'within_range': previous_set.within_range
-        }
+    previous_sets = []
+    if latest_session_id:
+        # Get all completed sets for this exercise from the latest session
+        previous_sets = Set.query\
+            .filter(
+                Set.session_id == latest_session_id[0],
+                Set.exercise_id == exercise_id,
+                Set.completed == True
+            )\
+            .order_by(Set.order)\
+            .all()
+        
+        # Convert sets to a list of dictionaries
+        previous_sets = [{
+            'order': set.order,
+            'weight': set.weight,
+            'reps': set.reps,
+            'time': set.time,
+            'distance': set.distance,
+            'additional_weight': set.additional_weight,
+            'assistance_weight': set.assistance_weight,
+            'set_type': set.set_type,
+            'within_range': set.within_range
+        } for set in previous_sets]
     
     return jsonify({
         'input_type': exercise.input_type,
@@ -230,7 +250,7 @@ def get_exercise_details(exercise_id):
         'max_duration': exercise.max_duration,
         'min_distance': exercise.min_distance,
         'max_distance': exercise.max_distance,
-        'previousValues': previous_values
+        'previousSets': previous_sets
     })
 
 @workout.route('/measurements')
