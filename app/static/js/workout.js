@@ -60,15 +60,15 @@ let workoutData = {
     console.log(`Fetching details for exercise ID: ${exerciseId}`);
     
     fetch(`/workout/api/exercise-details/${exerciseId}`)
-        .then(response => response.json())
-        .then(data => {
+      .then(response => response.json())
+      .then(data => {
             console.log('Exercise details:', data);
             
             // Create a new exercise structure
             const newExercise = {
-                id: exerciseId,
-                name: exerciseName,
-                input_type: data.input_type,
+          id: exerciseId,
+          name: exerciseName,
+          input_type: data.input_type,
                 sets: [],
                 range_enabled: data.range_enabled,
                 min_reps: data.min_reps,
@@ -100,15 +100,15 @@ let workoutData = {
                 console.log('No previous sets, adding a default empty set');
                 const defaultSet = {
                     ...generateDefaultSetValues(data.input_type),
-                    completed: false,
-                    set_type: 'normal',
+            completed: false,
+            set_type: 'normal',
                     hasPrevious: false
-                };
+        };
                 workoutData.exercises[exerciseIndex].sets.push(defaultSet);
             }
             
             // Update the UI
-            renderExercises();
+        renderExercises();
             
             // Sync workout timer in case this is a duration exercise
             syncWorkoutTimer();

@@ -322,7 +322,7 @@ function initChart(data) {
 // Load chart data with time range
 function loadChartData() {
     const timeRange = document.getElementById('timeRange').value;
-    fetch(`/api/measurement-data/{{ measurement_type }}?range=${timeRange}`)
+    fetch(`/workout/api/measurement-data/{{ measurement_type }}?range=${timeRange}`)
         .then(response => response.json())
         .then(data => {
             initChart(data);
@@ -342,24 +342,36 @@ document.getElementById('measurement-form').addEventListener('submit', function(
     
     let value = parseFloat(document.getElementById('measurement-value').value);
     const unitSelector = document.getElementById('unit-selector');
+    let unit = null;
     
-    // Convert to base units if needed
+    // Get the unit value if unit selector exists
     if (unitSelector) {
-        if (unitSelector.value === 'lbs') {
-            value = lbsToKg(value);
-        } else if (unitSelector.value === 'in') {
-            value = inToCm(value);
-        }
+        unit = unitSelector.value;
     }
 
-    fetch(`/measurements/{{ measurement_type }}`, {
+    // Create the data object
+    const data = {
+        value: value
+    };
+    
+    // Only add unit if it exists
+    if (unit) {
+        data.unit = unit;
+    }
+
+    fetch(`/workout/measurements/{{ measurement_type }}`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ value: value })
+        body: JSON.stringify(data)
     })
-    .then(response => response.json())
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+        return response.json();
+    })
     .then(data => {
         if (data.success) {
             window.location.reload();
@@ -367,16 +379,24 @@ document.getElementById('measurement-form').addEventListener('submit', function(
             alert(data.error || 'Error logging measurement');
         }
     })
-    .catch(error => console.error('Error:', error));
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Failed to save measurement. Please try again.');
+    });
 });
 
 // Delete measurement
 function deleteMeasurement(logId) {
     if (confirm('Are you sure you want to delete this measurement?')) {
-        fetch(`/delete-measurement/${logId}`, {
+        fetch(`/workout/delete-measurement/${logId}`, {
             method: 'DELETE'
         })
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! Status: ${response.status}`);
+            }
+            return response.json();
+        })
         .then(data => {
             if (data.success) {
                 window.location.reload();
@@ -384,7 +404,10 @@ function deleteMeasurement(logId) {
                 alert(data.error || 'Error deleting measurement');
             }
         })
-        .catch(error => console.error('Error:', error));
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Failed to delete measurement. Please try again.');
+        });
     }
 }
 
