@@ -109,6 +109,7 @@ class Exercise(db.Model):
     min_distance = db.Column(db.Float, nullable=True)
     max_distance = db.Column(db.Float, nullable=True)
     range_enabled = db.Column(db.Boolean, default=True)
+    rest_duration = db.Column(db.Integer, nullable=True, default=None)
 
     # Constants for exercise input types
     INPUT_TYPES = {

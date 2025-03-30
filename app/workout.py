@@ -251,6 +251,7 @@ def get_exercise_details(exercise_id):
         'max_duration': exercise.max_duration,
         'min_distance': exercise.min_distance,
         'max_distance': exercise.max_distance,
+        'rest_duration': exercise.rest_duration,
         'previousSets': previous_sets
     })
 
@@ -548,4 +549,36 @@ def update_exercise_ranges(exercise_id):
     except Exception as e:
         db.session.rollback()
         print(f"Error updating exercise ranges: {str(e)}")  # Add logging
+        return jsonify({'success': False, 'error': str(e)})
+
+@workout.route('/api/exercise-rest/<int:exercise_id>', methods=['POST'])
+@login_required
+def update_exercise_rest(exercise_id):
+    exercise = Exercise.query.get_or_404(exercise_id)
+    data = request.get_json()
+    
+    try:
+        print(f"Received rest duration data: {data}")  # Add debug logging
+        
+        # Update rest duration
+        if 'rest_duration' in data:
+            rest_duration = data.get('rest_duration')
+            
+            # Convert to integer if not None
+            if rest_duration is not None:
+                exercise.rest_duration = int(rest_duration)
+            else:
+                exercise.rest_duration = None
+        
+        db.session.commit()
+        print(f"Updated exercise rest duration for {exercise.id}: rest_duration={exercise.rest_duration}")
+        
+        return jsonify({
+            'success': True,
+            'rest_duration': exercise.rest_duration
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error updating exercise rest duration: {str(e)}")  # Add logging
         return jsonify({'success': False, 'error': str(e)})

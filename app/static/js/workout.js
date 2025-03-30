@@ -728,7 +728,7 @@ let workoutData = {
                     <label class="set-complete-checkbox">
                         <input type="checkbox"
                             ${set.completed ? 'checked' : ''}
-                            onchange="toggleSetCompletion(${exerciseIndex}, ${setIndex})">
+                            onchange="handleSetCompletion(${exerciseIndex}, ${setIndex})">
                         <span class="checkmark"></span>
                     </label>
                     <button onclick="removeSet(${exerciseIndex}, ${setIndex})" class="remove-set-btn">×</button>
@@ -736,10 +736,15 @@ let workoutData = {
             `;
         }).join('');
   
+        const restTimerText = exercise.rest_duration ? formatRestDuration(exercise.rest_duration) : 'No Rest Timer';
+        
         exerciseDiv.innerHTML = `
             <div class="exercise-header">
                 <h3 class="exercise-title">${exercise.name} (${formatSets(exercise.sets)})</h3>
                 <div class="exercise-actions">
+                    <button onclick="showRestSettingsModal(${exerciseIndex})" class="rest-timer-btn">
+                        Rest: ${restTimerText}
+                    </button>
                     <button onclick="showRangeSettings(${exerciseIndex})" class="range-settings-btn">
                         ${formatRangeSettings(exercise)}
                     </button>
@@ -1157,4 +1162,252 @@ let workoutData = {
     recommendation.isRecommended = isRecommended;
     
     return recommendation;
+  }
+
+  // Rest timer variables
+  let currentExerciseIndex = null;
+  let restTimerInterval = null;
+  let restSeconds = 0;
+  let restTotalSeconds = 0;
+  let isRestPaused = false;
+  let activeRestTimer = false;
+
+  function formatRestDuration(seconds) {
+    if (!seconds) return 'Off';
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  }
+
+  function showRestSettingsModal(exerciseIndex) {
+    currentExerciseIndex = exerciseIndex;
+    const exercise = workoutData.exercises[exerciseIndex];
+    const modal = document.getElementById('rest-timer-modal');
+    const minutesInput = document.getElementById('rest-minutes');
+    const secondsInput = document.getElementById('rest-seconds');
+    const enabledCheckbox = document.getElementById('rest-enabled');
+    const saveButton = document.getElementById('save-rest-settings');
+    const closeButton = modal.querySelector('.close');
+    
+    // Set initial values based on exercise settings
+    if (exercise.rest_duration) {
+        const mins = Math.floor(exercise.rest_duration / 60);
+        const secs = exercise.rest_duration % 60;
+        minutesInput.value = mins;
+        secondsInput.value = secs;
+        enabledCheckbox.checked = true;
+    } else {
+        minutesInput.value = 0;
+        secondsInput.value = 0;
+        enabledCheckbox.checked = false;
+    }
+    
+    // Add event listeners for save and close buttons
+    saveButton.onclick = saveRestSettings;
+    closeButton.onclick = function() {
+        modal.style.display = 'none';
+    };
+    
+    // Close modal when clicking outside
+    window.onclick = function(event) {
+        if (event.target == modal) {
+            modal.style.display = 'none';
+        }
+    };
+    
+    // Show modal
+    modal.style.display = 'block';
+  }
+
+  function saveRestSettings() {
+    if (currentExerciseIndex === null) return;
+    
+    const exercise = workoutData.exercises[currentExerciseIndex];
+    const modal = document.getElementById('rest-timer-modal');
+    const minutes = parseInt(document.getElementById('rest-minutes').value) || 0;
+    const seconds = parseInt(document.getElementById('rest-seconds').value) || 0;
+    const enabled = document.getElementById('rest-enabled').checked;
+    
+    // Calculate total seconds
+    let totalSeconds = null;
+    if (enabled && (minutes > 0 || seconds > 0)) {
+        totalSeconds = (minutes * 60) + seconds;
+    }
+    
+    // Create payload
+    const payload = {
+        rest_duration: totalSeconds
+    };
+    
+    console.log("Sending rest timer settings:", payload); // Debug log
+    
+    // Save to server
+    fetch(`/workout/api/exercise-rest/${exercise.id}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload)
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        if (data.success) {
+            // Update exercise data
+            exercise.rest_duration = data.rest_duration;
+            
+            // Close modal and refresh UI
+            modal.style.display = 'none';
+            renderExercises();
+        } else {
+            alert('Error saving rest timer: ' + (data.error || 'Unknown error'));
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error saving rest timer: ' + error.message);
+    });
+  }
+
+  function handleSetCompletion(exerciseIndex, setIndex) {
+    const exercise = workoutData.exercises[exerciseIndex];
+    const set = exercise.sets[setIndex];
+    
+    // Toggle completion status
+    set.completed = !set.completed;
+    
+    // If set was marked as completed and there's a rest timer set, start it
+    if (set.completed && exercise.rest_duration) {
+        startRestTimer(exercise.rest_duration, exercise.name);
+    }
+    
+    renderExercises();
+  }
+
+  function startRestTimer(seconds, exerciseName) {
+    // Clear any existing rest timer
+    if (restTimerInterval) {
+        clearInterval(restTimerInterval);
+    }
+    
+    // Setup new rest timer
+    restSeconds = seconds;
+    restTotalSeconds = seconds;
+    isRestPaused = false;
+    activeRestTimer = true;
+    
+    // Show the rest timer container
+    const restTimerContainer = document.getElementById('rest-timer-container');
+    restTimerContainer.style.display = 'flex';
+    
+    // Update display
+    updateRestTimerDisplay();
+    
+    // Start the interval
+    restTimerInterval = setInterval(function() {
+        if (!isRestPaused) {
+            restSeconds--;
+            updateRestTimerDisplay();
+            
+            // When timer reaches zero
+            if (restSeconds <= 0) {
+                clearInterval(restTimerInterval);
+                restTimerInterval = null;
+                
+                // Show notification
+                if (Notification.permission === "granted") {
+                    new Notification("Rest Timer Complete", {
+                        body: `Time to continue your ${exerciseName} sets!`,
+                        icon: "/static/img/logo.png"
+                    });
+                }
+                
+                // Play sound
+                const audio = new Audio('/static/sounds/timer-complete.mp3');
+                audio.play().catch(e => console.log('Error playing sound:', e));
+                
+                // Hide rest timer after short delay
+                setTimeout(function() {
+                    if (!activeRestTimer) {
+                        restTimerContainer.style.display = 'none';
+                    }
+                }, 3000);
+            }
+        }
+    }, 1000);
+    
+    // Request notification permission if not already granted
+    if (Notification.permission !== "granted" && Notification.permission !== "denied") {
+        Notification.requestPermission();
+    }
+  }
+
+  function updateRestTimerDisplay() {
+    const minutes = Math.floor(restSeconds / 60);
+    const seconds = restSeconds % 60;
+    const display = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    
+    const restTimerElement = document.getElementById('rest-timer');
+    restTimerElement.textContent = display;
+    restTimerElement.dataset.seconds = restSeconds;
+    
+    // Update button text based on state
+    const pauseButton = document.getElementById('pause-rest');
+    pauseButton.textContent = isRestPaused ? 'Resume' : 'Pause';
+  }
+
+  function toggleRestTimer() {
+    isRestPaused = !isRestPaused;
+    
+    // Update button text
+    const pauseButton = document.getElementById('pause-rest');
+    pauseButton.textContent = isRestPaused ? 'Resume' : 'Pause';
+  }
+
+  function cancelRestTimer() {
+    // Clear interval
+    if (restTimerInterval) {
+        clearInterval(restTimerInterval);
+        restTimerInterval = null;
+    }
+    
+    // Hide rest timer container
+    const restTimerContainer = document.getElementById('rest-timer-container');
+    restTimerContainer.style.display = 'none';
+    
+    activeRestTimer = false;
+  }
+
+  function restartRestTimer() {
+    // If we have a valid total duration, restart the timer
+    if (restTotalSeconds > 0) {
+        // Clear existing interval
+        if (restTimerInterval) {
+            clearInterval(restTimerInterval);
+        }
+        
+        // Reset timer variables
+        restSeconds = restTotalSeconds;
+        isRestPaused = false;
+        
+        // Update display
+        updateRestTimerDisplay();
+        
+        // Start new interval
+        restTimerInterval = setInterval(function() {
+            if (!isRestPaused) {
+                restSeconds--;
+                updateRestTimerDisplay();
+                
+                if (restSeconds <= 0) {
+                    clearInterval(restTimerInterval);
+                    restTimerInterval = null;
+                }
+            }
+        }, 1000);
+    }
   }
