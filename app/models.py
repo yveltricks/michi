@@ -89,6 +89,8 @@ class Session(db.Model):
     title = db.Column(db.String(100), nullable=False, default='Workout')
     description = db.Column(db.Text)
     photo = db.Column(db.String(200))
+    sets_completed = db.Column(db.Integer, default=0)
+    total_reps = db.Column(db.Integer, default=0)
 
 class Exercise(db.Model):
     id = db.Column(db.Integer, primary_key=True)

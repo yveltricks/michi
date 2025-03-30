@@ -58,66 +58,18 @@ let workoutData = {
   function addExerciseAndStayOpen(exerciseId, exerciseName) {
     // Fetch exercise details including input type and previous values
     console.log(`Fetching details for exercise ID: ${exerciseId}`);
+    
     fetch(`/workout/api/exercise-details/${exerciseId}`)
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`Server returned ${response.status}: ${response.statusText}`);
-            }
-            return response.json();
-        })
-      .then(data => {
-            console.log('Received exercise data:', data);
+        .then(response => response.json())
+        .then(data => {
+            console.log('Exercise details:', data);
             
-            // Create the first set
-            const firstSet = {
-                completed: false,
-                set_type: 'normal',
-                ...generateDefaultSetValues(data.input_type),
-                hasPrevious: false,
-                prevValues: null,
-                isRecommended: {}
-            };
-            
-            // If there are previous sets, add the first one as previous values
-            if (data.previousSets && data.previousSets.length > 0) {
-                const firstPrevSet = data.previousSets[0];
-                firstSet.prevValues = firstPrevSet;
-                firstSet.hasPrevious = true;
-                
-                // Apply previous set type immediately
-                if (firstPrevSet.set_type) {
-                    firstSet.set_type = firstPrevSet.set_type;
-                }
-                
-                // Calculate recommended values if range is enabled
-                if (data.range_enabled) {
-                    const recommendedValues = calculateRecommendedValues(data, data.previousSets);
-                    console.log('Recommended values:', recommendedValues);
-                    
-                    // Apply recommended values to the set
-                    if (recommendedValues) {
-                        // Save which fields are recommendations
-                        if (recommendedValues.isRecommended) {
-                            firstSet.isRecommended = recommendedValues.isRecommended;
-                            delete recommendedValues.isRecommended;
-                        }
-                        
-                        // Apply each recommended value if it exists
-                        Object.keys(recommendedValues).forEach(field => {
-                            if (recommendedValues[field] !== null && recommendedValues[field] !== undefined) {
-                                firstSet[field] = recommendedValues[field];
-                            }
-                        });
-                    }
-                } else {
-                    console.log('Range is disabled, using previous values without recommendations');
-                }
-            }
-            
-        const exercise = {
-          id: exerciseId,
-          name: exerciseName,
-          input_type: data.input_type,
+            // Create a new exercise structure
+            const newExercise = {
+                id: exerciseId,
+                name: exerciseName,
+                input_type: data.input_type,
+                sets: [],
                 range_enabled: data.range_enabled,
                 min_reps: data.min_reps,
                 max_reps: data.max_reps,
@@ -126,23 +78,44 @@ let workoutData = {
                 min_distance: data.min_distance,
                 max_distance: data.max_distance,
                 previousSets: data.previousSets || [],
-                sets: [firstSet]
+                // Add the rest timer duration from the server data
+                rest_duration: data.rest_duration
             };
             
-        workoutData.exercises.push(exercise);
+            // Add exercise to workout data
+            workoutData.exercises.push(newExercise);
+            const exerciseIndex = workoutData.exercises.length - 1;
             
-            // If there were more than one previous set, add those too
-            if (data.previousSets && data.previousSets.length > 1) {
-                for (let i = 1; i < data.previousSets.length; i++) {
-                    addSetWithPrevious(workoutData.exercises.length - 1, data.previousSets[i], data);
-                }
+            // Add sets based on previous workout
+            if (data.previousSets && data.previousSets.length > 0) {
+                // Add each set from the previous workout
+                console.log(`Adding ${data.previousSets.length} sets from previous workout`);
+                
+                // Add a set for each previous set
+                data.previousSets.forEach((previousSet, index) => {
+                    addSetWithPrevious(exerciseIndex, previousSet, data);
+                });
+            } else {
+                // Add just one empty set
+                console.log('No previous sets, adding a default empty set');
+                const defaultSet = {
+                    ...generateDefaultSetValues(data.input_type),
+                    completed: false,
+                    set_type: 'normal',
+                    hasPrevious: false
+                };
+                workoutData.exercises[exerciseIndex].sets.push(defaultSet);
             }
             
-        renderExercises();
+            // Update the UI
+            renderExercises();
+            
+            // Sync workout timer in case this is a duration exercise
+            syncWorkoutTimer();
         })
         .catch(error => {
             console.error('Error fetching exercise details:', error);
-            alert('Error loading exercise: ' + error.message);
+            alert('Error adding exercise. Please try again.');
         });
   }
   
@@ -166,7 +139,13 @@ let workoutData = {
     
     // Apply recommended values if range is enabled and exercise data is available
     if (exercise.range_enabled && exerciseData && previousSet) {
-        const recommendedValues = calculateRecommendedValues(exerciseData, exerciseData.previousSets);
+        console.log(`Calculating recommended values for set ${exercise.sets.length + 1} of ${exercise.name}`);
+        
+        // If we have exercise data with previousSets, use it to calculate recommendations
+        const previousSets = exerciseData.previousSets || [];
+        const recommendedValues = calculateRecommendedValues(exerciseData, previousSets);
+        
+        console.log('Recommended values:', recommendedValues);
         
         // Apply recommended values to the set
         if (recommendedValues) {
@@ -306,7 +285,21 @@ let workoutData = {
         previousSet = exercise.previousSets[setIndex];
     }
     
-    addSetWithPrevious(exerciseIndex, previousSet);
+    // Get exercise data for recommendation calculations
+    const exerciseData = {
+      input_type: exercise.input_type,
+      range_enabled: exercise.range_enabled,
+      recommend_enabled: true, // Use the user's setting if available
+      min_reps: exercise.min_reps,
+      max_reps: exercise.max_reps,
+      min_duration: exercise.min_duration,
+      max_duration: exercise.max_duration,
+      min_distance: exercise.min_distance,
+      max_distance: exercise.max_distance,
+      previousSets: exercise.previousSets || []
+    };
+    
+    addSetWithPrevious(exerciseIndex, previousSet, exerciseData);
     renderExercises();
   }
   
@@ -707,12 +700,41 @@ let workoutData = {
     const container = document.getElementById('exercises-container');
     container.innerHTML = '';
   
+    // First reset performance metrics to recalculate
+    let shouldRecalculatePerformance = false;
+    
+    // Check if we have any completed sets that need performance recalculation
+    workoutData.exercises.forEach(exercise => {
+      exercise.sets.forEach(set => {
+        if (set.completed && set.hasPrevious && set.prevValues) {
+          shouldRecalculatePerformance = true;
+        }
+      });
+    });
+    
+    // If we need to recalculate, reset first
+    if (shouldRecalculatePerformance) {
+      resetPerformanceMetrics();
+      
+      // Then analyze all completed sets
+      workoutData.exercises.forEach(exercise => {
+        exercise.sets.forEach(set => {
+          if (set.completed && set.hasPrevious && set.prevValues) {
+            updatePerformanceMetrics(exercise, set, set.prevValues, true);
+          }
+        });
+      });
+    }
+  
     workoutData.exercises.forEach((exercise, exerciseIndex) => {
         const exerciseDiv = document.createElement('div');
         exerciseDiv.className = 'exercise-entry';
   
         let setsHtml = exercise.sets.map((set, setIndex) => {
             const setType = SET_TYPES[set.set_type || 'normal'];
+            
+            // Don't update stats counters here - they're updated in handleSetCompletion
+            
             return `
                 <div class="set-entry ${set.completed ? 'checked' : ''}">
                     <span class="set-label" 
@@ -737,7 +759,7 @@ let workoutData = {
         }).join('');
   
         const restTimerText = exercise.rest_duration ? formatRestDuration(exercise.rest_duration) : 'No Rest Timer';
-        
+  
         exerciseDiv.innerHTML = `
             <div class="exercise-header">
                 <h3 class="exercise-title">${exercise.name} (${formatSets(exercise.sets)})</h3>
@@ -760,6 +782,9 @@ let workoutData = {
   
         container.appendChild(exerciseDiv);
     });
+    
+    // Update EXP display
+    updateExpDisplay();
   }
   
   // Handle muscle group filtering
@@ -805,9 +830,19 @@ let workoutData = {
         title: document.getElementById('workout-title').value.trim() || 'Workout',
         description: document.getElementById('workout-description').value,
         rating: document.getElementById('workout-rating').value,
-        duration: calculateWorkoutDuration()
+        duration: calculateWorkoutDuration(),
+        exp_gained: sessionExpGained, // Include the session EXP
+        volume: totalVolume // Include total volume
     };
   
+    // Log the data being sent
+    console.log('Sending workout data:', data);
+  
+    // Show loading indicator
+    document.querySelector('.finish-workout-btn').disabled = true;
+    document.querySelector('.finish-workout-btn').textContent = 'Saving...';
+  
+    // Send data to server
     fetch('/workout/log-workout', {
         method: 'POST',
         headers: {
@@ -815,17 +850,34 @@ let workoutData = {
         },
         body: JSON.stringify(data)
     })
-    .then(response => response.json())
+    .then(response => {
+        console.log('Response status:', response.status);
+        // Check if response is OK before trying to parse as JSON
+        if (!response.ok) {
+            return response.text().then(text => {
+                console.error('Server error response:', text);
+                throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+            });
+        }
+        return response.json();
+    })
     .then(data => {
+        console.log('Server response:', data);
         if (data.success) {
-            window.location.href = '/';
+            window.location.href = '/workout/session/' + data.session_id;
         } else {
             alert('Error saving workout: ' + (data.error || 'Unknown error'));
+            // Re-enable button
+            document.querySelector('.finish-workout-btn').disabled = false;
+            document.querySelector('.finish-workout-btn').textContent = 'Complete Workout';
         }
     })
-    .catch(error => {
-        console.error('Error:', error);
-        alert('Error saving workout');
+    .catch((error) => {
+        console.error('Error details:', error);
+        alert('Error saving workout: ' + error.message);
+        // Re-enable button
+        document.querySelector('.finish-workout-btn').disabled = false;
+        document.querySelector('.finish-workout-btn').textContent = 'Complete Workout';
     });
   }
   
@@ -971,20 +1023,30 @@ let workoutData = {
 
   // Function to calculate recommended values based on previous performance
   function calculateRecommendedValues(exerciseData, previousSets) {
+    console.log('Starting recommendation calculation with data:', { 
+      inputType: exerciseData.input_type,
+      rangeEnabled: exerciseData.range_enabled,
+      minReps: exerciseData.min_reps,
+      maxReps: exerciseData.max_reps,
+      previousSetsCount: previousSets?.length || 0
+    });
+    
     // If ranges are disabled or no previous sets, no recommendations
     if (!exerciseData.range_enabled || !previousSets || previousSets.length === 0) {
-        return null;
+      console.log('Cannot make recommendations: ranges disabled or no previous sets');
+      return null;
     }
     
     // Check if recommendations are enabled globally (gets passed from the server in exerciseData)
     if (exerciseData.recommend_enabled === false) {
-        console.log('Recommendations are disabled in user settings');
-        return null;
+      console.log('Recommendations are disabled in user settings');
+      return null;
     }
     
     const inputType = exerciseData.input_type;
-    // Get last 3 sets or all if less than 3
+    // Get last 3 sets or all
     const recentSets = previousSets.slice(-3);
+    console.log('Using most recent sets for calculation:', recentSets);
     
     // Initialize recommendation object
     const recommendation = {};
@@ -993,174 +1055,207 @@ let workoutData = {
     
     // Check if input type uses weight
     if (inputType.includes('weight')) {
-        // Find the last weight value used
-        let lastWeight = 0;
-        for (const set of recentSets) {
-            if (set.weight) {
-                lastWeight = set.weight;
-                break;
-            } else if (set.additional_weight) {
-                lastWeight = set.additional_weight;
-                break;
-            }
+      // Find the last weight value used
+      let lastWeight = 0;
+      for (const set of recentSets) {
+        if (set.weight) {
+          lastWeight = set.weight;
+          break;
+        } else if (set.additional_weight) {
+          lastWeight = set.additional_weight;
+          break;
         }
-        
-        // Check if all sets were within or above range for various metrics
-        let allUpperRange = true;
-        let allLowerRange = true;
-        
-        if (inputType === 'weight_reps' || inputType === 'bodyweight_reps' || inputType === 'weighted_bodyweight') {
-            // Check rep ranges
-            if (exerciseData.min_reps !== null && exerciseData.max_reps !== null) {
-                for (const set of recentSets) {
-                    if (set.reps < exerciseData.max_reps) {
-                        allUpperRange = false;
-                    }
-                    if (set.reps > exerciseData.min_reps) {
-                        allLowerRange = false;
-                    }
-                }
-                
-                // Make weight recommendations based on performance
-                if (allUpperRange && lastWeight > 0) {
-                    // If all sets hit upper range, recommend higher weight
-                    if (inputType === 'weight_reps') {
-                        recommendation.weight = Math.round((lastWeight + 2.5) * 10) / 10; // Round to nearest 0.1
-                        isRecommended.weight = true;
-                    } else if (inputType === 'weighted_bodyweight') {
-                        recommendation.additional_weight = Math.round((lastWeight + 2.5) * 10) / 10;
-                        isRecommended.additional_weight = true;
-                    }
-                } else if (allLowerRange && lastWeight > 0) {
-                    // If all sets below lower range, recommend lower weight
-                    if (inputType === 'weight_reps') {
-                        recommendation.weight = Math.max(0, Math.round((lastWeight - 2.5) * 10) / 10);
-                        isRecommended.weight = true;
-                    } else if (inputType === 'weighted_bodyweight') {
-                        recommendation.additional_weight = Math.max(0, Math.round((lastWeight - 2.5) * 10) / 10);
-                        isRecommended.additional_weight = true;
-                    }
-                } else if (lastWeight > 0) {
-                    // If mixed performance, keep same weight
-                    if (inputType === 'weight_reps') {
-                        recommendation.weight = lastWeight;
-                    } else if (inputType === 'weighted_bodyweight') {
-                        recommendation.additional_weight = lastWeight;
-                    }
-                }
+      }
+      
+      console.log(`Found last weight: ${lastWeight}`);
+      
+      // Check if all sets were within or above range for various metrics
+      let allUpperRange = true;
+      let allLowerRange = true;
+      
+      if (inputType === 'weight_reps' || inputType === 'bodyweight_reps' || inputType === 'weighted_bodyweight') {
+        // Check rep ranges
+        if (exerciseData.min_reps !== null && exerciseData.max_reps !== null) {
+          console.log(`Checking rep ranges: min=${exerciseData.min_reps}, max=${exerciseData.max_reps}`);
+          
+          for (const set of recentSets) {
+            console.log(`Set reps: ${set.reps}, comparing to min=${exerciseData.min_reps}, max=${exerciseData.max_reps}`);
+            
+            if (set.reps < exerciseData.max_reps) {
+              allUpperRange = false;
+              console.log(`Set with ${set.reps} reps is below max ${exerciseData.max_reps}, allUpperRange=${allUpperRange}`);
             }
-        } else if (inputType === 'duration_weight') {
-            // Check duration ranges
-            if (exerciseData.min_duration !== null && exerciseData.max_duration !== null) {
-                for (const set of recentSets) {
-                    if (set.time < exerciseData.max_duration) {
-                        allUpperRange = false;
-                    }
-                    if (set.time > exerciseData.min_duration) {
-                        allLowerRange = false;
-                    }
-                }
-                
-                // Make weight recommendations based on duration performance
-                if (allUpperRange && lastWeight > 0) {
-                    recommendation.weight = Math.round((lastWeight + 2.5) * 10) / 10;
-                    isRecommended.weight = true;
-                } else if (allLowerRange && lastWeight > 0) {
-                    recommendation.weight = Math.max(0, Math.round((lastWeight - 2.5) * 10) / 10);
-                    isRecommended.weight = true;
-                } else if (lastWeight > 0) {
-                    recommendation.weight = lastWeight;
-                }
+            if (set.reps > exerciseData.min_reps) {
+              allLowerRange = false;
+              console.log(`Set with ${set.reps} reps is above min ${exerciseData.min_reps}, allLowerRange=${allLowerRange}`);
             }
-        } else if (inputType === 'weight_distance') {
-            // Check distance ranges
-            if (exerciseData.min_distance !== null && exerciseData.max_distance !== null) {
-                for (const set of recentSets) {
-                    if (set.distance < exerciseData.max_distance) {
-                        allUpperRange = false;
-                    }
-                    if (set.distance > exerciseData.min_distance) {
-                        allLowerRange = false;
-                    }
-                }
-                
-                // Make weight recommendations based on distance performance
-                if (allUpperRange && lastWeight > 0) {
-                    recommendation.weight = Math.round((lastWeight + 2.5) * 10) / 10;
-                    isRecommended.weight = true;
-                } else if (allLowerRange && lastWeight > 0) {
-                    recommendation.weight = Math.max(0, Math.round((lastWeight - 2.5) * 10) / 10);
-                    isRecommended.weight = true;
-                } else if (lastWeight > 0) {
-                    recommendation.weight = lastWeight;
-                }
+          }
+          
+          // Make weight recommendations based on performance
+          if (allUpperRange && lastWeight > 0) {
+            // If all sets hit upper range, recommend higher weight
+            if (inputType === 'weight_reps') {
+              recommendation.weight = Math.round((lastWeight + 2.5) * 10) / 10; // Round to nearest 0.1
+              isRecommended.weight = true;
+              console.log(`All sets at upper range, recommending higher weight: ${recommendation.weight}`);
+            } else if (inputType === 'weighted_bodyweight') {
+              recommendation.additional_weight = Math.round((lastWeight + 2.5) * 10) / 10;
+              isRecommended.additional_weight = true;
+              console.log(`All sets at upper range, recommending higher additional weight: ${recommendation.additional_weight}`);
             }
+          } else if (allLowerRange && lastWeight > 0) {
+            // If all sets below lower range, recommend lower weight
+            if (inputType === 'weight_reps') {
+              recommendation.weight = Math.max(0, Math.round((lastWeight - 2.5) * 10) / 10);
+              isRecommended.weight = true;
+              console.log(`All sets at lower range, recommending lower weight: ${recommendation.weight}`);
+            } else if (inputType === 'weighted_bodyweight') {
+              recommendation.additional_weight = Math.max(0, Math.round((lastWeight - 2.5) * 10) / 10);
+              isRecommended.additional_weight = true;
+              console.log(`All sets at lower range, recommending lower additional weight: ${recommendation.additional_weight}`);
+            }
+          } else if (lastWeight > 0) {
+            // If mixed performance, keep same weight
+            if (inputType === 'weight_reps') {
+              recommendation.weight = lastWeight;
+              console.log(`Mixed performance, keeping same weight: ${recommendation.weight}`);
+            } else if (inputType === 'weighted_bodyweight') {
+              recommendation.additional_weight = lastWeight;
+              console.log(`Mixed performance, keeping same additional weight: ${recommendation.additional_weight}`);
+            }
+          }
         }
+      } else if (inputType === 'duration_weight') {
+        // Check duration ranges
+        if (exerciseData.min_duration !== null && exerciseData.max_duration !== null) {
+          for (const set of recentSets) {
+            if (set.time < exerciseData.max_duration) {
+              allUpperRange = false;
+            }
+            if (set.time > exerciseData.min_duration) {
+              allLowerRange = false;
+            }
+          }
+          
+          // Make weight recommendations based on duration performance
+          if (allUpperRange && lastWeight > 0) {
+            recommendation.weight = Math.round((lastWeight + 2.5) * 10) / 10;
+            isRecommended.weight = true;
+            console.log(`All duration at upper range, recommending higher weight: ${recommendation.weight}`);
+          } else if (allLowerRange && lastWeight > 0) {
+            recommendation.weight = Math.max(0, Math.round((lastWeight - 2.5) * 10) / 10);
+            isRecommended.weight = true;
+            console.log(`All duration at lower range, recommending lower weight: ${recommendation.weight}`);
+          } else if (lastWeight > 0) {
+            recommendation.weight = lastWeight;
+            console.log(`Mixed duration performance, keeping same weight: ${recommendation.weight}`);
+          }
+        }
+      } else if (inputType === 'weight_distance') {
+        // Check distance ranges
+        if (exerciseData.min_distance !== null && exerciseData.max_distance !== null) {
+          for (const set of recentSets) {
+            if (set.distance < exerciseData.max_distance) {
+              allUpperRange = false;
+            }
+            if (set.distance > exerciseData.min_distance) {
+              allLowerRange = false;
+            }
+          }
+          
+          // Make weight recommendations based on distance performance
+          if (allUpperRange && lastWeight > 0) {
+            recommendation.weight = Math.round((lastWeight + 2.5) * 10) / 10;
+            isRecommended.weight = true;
+            console.log(`All distance at upper range, recommending higher weight: ${recommendation.weight}`);
+          } else if (allLowerRange && lastWeight > 0) {
+            recommendation.weight = Math.max(0, Math.round((lastWeight - 2.5) * 10) / 10);
+            isRecommended.weight = true;
+            console.log(`All distance at lower range, recommending lower weight: ${recommendation.weight}`);
+          } else if (lastWeight > 0) {
+            recommendation.weight = lastWeight;
+            console.log(`Mixed distance performance, keeping same weight: ${recommendation.weight}`);
+          }
+        }
+      }
     }
     
     // Handle pure duration exercises (like planks)
     if (inputType === 'duration') {
-        // Get the last duration used
-        let lastDuration = 0;
+      // Get the last duration used
+      let lastDuration = 0;
+      for (const set of recentSets) {
+        if (set.time) {
+          lastDuration = set.time;
+          break;
+        }
+      }
+      
+      let allUpperRange = true;
+      let allLowerRange = true;
+      
+      // Check duration ranges
+      if (exerciseData.min_duration !== null && exerciseData.max_duration !== null) {
         for (const set of recentSets) {
-            if (set.time) {
-                lastDuration = set.time;
-                break;
-            }
+          if (!set.time) continue;
+          // Check if all sets are at or above the max duration
+          if (set.time < exerciseData.max_duration) {
+            allUpperRange = false;
+          }
+          // Check if all sets are below the min duration
+          if (set.time > exerciseData.min_duration) {
+            allLowerRange = false;
+          }
         }
         
-        let allUpperRange = true;
-        let allLowerRange = true;
+        console.log('Duration check:', { lastDuration, min: exerciseData.min_duration, max: exerciseData.max_duration, allUpperRange, allLowerRange });
         
-        // Check duration ranges
-        if (exerciseData.min_duration !== null && exerciseData.max_duration !== null) {
-            for (const set of recentSets) {
-                if (!set.time) continue;
-                // Check if all sets are at or above the max duration
-                if (set.time < exerciseData.max_duration) {
-                    allUpperRange = false;
-                }
-                // Check if all sets are below the min duration
-                if (set.time > exerciseData.min_duration) {
-                    allLowerRange = false;
-                }
-            }
-            
-            console.log('Duration check:', { lastDuration, min: exerciseData.min_duration, max: exerciseData.max_duration, allUpperRange, allLowerRange });
-            
-            // Make duration recommendations based on performance
-            if (allUpperRange && lastDuration > 0) {
-                // If all durations at or above max, recommend 10% longer duration
-                const increasedDuration = Math.ceil(lastDuration * 1.1);
-                recommendation.time = increasedDuration;
-                isRecommended.time = true;
-                console.log('Recommending increased duration:', increasedDuration);
-            } else if (allLowerRange && lastDuration > 0) {
-                // If all durations below min, recommend 10% shorter duration
-                const decreasedDuration = Math.max(5, Math.floor(lastDuration * 0.9));
-                recommendation.time = decreasedDuration;
-                isRecommended.time = true;
-                console.log('Recommending decreased duration:', decreasedDuration);
-            } else if (lastDuration > 0) {
-                // If mixed performance, keep the same duration
-                recommendation.time = lastDuration;
-                console.log('Keeping same duration:', lastDuration);
-            }
+        // Make duration recommendations based on performance
+        if (allUpperRange && lastDuration > 0) {
+          // If all durations at or above max, recommend 10% longer duration
+          const increasedDuration = Math.ceil(lastDuration * 1.1);
+          recommendation.time = increasedDuration;
+          isRecommended.time = true;
+          console.log('Recommending increased duration:', increasedDuration);
+        } else if (allLowerRange && lastDuration > 0) {
+          // If all durations below min, recommend 10% shorter duration
+          const decreasedDuration = Math.max(5, Math.floor(lastDuration * 0.9));
+          recommendation.time = decreasedDuration;
+          isRecommended.time = true;
+          console.log('Recommending decreased duration:', decreasedDuration);
+        } else if (lastDuration > 0) {
+          // If mixed performance, keep the same duration
+          recommendation.time = lastDuration;
+          console.log('Keeping same duration:', lastDuration);
         }
+      }
     }
     
     // For all other values, just use the previous values
     // This ensures we're only changing certain values based on performance in ranges
     for (const set of recentSets) {
-        if (!inputType.includes('duration') && set.reps && !recommendation.reps) recommendation.reps = set.reps;
-        if (!inputType.includes('weight') && !inputType.includes('duration') && set.time && !recommendation.time) recommendation.time = set.time;
-        if (!inputType.includes('distance') && set.distance && !recommendation.distance) recommendation.distance = set.distance;
-        if (set.assistance_weight && !recommendation.assistance_weight) recommendation.assistance_weight = set.assistance_weight;
+      if (!inputType.includes('duration') && set.reps && !recommendation.reps) {
+        recommendation.reps = set.reps;
+        console.log(`Using previous reps value: ${recommendation.reps}`);
+      }
+      if (!inputType.includes('weight') && !inputType.includes('duration') && set.time && !recommendation.time) {
+        recommendation.time = set.time;
+        console.log(`Using previous time value: ${recommendation.time}`);
+      }
+      if (!inputType.includes('distance') && set.distance && !recommendation.distance) {
+        recommendation.distance = set.distance;
+        console.log(`Using previous distance value: ${recommendation.distance}`);
+      }
+      if (set.assistance_weight && !recommendation.assistance_weight) {
+        recommendation.assistance_weight = set.assistance_weight;
+        console.log(`Using previous assistance weight value: ${recommendation.assistance_weight}`);
+      }
     }
     
-    // Add the isRecommended field to the recommendation object
+    // Add isRecommended flags to the recommendation
     recommendation.isRecommended = isRecommended;
     
+    console.log('Final recommendation:', recommendation);
     return recommendation;
   }
 
@@ -1273,19 +1368,112 @@ let workoutData = {
     });
   }
 
+  // Add global variables for tracking exp
+  let sessionExpGained = 0;
+  let expGainTimeout = null;
+
+  // Add globals for workout stats tracking
+  let totalVolume = 0;
+  let completedSets = 0;
+  let totalReps = 0;
+  let performanceData = {
+    improved: 0,
+    declined: 0,
+    neutral: 0,
+    totalSetsAnalyzed: 0,
+    percentChange: 0
+  };
+
   function handleSetCompletion(exerciseIndex, setIndex) {
     const exercise = workoutData.exercises[exerciseIndex];
     const set = exercise.sets[setIndex];
     
     // Toggle completion status
+    const wasCompleted = set.completed;
     set.completed = !set.completed;
     
-    // If set was marked as completed and there's a rest timer set, start it
-    if (set.completed && exercise.rest_duration) {
-        startRestTimer(exercise.rest_duration, exercise.name);
+    // If set was marked as completed (not uncompleted)
+    if (set.completed && !wasCompleted) {
+        // Calculate EXP gain if there are previous values to compare
+        if (set.hasPrevious && set.prevValues) {
+            const expGained = calculateExpGain(exercise, set, set.prevValues);
+            if (expGained > 0) {
+                showExpGain(expGained);
+            }
+            
+            // Calculate performance metrics if we have previous values
+            updatePerformanceMetrics(exercise, set, set.prevValues, true);
+        } else {
+            // Base EXP for completing a set with no previous comparison
+            showExpGain(1);
+        }
+        
+        // Update volume, sets, and reps stats
+        updateWorkoutStats(exercise, set, true);
+        
+        // Start rest timer if enabled
+        if (exercise.rest_duration) {
+            startRestTimer(exercise.rest_duration, exercise.name);
+        }
+    } else if (!set.completed && wasCompleted) {
+        // If set was uncompleted, remove EXP
+        // We don't know exactly how much EXP this set contributed, so use a base value
+        sessionExpGained = Math.max(0, sessionExpGained - 1);
+        updateExpDisplay();
+        
+        // Update volume, sets, and reps stats
+        updateWorkoutStats(exercise, set, false);
+        
+        // Revert performance metrics if we have previous values
+        if (set.hasPrevious && set.prevValues) {
+            updatePerformanceMetrics(exercise, set, set.prevValues, false);
+        }
     }
     
     renderExercises();
+  }
+
+  // Add function to update workout stats
+  function updateWorkoutStats(exercise, set, isCompleted) {
+    // Update completed sets count
+    completedSets = isCompleted ? completedSets + 1 : completedSets - 1;
+    document.getElementById('sets-done').textContent = completedSets;
+    
+    // Update reps based on exercise input type
+    if (set.reps) {
+        totalReps = isCompleted ? totalReps + parseInt(set.reps) : totalReps - parseInt(set.reps);
+        document.getElementById('reps-done').textContent = totalReps;
+    }
+    
+    // Calculate and update volume
+    const setVolume = calculateSetVolume(exercise, set);
+    totalVolume = isCompleted ? totalVolume + setVolume : totalVolume - setVolume;
+    document.getElementById('workout-volume').textContent = Math.round(totalVolume);
+  }
+
+  // Function to calculate the volume of a set
+  function calculateSetVolume(exercise, set) {
+    let volume = 0;
+    
+    if (exercise.input_type === 'weight_reps' && set.weight && set.reps) {
+        // Standard weight × reps volume calculation
+        volume = parseFloat(set.weight) * parseInt(set.reps);
+    } else if (exercise.input_type === 'weighted_bodyweight' && set.additional_weight && set.reps) {
+        // For weighted bodyweight exercises (estimated bodyweight + additional weight) × reps
+        const estimatedBodyweight = 75; // Default estimate - could be improved to use user's actual weight
+        volume = (estimatedBodyweight + parseFloat(set.additional_weight)) * parseInt(set.reps);
+    } else if (exercise.input_type === 'bodyweight_reps' && set.reps) {
+        // For bodyweight only, estimate bodyweight × reps
+        const estimatedBodyweight = 75; // Default estimate
+        volume = estimatedBodyweight * parseInt(set.reps);
+    } else if (exercise.input_type === 'assisted_bodyweight' && set.assistance_weight && set.reps) {
+        // For assisted bodyweight exercises (estimated bodyweight - assistance weight) × reps
+        const estimatedBodyweight = 75; // Default estimate
+        const assistWeight = parseFloat(set.assistance_weight);
+        volume = Math.max(0, estimatedBodyweight - assistWeight) * parseInt(set.reps);
+    }
+    
+    return volume;
   }
 
   function startRestTimer(seconds, exerciseName) {
@@ -1409,5 +1597,409 @@ let workoutData = {
                 }
             }
         }, 1000);
+    }
+  }
+
+  // Function to update EXP display in the workout stats bar
+  function updateExpDisplay() {
+    const sessionExpElement = document.getElementById('session-exp');
+    if (sessionExpElement) {
+        sessionExpElement.textContent = sessionExpGained;
+    }
+    
+    // Update progress bar
+    const levelProgressBar = document.getElementById('level-progress');
+    if (levelProgressBar) {
+        // Get current exp from page data, or default to 0
+        const currentExp = parseInt(levelProgressBar.dataset.currentExp || 0);
+        const currentLevel = parseInt(levelProgressBar.dataset.currentLevel || 1);
+        const expToNextLevel = (currentLevel + 1) * 100;
+        
+        // Calculate progress percentage
+        const totalExp = currentExp + sessionExpGained;
+        const levelExp = totalExp % 100;
+        const progressPercentage = (levelExp / 100) * 100;
+        
+        // Update the progress bar
+        levelProgressBar.style.width = `${progressPercentage}%`;
+        
+        // Check if user leveled up
+        const startingLevel = Math.floor(currentExp / 100) + 1;
+        const newLevel = Math.floor((currentExp + sessionExpGained) / 100) + 1;
+        
+        if (newLevel > startingLevel) {
+            // User leveled up!
+            showLevelUpModal(newLevel);
+        }
+    }
+  }
+
+  // Function to show level up modal
+  function showLevelUpModal(newLevel) {
+    const modal = document.getElementById('levelUpModal');
+    if (modal) {
+        const levelSpan = document.getElementById('new-level');
+        if (levelSpan) {
+            levelSpan.textContent = newLevel;
+        }
+        
+        // Show the modal
+        $(modal).modal('show');
+        
+        // Play level up sound if available
+        try {
+            const audio = new Audio('/static/sounds/level-up.mp3');
+            audio.play().catch(e => console.log('Error playing level up sound:', e));
+        } catch (e) {
+            console.log('Sound not available');
+        }
+    }
+  }
+
+  // Function to show EXP gain notification
+  function showExpGain(amount) {
+    sessionExpGained += amount;
+    
+    // Update total EXP display
+    updateExpDisplay();
+    
+    // Show notification
+    const notification = document.getElementById('exp-notification');
+    if (notification) {
+        notification.textContent = `+${amount} EXP`;
+        notification.style.display = 'block';
+        
+        // Add animation class
+        notification.classList.add('exp-notification-animate');
+        
+        // Clear previous timeout if exists
+        if (expGainTimeout) {
+            clearTimeout(expGainTimeout);
+            notification.classList.remove('exp-notification-animate');
+            void notification.offsetWidth; // Trigger reflow to restart animation
+            notification.classList.add('exp-notification-animate');
+        }
+        
+        // Hide after animation completes
+        expGainTimeout = setTimeout(() => {
+            notification.style.display = 'none';
+            notification.classList.remove('exp-notification-animate');
+            expGainTimeout = null;
+        }, 3000);
+    }
+  }
+
+  // Function to calculate EXP gain based on improvement
+  function calculateExpGain(exercise, currentSet, previousSet) {
+    let expGained = 0;
+    const inputType = exercise.input_type;
+    
+    // Base EXP just for completing a set
+    const baseExp = 1;
+    expGained += baseExp;
+    
+    // Calculate volume-based improvements
+    if (inputType === 'weight_reps') {
+        // Compare current volume with previous
+        const currentVolume = (currentSet.weight || 0) * (currentSet.reps || 0);
+        const previousVolume = (previousSet.weight || 0) * (previousSet.reps || 0);
+        
+        if (currentVolume > previousVolume) {
+            // Calculate percentage improvement
+            const improvement = (currentVolume - previousVolume) / previousVolume;
+            // Award EXP based on % improvement (1-10 EXP)
+            const volumeExp = Math.min(Math.ceil(improvement * 20), 10);
+            expGained += volumeExp;
+            
+            // Bonus for significant improvements
+            if (improvement > 0.2) {
+                expGained += 5; // +5 EXP for 20%+ improvement
+            }
+        }
+    } 
+    else if (inputType === 'duration') {
+        // Compare durations
+        const currentDuration = currentSet.time || 0;
+        const previousDuration = previousSet.time || 0;
+        
+        if (currentDuration > previousDuration && previousDuration > 0) {
+            // Calculate improvement in seconds
+            const improvement = currentDuration - previousDuration;
+            // Award 1 EXP per 10% improvement
+            const durationExp = Math.ceil((improvement / previousDuration) * 10);
+            expGained += Math.min(durationExp, 10);
+        }
+    }
+    else if (inputType === 'distance_duration') {
+        // Compare distances and times (better pace)
+        const currentDistance = currentSet.distance || 0;
+        const previousDistance = previousSet.distance || 0;
+        const currentTime = currentSet.time || 1; // Avoid div by zero
+        const previousTime = previousSet.time || 1;
+        
+        // Calculate paces (lower is better)
+        const currentPace = currentTime / currentDistance;
+        const previousPace = previousTime / previousDistance;
+        
+        if (currentDistance > previousDistance) {
+            // Award EXP for longer distance
+            const distanceImprovement = (currentDistance - previousDistance) / previousDistance;
+            expGained += Math.min(Math.ceil(distanceImprovement * 10), 8);
+        }
+        
+        if (currentPace < previousPace) {
+            // Award EXP for better pace
+            const paceImprovement = (previousPace - currentPace) / previousPace;
+            expGained += Math.min(Math.ceil(paceImprovement * 15), 7);
+        }
+    }
+    
+    // Award bonus EXP for working within or above the target range (if ranges enabled)
+    if (exercise.range_enabled) {
+        if (inputType.includes('reps') && exercise.max_reps) {
+            if (currentSet.reps >= exercise.max_reps) {
+                expGained += 3; // Bonus for hitting or exceeding max reps
+            } else if (currentSet.reps >= exercise.min_reps) {
+                expGained += 1; // Smaller bonus for staying in range
+            }
+        } else if (inputType.includes('duration') && exercise.max_duration) {
+            if (currentSet.time >= exercise.max_duration) {
+                expGained += 3; // Bonus for meeting/exceeding max duration
+            } else if (currentSet.time >= exercise.min_duration) {
+                expGained += 1; // Smaller bonus for staying in range
+            }
+        } else if (inputType.includes('distance') && exercise.max_distance) {
+            if (currentSet.distance >= exercise.max_distance) {
+                expGained += 3; // Bonus for meeting/exceeding max distance
+            } else if (currentSet.distance >= exercise.min_distance) {
+                expGained += 1; // Smaller bonus for staying in range
+            }
+        }
+    }
+    
+    // Make sure we award some minimum EXP
+    return Math.max(expGained, baseExp);
+  }
+
+  // Function to reset stats counters
+  function resetWorkoutStatsCounters() {
+    totalVolume = 0;
+    completedSets = 0;
+    totalReps = 0;
+    
+    document.getElementById('workout-volume').textContent = '0';
+    document.getElementById('sets-done').textContent = '0';
+    document.getElementById('reps-done').textContent = '0';
+  }
+
+  // Function to reset performance metrics
+  function resetPerformanceMetrics() {
+    performanceData = {
+      improved: 0,
+      declined: 0,
+      neutral: 0,
+      totalSetsAnalyzed: 0,
+      percentChange: 0
+    };
+    
+    const performanceIcon = document.getElementById('performance-icon');
+    const performancePercent = document.getElementById('performance-percent');
+    
+    if (performanceIcon) {
+      performanceIcon.textContent = '?';
+      performanceIcon.classList.remove('performance-improved', 'performance-declined', 'performance-neutral');
+      performanceIcon.classList.add('performance-unknown');
+    }
+    
+    if (performancePercent) {
+      performancePercent.textContent = '';
+      performancePercent.classList.remove('performance-improved', 'performance-declined', 'performance-neutral');
+    }
+  }
+
+  // Add DOM content loaded event listener to initialize the workout page
+  document.addEventListener('DOMContentLoaded', function() {
+    // Initialize progress bar width
+    const progressBar = document.getElementById('level-progress');
+    if (progressBar) {
+      const currentExp = progressBar.getAttribute('data-current-exp');
+      if (currentExp) {
+        const progressPercentage = currentExp % 100;
+        progressBar.style.width = progressPercentage + '%';
+      }
+    }
+    
+    // Reset performance metrics to start fresh
+    resetPerformanceMetrics();
+    
+    // Initialize other workout page elements
+    // ...
+  });
+
+  // Add function to update performance metrics
+  function updatePerformanceMetrics(exercise, currentSet, previousSet, isCompleted) {
+    // Skip if no previous values to compare against
+    if (!previousSet) return;
+    
+    // Get the input type to determine how to compare
+    const inputType = exercise.input_type;
+    let isImproved = false;
+    let isDeclined = false;
+    let percentChange = 0;
+    
+    // Compare based on exercise type
+    if (inputType === 'weight_reps') {
+      // For weight/reps, compare total volume (weight × reps)
+      const currentVolume = (currentSet.weight || 0) * (currentSet.reps || 0);
+      const previousVolume = (previousSet.weight || 0) * (previousSet.reps || 0);
+      
+      if (previousVolume > 0) {
+        percentChange = ((currentVolume - previousVolume) / previousVolume) * 100;
+        isImproved = currentVolume > previousVolume;
+        isDeclined = currentVolume < previousVolume;
+      }
+    } 
+    else if (inputType === 'weighted_bodyweight' || inputType === 'bodyweight_reps') {
+      // For bodyweight exercises, compare reps or (bodyweight + additional weight) × reps
+      let currentValue, previousValue;
+      
+      if (inputType === 'weighted_bodyweight') {
+        // For weighted bodyweight, compare (bodyweight + additional weight) × reps
+        const additionalWeightCurrent = currentSet.additional_weight || 0;
+        const additionalWeightPrevious = previousSet.additional_weight || 0;
+        currentValue = (75 + additionalWeightCurrent) * (currentSet.reps || 0);
+        previousValue = (75 + additionalWeightPrevious) * (previousSet.reps || 0);
+      } else {
+        // For bodyweight only, compare reps
+        currentValue = currentSet.reps || 0;
+        previousValue = previousSet.reps || 0;
+      }
+      
+      if (previousValue > 0) {
+        percentChange = ((currentValue - previousValue) / previousValue) * 100;
+        isImproved = currentValue > previousValue;
+        isDeclined = currentValue < previousValue;
+      }
+    }
+    else if (inputType === 'assisted_bodyweight') {
+      // For assisted bodyweight, less assistance is better
+      const currentReps = currentSet.reps || 0;
+      const previousReps = previousSet.reps || 0;
+      const currentAssistance = currentSet.assistance_weight || 0;
+      const previousAssistance = previousSet.assistance_weight || 0;
+      
+      // Calculate an "effective strength" metric
+      const currentStrength = currentReps * (75 - currentAssistance);
+      const previousStrength = previousReps * (75 - previousAssistance);
+      
+      if (previousStrength > 0) {
+        percentChange = ((currentStrength - previousStrength) / previousStrength) * 100;
+        isImproved = currentStrength > previousStrength;
+        isDeclined = currentStrength < previousStrength;
+      }
+    }
+    else if (inputType === 'duration') {
+      // For duration exercises, longer is better
+      const currentDuration = currentSet.time || 0;
+      const previousDuration = previousSet.time || 0;
+      
+      if (previousDuration > 0) {
+        percentChange = ((currentDuration - previousDuration) / previousDuration) * 100;
+        isImproved = currentDuration > previousDuration;
+        isDeclined = currentDuration < previousDuration;
+      }
+    }
+    else if (inputType === 'distance_duration') {
+      // For distance/duration, better pace is an improvement
+      const currentDistance = currentSet.distance || 0;
+      const previousDistance = previousSet.distance || 0;
+      const currentTime = currentSet.time || 1; // Avoid div by zero
+      const previousTime = previousSet.time || 1;
+      
+      // Calculate paces (lower is better) in seconds per km
+      const currentPace = currentTime / currentDistance;
+      const previousPace = previousTime / previousDistance;
+      
+      if (previousPace > 0 && currentDistance > 0 && previousDistance > 0) {
+        percentChange = ((previousPace - currentPace) / previousPace) * 100;
+        isImproved = currentPace < previousPace;
+        isDeclined = currentPace > previousPace;
+      }
+    }
+    
+    // Update our performance tracking
+    if (isCompleted) {
+      if (isImproved) {
+        performanceData.improved++;
+        performanceData.percentChange += percentChange;
+      } else if (isDeclined) {
+        performanceData.declined++;
+        performanceData.percentChange += percentChange;
+      } else {
+        performanceData.neutral++;
+      }
+      performanceData.totalSetsAnalyzed++;
+    } else {
+      // Removing a set, so subtract from our totals
+      if (isImproved) {
+        performanceData.improved--;
+        performanceData.percentChange -= percentChange;
+      } else if (isDeclined) {
+        performanceData.declined--;
+        performanceData.percentChange -= percentChange;
+      } else {
+        performanceData.neutral--;
+      }
+      performanceData.totalSetsAnalyzed--;
+    }
+    
+    // Update the performance indicator
+    updatePerformanceIndicator();
+  }
+
+  // Function to update the performance indicator in the UI
+  function updatePerformanceIndicator() {
+    const performanceIcon = document.getElementById('performance-icon');
+    const performancePercent = document.getElementById('performance-percent');
+    
+    if (!performanceIcon || !performancePercent) return;
+
+    // Reset classes first
+    performanceIcon.classList.remove('performance-improved', 'performance-declined', 'performance-neutral', 'performance-unknown');
+    
+    // If we don't have enough data yet
+    if (performanceData.totalSetsAnalyzed < 2) {
+      performanceIcon.textContent = '?';
+      performanceIcon.classList.add('performance-unknown');
+      performancePercent.textContent = '';
+      return;
+    }
+    
+    // Calculate the average percent change
+    let avgPercentChange = 0;
+    if (performanceData.totalSetsAnalyzed > 0) {
+      avgPercentChange = performanceData.percentChange / performanceData.totalSetsAnalyzed;
+    }
+    
+    // Format the percent change
+    const percentText = avgPercentChange !== 0 ? 
+      `${Math.abs(Math.round(avgPercentChange))}%` : '';
+    
+    // Determine if overall performance is improved or declined
+    if (performanceData.improved > performanceData.declined) {
+      performanceIcon.textContent = '↑';
+      performanceIcon.classList.add('performance-improved');
+      performancePercent.textContent = percentText;
+      performancePercent.classList.add('performance-improved');
+    } else if (performanceData.declined > performanceData.improved) {
+      performanceIcon.textContent = '↓';
+      performanceIcon.classList.add('performance-declined');
+      performancePercent.textContent = percentText;
+      performancePercent.classList.add('performance-declined');
+    } else {
+      performanceIcon.textContent = '→';
+      performanceIcon.classList.add('performance-neutral');
+      performancePercent.textContent = percentText;
+      performancePercent.classList.add('performance-neutral');
     }
   }

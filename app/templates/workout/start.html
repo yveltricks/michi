@@ -22,6 +22,66 @@
             <button id="pause-rest" onclick="toggleRestTimer()">Pause</button>
         </div>
     </div>
+
+    <div class="workout-stats">
+        <div class="time-container">
+            <div class="time-info">
+                <span class="time-label">TOTAL TIME</span>
+                <span class="time-value" id="workout-timer">00:00:00</span>
+            </div>
+            <div class="timer-buttons">
+                <button class="timer-control" id="start-timer"><i class="fas fa-play"></i></button>
+                <button class="timer-control" id="pause-timer"><i class="fas fa-pause"></i></button>
+                <button class="timer-control" id="reset-timer"><i class="fas fa-redo"></i></button>
+            </div>
+        </div>
+        
+        <!-- Add EXP display container -->
+        <div class="exp-container">
+            <div class="exp-notification" id="exp-notification" style="display: none;"></div>
+            <div class="exp-info">
+                <span class="exp-label">EXP Gained</span>
+                <span class="exp-value" id="session-exp">0</span>
+            </div>
+            <div class="level-progress-container">
+                <div class="level-progress-bar" id="level-progress" data-current-exp="{{ current_user.exp }}" data-current-level="{{ current_user.level }}"></div>
+            </div>
+            <div class="level-badge">{{ current_user.level }}</div>
+        </div>
+        
+        <!-- Add volume, sets, and reps counters -->
+        <div class="stats-container volume-container">
+            <div class="stats-info">
+                <span class="stats-label">VOLUME</span>
+                <span class="stats-value" id="workout-volume">0</span>
+            </div>
+        </div>
+        
+        <div class="stats-container sets-container">
+            <div class="stats-info">
+                <span class="stats-label">SETS</span>
+                <span class="stats-value" id="sets-done">0</span>
+            </div>
+        </div>
+        
+        <div class="stats-container reps-container">
+            <div class="stats-info">
+                <span class="stats-label">REPS</span>
+                <span class="stats-value" id="reps-done">0</span>
+            </div>
+        </div>
+
+        <!-- Add overall performance indicator -->
+        <div class="stats-container performance-container">
+            <div class="stats-info">
+                <span class="stats-label">PERFORMANCE</span>
+                <div class="performance-indicator">
+                    <span class="performance-value" id="performance-icon">?</span>
+                    <span class="performance-percent" id="performance-percent"></span>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
 <div class="workout-container">
@@ -161,6 +221,31 @@
             </div>
             
             <button id="save-rest-settings" class="btn btn-primary">Save Rest Timer</button>
+        </div>
+    </div>
+</div>
+
+<!-- Add after the existing modals -->
+<div class="modal fade" id="levelUpModal" tabindex="-1" role="dialog" aria-labelledby="levelUpModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="levelUpModalLabel">Level Up!</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body text-center">
+                <div class="level-up-animation">
+                    <i class="fas fa-arrow-up fa-3x mb-3" style="color: #6200ea;"></i>
+                </div>
+                <h3>Congratulations!</h3>
+                <p>You've reached <strong>Level <span id="new-level">1</span></strong>!</p>
+                <p>Keep up the good work and continue improving your workouts.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" data-dismiss="modal">Continue</button>
+            </div>
         </div>
     </div>
 </div>
