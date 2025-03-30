@@ -1090,3 +1090,43 @@ nav a:hover {
 .performance-unknown {
     color: #BBBBBB; /* Light gray */
 }
+
+/* Unit Converter Styles */
+.converter-inputs {
+    margin: 15px 0;
+}
+
+#unit-converter-modal .modal-content {
+    max-width: 400px;
+}
+
+#conversion-type {
+    margin-bottom: 10px;
+    font-weight: 500;
+}
+
+.converter-inputs label {
+    font-weight: 500;
+    margin-bottom: 5px;
+    display: block;
+}
+
+.converter-inputs input {
+    padding: 8px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    width: 100%;
+}
+
+.converter-inputs input:focus {
+    border-color: var(--primary-color);
+    outline: none;
+}
+
+.converter-direction {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 10px;
+    font-size: 18px;
+}

@@ -29,6 +29,7 @@
                         <a href="{{ url_for('workout.start_workout') }}" class="nav-link">Start Workout</a>
                         <a href="{{ url_for('workout.measurements') }}" class="nav-link">Measurements</a>
                         <a href="{{ url_for('auth.settings') }}" class="nav-link">Settings</a>
+                        <a href="#" onclick="openUnitConverter(event)" class="nav-link">Unit Converter</a>
                         <a href="{{ url_for('auth.logout') }}" class="nav-link">Logout</a>
                     {% else %}
                         <a href="{{ url_for('auth.login') }}" class="nav-link">Login</a>
@@ -60,5 +61,145 @@
     <!-- Scripts -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.7.0/chart.min.js"></script>
     {% block scripts %}{% endblock %}
+
+    <!-- Unit Converter Modal -->
+    <div id="unit-converter-modal" class="modal">
+        <div class="modal-content" style="max-width: 400px;">
+            <div class="modal-header">
+                <h2>Unit Converter</h2>
+                <span class="close" onclick="closeUnitConverter()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="conversion-type">Conversion Type:</label>
+                    <select id="conversion-type" class="form-control" onchange="updateUnitConverter()">
+                        <option value="weight">Weight (kg ↔ lbs)</option>
+                        <option value="distance">Distance (km ↔ miles)</option>
+                        <option value="length">Length (cm ↔ inches)</option>
+                    </select>
+                </div>
+                
+                <div class="converter-inputs" style="display: flex; gap: 10px; margin-top: 15px;">
+                    <div class="form-group" style="flex: 1;">
+                        <label id="from-unit-label" for="from-value">kg:</label>
+                        <input type="number" id="from-value" class="form-control" step="0.01" min="0" oninput="convertFromLeft()">
+                    </div>
+                    
+                    <div style="display: flex; align-items: center; margin-top: 20px;">
+                        <span style="margin: 0 5px;">↔</span>
+                    </div>
+                    
+                    <div class="form-group" style="flex: 1;">
+                        <label id="to-unit-label" for="to-value">lbs:</label>
+                        <input type="number" id="to-value" class="form-control" step="0.01" min="0" oninput="convertFromRight()">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Unit Converter Script -->
+    <script>
+        const unitConverterModal = document.getElementById('unit-converter-modal');
+        
+        function openUnitConverter(event) {
+            event.preventDefault();
+            unitConverterModal.style.display = 'block';
+            updateUnitConverter();
+        }
+        
+        function closeUnitConverter() {
+            unitConverterModal.style.display = 'none';
+        }
+        
+        // Close modal when clicking outside
+        window.addEventListener('click', function(event) {
+            if (event.target == unitConverterModal) {
+                closeUnitConverter();
+            }
+        });
+        
+        function updateUnitConverter() {
+            const conversionType = document.getElementById('conversion-type').value;
+            const fromUnitLabel = document.getElementById('from-unit-label');
+            const toUnitLabel = document.getElementById('to-unit-label');
+            
+            // Reset values
+            document.getElementById('from-value').value = '';
+            document.getElementById('to-value').value = '';
+            
+            // Update labels based on conversion type
+            switch(conversionType) {
+                case 'weight':
+                    fromUnitLabel.textContent = 'kg:';
+                    toUnitLabel.textContent = 'lbs:';
+                    break;
+                case 'distance':
+                    fromUnitLabel.textContent = 'km:';
+                    toUnitLabel.textContent = 'miles:';
+                    break;
+                case 'length':
+                    fromUnitLabel.textContent = 'cm:';
+                    toUnitLabel.textContent = 'inches:';
+                    break;
+            }
+        }
+        
+        function convertFromLeft() {
+            const conversionType = document.getElementById('conversion-type').value;
+            const fromValue = parseFloat(document.getElementById('from-value').value);
+            
+            if (isNaN(fromValue)) {
+                document.getElementById('to-value').value = '';
+                return;
+            }
+            
+            let result;
+            switch(conversionType) {
+                case 'weight':
+                    // kg to lbs (1 kg = 2.20462 lbs)
+                    result = fromValue * 2.20462;
+                    break;
+                case 'distance':
+                    // km to miles (1 km = 0.621371 miles)
+                    result = fromValue * 0.621371;
+                    break;
+                case 'length':
+                    // cm to inches (1 cm = 0.393701 inches)
+                    result = fromValue * 0.393701;
+                    break;
+            }
+            
+            document.getElementById('to-value').value = result.toFixed(2);
+        }
+        
+        function convertFromRight() {
+            const conversionType = document.getElementById('conversion-type').value;
+            const toValue = parseFloat(document.getElementById('to-value').value);
+            
+            if (isNaN(toValue)) {
+                document.getElementById('from-value').value = '';
+                return;
+            }
+            
+            let result;
+            switch(conversionType) {
+                case 'weight':
+                    // lbs to kg (1 lbs = 0.453592 kg)
+                    result = toValue * 0.453592;
+                    break;
+                case 'distance':
+                    // miles to km (1 mile = 1.60934 km)
+                    result = toValue * 1.60934;
+                    break;
+                case 'length':
+                    // inches to cm (1 inch = 2.54 cm)
+                    result = toValue * 2.54;
+                    break;
+            }
+            
+            document.getElementById('from-value').value = result.toFixed(2);
+        }
+    </script>
 </body>
 </html>
