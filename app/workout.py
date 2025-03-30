@@ -244,6 +244,7 @@ def get_exercise_details(exercise_id):
     return jsonify({
         'input_type': exercise.input_type,
         'range_enabled': exercise.range_enabled,
+        'recommend_enabled': current_user.recommend_enabled,
         'min_reps': exercise.min_reps,
         'max_reps': exercise.max_reps,
         'min_duration': exercise.min_duration,
@@ -512,8 +513,9 @@ def update_exercise_ranges(exercise_id):
             else:
                 exercise.max_distance = None
         
-        # Get the user's range_enabled setting
-        exercise.range_enabled = current_user.range_enabled
+        # Set range_enabled from the request data
+        if 'range_enabled' in data:
+            exercise.range_enabled = bool(data.get('range_enabled'))
         
         # Validate ranges
         if exercise.range_enabled:
@@ -530,7 +532,7 @@ def update_exercise_ranges(exercise_id):
                     return jsonify({'success': False, 'error': 'Minimum distance cannot be greater than maximum distance'})
         
         db.session.commit()
-        print(f"Updated exercise ranges for {exercise.id}: min_reps={exercise.min_reps}, max_reps={exercise.max_reps}")
+        print(f"Updated exercise ranges for {exercise.id}: range_enabled={exercise.range_enabled}, min_reps={exercise.min_reps}, max_reps={exercise.max_reps}")
         
         return jsonify({
             'success': True,

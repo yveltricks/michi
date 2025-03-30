@@ -235,29 +235,28 @@ def settings():
 @auth.route('/update-preferences', methods=['POST'])
 @login_required
 def update_preferences():
-    if request.form.get('reset') == 'true':
-        # Reset to defaults
+    # Check if reset to defaults was requested
+    if request.form.get('reset'):
         current_user.preferred_weight_unit = 'kg'
         current_user.preferred_distance_unit = 'km'
         current_user.preferred_measurement_unit = 'cm'
         current_user.range_enabled = True
-        flash('Preferences reset to defaults!', 'success')
-    else:
-        # Update with new preferences
-        current_user.preferred_weight_unit = request.form.get('preferred_weight_unit', 'kg')
-        current_user.preferred_distance_unit = request.form.get('preferred_distance_unit', 'km')
-        current_user.preferred_measurement_unit = request.form.get('preferred_measurement_unit', 'cm')
-        # Handle checkbox - if not checked, it won't be in the form data
-        current_user.range_enabled = 'range_enabled' in request.form
-        flash('Preferences updated successfully!', 'success')
-
-    try:
+        current_user.recommend_enabled = True
         db.session.commit()
-    except Exception as e:
-        db.session.rollback()
-        flash('Error updating preferences', 'error')
-        print(f"Error updating preferences: {str(e)}")  # For debugging
-
+        flash('Preferences reset to defaults', 'success')
+        return redirect(url_for('auth.settings'))
+    
+    # Update user preferences
+    current_user.preferred_weight_unit = request.form.get('preferred_weight_unit')
+    current_user.preferred_distance_unit = request.form.get('preferred_distance_unit')
+    current_user.preferred_measurement_unit = request.form.get('preferred_measurement_unit')
+    
+    # Handle checkbox values
+    current_user.range_enabled = 'range_enabled' in request.form
+    current_user.recommend_enabled = 'recommend_enabled' in request.form
+    
+    db.session.commit()
+    flash('Preferences updated successfully', 'success')
     return redirect(url_for('auth.settings'))
 
 @auth.route('/update-privacy', methods=['POST'])

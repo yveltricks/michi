@@ -34,6 +34,7 @@ class User(UserMixin, db.Model):
     preferred_measurement_unit = db.Column(db.String(10), default='cm')
     privacy_setting = db.Column(db.String(20), default='public')
     range_enabled = db.Column(db.Boolean, default=True)
+    recommend_enabled = db.Column(db.Boolean, default=True)
 
     # Relationships
     sessions = db.relationship('Session', backref='user', lazy=True)

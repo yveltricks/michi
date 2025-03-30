@@ -170,6 +170,16 @@
                     <span>Enable rep/duration ranges by default for new exercises</span>
                 </label>
             </div>
+            <div class="mt-2">
+                <label class="flex items-center space-x-2">
+                    <input type="checkbox" name="recommend_enabled" class="form-checkbox h-5 w-5 text-blue-600"
+                           {% if current_user.recommend_enabled %}checked{% endif %}>
+                    <span>Recommend weight adjustments based on performance</span>
+                </label>
+                <p class="text-sm text-gray-600 mt-1 ml-7">
+                    When enabled, weights will automatically be recommended based on your performance relative to your set ranges.
+                </p>
+            </div>
             <div class="mt-4 space-x-4">
                 <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
                     Save Preferences
