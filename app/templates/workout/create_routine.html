@@ -1,0 +1,546 @@
+{% extends "base.html" %}
+{% block title %}Create Routine{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/workout.css') }}">
+<script src="{{ url_for('static', filename='js/workout.js') }}"></script>
+<script src="{{ url_for('static', filename='js/workout-timer.js') }}"></script>
+<script src="{{ url_for('static', filename='js/workout-handlers.js') }}"></script>
+<script src="{{ url_for('static', filename='js/modal-handlers.js') }}"></script>
+<style>
+    /* Additional routine-specific styles */
+    .routine-form {
+        margin-top: 20px;
+        background-color: white;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    
+    .routine-form .form-group {
+        margin-bottom: 15px;
+    }
+    
+    .routine-form label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: 500;
+    }
+    
+    .muscle-group-options {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+    
+    .routine-form input[type="text"],
+    .routine-form select,
+    .routine-form textarea {
+        width: 100%;
+        padding: 8px 12px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+    }
+    
+    .toggle-switch {
+        position: relative;
+        display: inline-block;
+        width: 50px;
+        height: 24px;
+    }
+
+    .toggle-switch input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+    }
+
+    .toggle-slider {
+        position: absolute;
+        cursor: pointer;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: #ccc;
+        transition: .4s;
+        border-radius: 24px;
+    }
+
+    .toggle-slider:before {
+        position: absolute;
+        content: "";
+        height: 16px;
+        width: 16px;
+        left: 4px;
+        bottom: 4px;
+        background-color: white;
+        transition: .4s;
+        border-radius: 50%;
+    }
+
+    input:checked + .toggle-slider {
+        background-color: #3b82f6;
+    }
+
+    input:checked + .toggle-slider:before {
+        transform: translateX(26px);
+    }
+    
+    .save-routine-btn {
+        display: block;
+        width: 100%;
+        padding: 12px;
+        background-color: #e53e3e;
+        color: white;
+        font-weight: 600;
+        text-align: center;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        margin-top: 20px;
+    }
+    
+    .save-routine-btn:hover {
+        background-color: #c53030;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 min-h-screen pb-24">
+    <div class="flex items-center mb-4 pt-4">
+        <a href="{{ url_for('workout.workout_page') }}" class="inline-flex items-center text-gray-600 hover:text-gray-900">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clip-rule="evenodd" />
+            </svg>
+            Back
+        </a>
+        <h1 class="text-2xl font-bold mx-auto">{% if is_edit %}Edit{% else %}Create{% endif %} Routine</h1>
+    </div>
+
+    <div class="workout-container">
+        <!-- Routine Details Form -->
+        <div class="routine-form">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="form-group">
+                    <label for="routine-name">Routine Name:</label>
+                    <input type="text" id="routine-name" class="form-control" placeholder="e.g. Upper Body Day" {% if routine %}value="{{ routine.name }}"{% endif %}>
+                </div>
+
+                <div class="form-group">
+                    <label for="routine-level">Level:</label>
+                    <select id="routine-level" class="form-control">
+                        <option value="Beginner" {% if routine and routine.level == 'Beginner' %}selected{% endif %}>Beginner</option>
+                        <option value="Intermediate" {% if routine and routine.level == 'Intermediate' %}selected{% endif %}>Intermediate</option>
+                        <option value="Advanced" {% if routine and routine.level == 'Advanced' %}selected{% endif %}>Advanced</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="routine-goal">Goal:</label>
+                    <select id="routine-goal" class="form-control">
+                        <option value="Strength" {% if routine and routine.goal == 'Strength' %}selected{% endif %}>Strength</option>
+                        <option value="Hypertrophy" {% if routine and routine.goal == 'Hypertrophy' %}selected{% endif %}>Hypertrophy</option>
+                        <option value="Endurance" {% if routine and routine.goal == 'Endurance' %}selected{% endif %}>Endurance</option>
+                        <option value="Weight Loss" {% if routine and routine.goal == 'Weight Loss' %}selected{% endif %}>Weight Loss</option>
+                        <option value="General Fitness" {% if routine and routine.goal == 'General Fitness' %}selected{% endif %}>General Fitness</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Muscle Groups:</label>
+                    <div class="muscle-group-options">
+                        {% set muscle_groups = routine.muscle_groups.split(',') if routine and routine.muscle_groups else [] %}
+                        <label class="inline-flex items-center">
+                            <input type="checkbox" class="muscle-group" value="Chest" {% if 'Chest' in muscle_groups %}checked{% endif %}>
+                            <span class="ml-2">Chest</span>
+                        </label>
+                        <label class="inline-flex items-center">
+                            <input type="checkbox" class="muscle-group" value="Back" {% if 'Back' in muscle_groups %}checked{% endif %}>
+                            <span class="ml-2">Back</span>
+                        </label>
+                        <label class="inline-flex items-center">
+                            <input type="checkbox" class="muscle-group" value="Shoulders" {% if 'Shoulders' in muscle_groups %}checked{% endif %}>
+                            <span class="ml-2">Shoulders</span>
+                        </label>
+                        <label class="inline-flex items-center">
+                            <input type="checkbox" class="muscle-group" value="Arms" {% if 'Arms' in muscle_groups %}checked{% endif %}>
+                            <span class="ml-2">Arms</span>
+                        </label>
+                        <label class="inline-flex items-center">
+                            <input type="checkbox" class="muscle-group" value="Legs" {% if 'Legs' in muscle_groups %}checked{% endif %}>
+                            <span class="ml-2">Legs</span>
+                        </label>
+                        <label class="inline-flex items-center">
+                            <input type="checkbox" class="muscle-group" value="Core" {% if 'Core' in muscle_groups %}checked{% endif %}>
+                            <span class="ml-2">Core</span>
+                        </label>
+                        <label class="inline-flex items-center">
+                            <input type="checkbox" class="muscle-group" value="Cardio" {% if 'Cardio' in muscle_groups %}checked{% endif %}>
+                            <span class="ml-2">Cardio</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="md:col-span-2 form-group">
+                    <label for="routine-description">Description (optional):</label>
+                    <textarea id="routine-description" class="form-control" rows="3" placeholder="Describe your routine...">{% if routine %}{{ routine.description }}{% endif %}</textarea>
+                </div>
+
+                <div class="form-group flex items-center">
+                    <label class="toggle-switch mr-3">
+                        <input type="checkbox" id="routine-public" {% if routine and routine.is_public %}checked{% endif %}>
+                        <span class="toggle-slider"></span>
+                    </label>
+                    <span>Share Publicly</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Add Exercise List - Reusing start.html approach -->
+        <h2 class="text-xl font-bold my-4">Exercises in Routine</h2>
+        
+        <!-- Add Exercise Button (same as in workout) -->
+        <button id="add-exercise-btn" class="add-exercise-btn">
+            <i class="fas fa-plus"></i> Add Exercise
+        </button>
+
+        <!-- Exercise container - same as in workout -->
+        <div id="exercises-container" class="exercise-list">
+            <!-- Exercises will be dynamically added here -->
+        </div>
+
+        <!-- Exercise Selection Modal - same as in workout -->
+        <div id="exercise-modal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Add Exercise</h2>
+                    <span class="close">&times;</span>
+                </div>
+                <div class="modal-body">
+                    <div class="search-container">
+                        <input type="text" id="exercise-search" placeholder="Search exercises..." class="form-control">
+                        <select id="muscle-filter" class="form-control">
+                            <option value="all">All Muscles</option>
+                            <option value="chest">Chest</option>
+                            <option value="back">Back</option>
+                            <option value="legs">Legs</option>
+                            <option value="shoulders">Shoulders</option>
+                            <option value="arms">Arms</option>
+                            <option value="core">Core</option>
+                            <option value="cardio">Cardio</option>
+                        </select>
+                    </div>
+                    <div id="exercise-list" class="exercise-options">
+                        {% for exercise in exercises %}
+                        <div class="exercise-option" data-id="{{ exercise.id }}" data-name="{{ exercise.name }}" data-muscles="{{ exercise.muscles_worked }}">
+                            <div class="exercise-info">
+                                <h4>{{ exercise.name }}</h4>
+                                <small>{{ exercise.muscles_worked }}</small>
+                            </div>
+                            <button class="add-btn">Add</button>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Set Type Modal - Same as in workout -->
+        <div id="set-type-modal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Set Type</h2>
+                    <span class="close">&times;</span>
+                </div>
+                <div class="modal-body">
+                    <div id="set-type-list" class="set-type-options"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Range Settings Modal - Same as in workout -->
+        <div id="range-settings-modal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Set Range</h2>
+                    <span class="close">&times;</span>
+                </div>
+                <div class="modal-body">
+                    <div class="range-setting-header">
+                        <div class="range-toggle">
+                            <label for="range-enabled-checkbox">Enable Range:</label>
+                            <input type="checkbox" id="range-enabled-checkbox" checked>
+                        </div>
+                    </div>
+                    <div id="range-inputs">
+                        <!-- Range inputs will be dynamically added here -->
+                    </div>
+                    <button id="save-range-settings" class="btn btn-primary">Save Range Settings</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Rest Timer Settings Modal - Same as in workout -->
+        <div id="rest-timer-modal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Set Rest Timer</h2>
+                    <span class="close">&times;</span>
+                </div>
+                <div class="modal-body">
+                    <p>Set a rest timer for this exercise. This timer will start automatically after completing a set.</p>
+                    
+                    <div class="rest-timer-form">
+                        <div class="rest-input-group">
+                            <label for="rest-minutes">Minutes:</label>
+                            <input type="number" id="rest-minutes" min="0" max="10" value="0">
+                        </div>
+                        <div class="rest-input-group">
+                            <label for="rest-seconds">Seconds:</label>
+                            <input type="number" id="rest-seconds" min="0" max="59" value="0">
+                        </div>
+                        <div class="rest-toggle">
+                            <label for="rest-enabled">Enable rest timer:</label>
+                            <input type="checkbox" id="rest-enabled" checked>
+                        </div>
+                    </div>
+                    
+                    <button id="save-rest-settings" class="btn btn-primary">Save Rest Timer</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Save Routine Button -->
+        <button id="save-routine" class="save-routine-btn">
+            {% if is_edit %}Update{% else %}Save{% endif %} Routine
+        </button>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Initialize when page loads
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log('Initializing create routine page');
+        
+        // Initialize workout data
+        if (!workoutData) {
+            workoutData = {
+                exercises: []
+            };
+        }
+        
+        // Load existing routine data if editing
+        {% if is_edit and routine and routine.exercises %}
+            console.log('Loading existing routine data for editing');
+            try {
+                const routineExercises = JSON.parse('{{ routine.exercises|safe }}');
+                
+                if (Array.isArray(routineExercises)) {
+                    console.log('Found', routineExercises.length, 'exercises to load');
+                    
+                    // Clear any existing exercises first
+                    workoutData.exercises = [];
+                    
+                    // Process each exercise in the routine
+                    routineExercises.forEach(exerciseData => {
+                        if (exerciseData.id) {
+                            // Fetch exercise details from server
+                            fetch(`/workout/api/exercise-details/${exerciseData.id}`)
+                                .then(response => response.json())
+                                .then(data => {
+                                    console.log('Loaded exercise:', data.name);
+                                    
+                                    // Create new exercise object with data from server
+                                    const newExercise = {
+                                        id: exerciseData.id,
+                                        name: data.name,
+                                        muscles_worked: data.muscles_worked,
+                                        input_type: data.input_type,
+                                        sets: [],
+                                        range_enabled: data.range_enabled || false,
+                                        min_reps: data.min_reps || 0,
+                                        max_reps: data.max_reps || 0,
+                                        min_duration: data.min_duration || 0,
+                                        max_duration: data.max_duration || 0,
+                                        min_distance: data.min_distance || 0,
+                                        max_distance: data.max_distance || 0,
+                                        rest_duration: exerciseData.rest_duration || 60
+                                    };
+                                    
+                                    // Add to workout data
+                                    workoutData.exercises.push(newExercise);
+                                    const exerciseIndex = workoutData.exercises.length - 1;
+                                    
+                                    // Add each set from the routine
+                                    if (exerciseData.sets && Array.isArray(exerciseData.sets)) {
+                                        exerciseData.sets.forEach(setData => {
+                                            const newSet = {
+                                                ...generateDefaultSetValues(data.input_type),
+                                                set_type: setData.set_type || 'normal'
+                                            };
+                                            
+                                            // Copy set values based on exercise type
+                                            if (data.input_type === 'weight_reps') {
+                                                newSet.weight = setData.weight || 0;
+                                                newSet.reps = setData.reps || 0;
+                                            } else if (data.input_type === 'bodyweight_reps') {
+                                                newSet.reps = setData.reps || 0;
+                                            } else if (data.input_type === 'duration') {
+                                                newSet.duration = setData.duration || 0;
+                                            } else if (data.input_type === 'distance_duration') {
+                                                newSet.distance = setData.distance || 0;
+                                                newSet.duration = setData.duration || 0;
+                                            }
+                                            
+                                            workoutData.exercises[exerciseIndex].sets.push(newSet);
+                                        });
+                                    } else {
+                                        // If no sets defined, add default sets
+                                        for (let i = 0; i < 3; i++) {
+                                            const defaultSet = {
+                                                ...generateDefaultSetValues(data.input_type),
+                                                set_type: 'normal'
+                                            };
+                                            workoutData.exercises[exerciseIndex].sets.push(defaultSet);
+                                        }
+                                    }
+                                    
+                                    // Update the UI
+                                    renderExercises();
+                                })
+                                .catch(error => {
+                                    console.error('Error fetching exercise details:', error);
+                                });
+                        }
+                    });
+                }
+            } catch (e) {
+                console.error('Error parsing routine exercises:', e);
+            }
+        {% endif %}
+        
+        // Search and filter functionality
+        const exerciseSearch = document.getElementById('exercise-search');
+        const muscleFilter = document.getElementById('muscle-filter');
+        
+        if (exerciseSearch && muscleFilter) {
+            function filterExercises() {
+                const searchText = exerciseSearch.value.toLowerCase();
+                const muscleType = muscleFilter.value;
+                const exerciseOptions = document.querySelectorAll('.exercise-option');
+                
+                exerciseOptions.forEach(option => {
+                    const name = option.getAttribute('data-name').toLowerCase();
+                    const muscles = option.getAttribute('data-muscles').toLowerCase();
+                    
+                    const matchesSearch = name.includes(searchText);
+                    const matchesMuscle = muscleType === 'all' || muscles.includes(muscleType);
+                    
+                    option.style.display = matchesSearch && matchesMuscle ? 'block' : 'none';
+                });
+            }
+            
+            exerciseSearch.addEventListener('input', filterExercises);
+            muscleFilter.addEventListener('change', filterExercises);
+        }
+        
+        // Save routine
+        document.getElementById('save-routine').addEventListener('click', function() {
+            // Validate form
+            const name = document.getElementById('routine-name').value.trim();
+            if (!name) {
+                alert('Please enter a routine name.');
+                return;
+            }
+            
+            if (workoutData.exercises.length === 0) {
+                alert('Please add at least one exercise to your routine.');
+                return;
+            }
+            
+            // Get muscle groups
+            const muscleGroups = [];
+            document.querySelectorAll('.muscle-group:checked').forEach(cb => {
+                muscleGroups.push(cb.value);
+            });
+            
+            // Format exercises for saving
+            const formattedExercises = workoutData.exercises.map(exercise => {
+                return {
+                    id: exercise.id,
+                    name: exercise.name,
+                    muscles_worked: exercise.muscles_worked || '',
+                    input_type: exercise.input_type,
+                    rest_duration: exercise.rest_duration || 60,
+                    sets: exercise.sets.map(set => {
+                        const formattedSet = {
+                            set_type: set.set_type || 'normal'
+                        };
+                        
+                        // Add appropriate fields based on exercise type
+                        if (exercise.input_type === 'weight_reps') {
+                            formattedSet.weight = set.weight || 0;
+                            formattedSet.reps = set.reps || 0;
+                        } else if (exercise.input_type === 'bodyweight_reps') {
+                            formattedSet.reps = set.reps || 0;
+                        } else if (exercise.input_type === 'duration') {
+                            formattedSet.duration = set.duration || 0;
+                        } else if (exercise.input_type === 'distance_duration') {
+                            formattedSet.distance = set.distance || 0;
+                            formattedSet.duration = set.duration || 0;
+                        }
+                        
+                        return formattedSet;
+                    })
+                };
+            });
+            
+            // Create routine data
+            const routineData = {
+                name: name,
+                level: document.getElementById('routine-level').value,
+                goal: document.getElementById('routine-goal').value,
+                muscle_groups: muscleGroups,
+                description: document.getElementById('routine-description').value,
+                is_public: document.getElementById('routine-public').checked,
+                exercises: formattedExercises
+            };
+            
+            // If editing, include the routine ID
+            {% if routine %}
+            const routineUrl = '/workout/api/routines/{{ routine.id }}';
+            const routineMethod = 'PUT';
+            {% else %}
+            const routineUrl = '/workout/api/routines';
+            const routineMethod = 'POST';
+            {% endif %}
+            
+            // Send to server
+            fetch(routineUrl, {
+                method: routineMethod,
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(routineData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Routine {{ "updated" if routine else "created" }} successfully!');
+                    window.location.href = '/workout/workout';
+                } else {
+                    alert(data.error || 'Error saving routine');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while saving the routine.');
+            });
+        });
+    });
+</script>
+{% endblock %} 

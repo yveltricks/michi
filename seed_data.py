@@ -281,7 +281,6 @@ def create_sample_routines(users, exercises):
                 goal=random.choice(goals),
                 muscle_groups='Full Body',
                 exercises=json.dumps(exercise_data),
-                rest_time=60
             )
             db.session.add(routine)
 

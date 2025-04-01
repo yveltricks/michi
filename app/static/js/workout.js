@@ -57,12 +57,28 @@ let workoutData = {
   
   function addExerciseAndStayOpen(exerciseId, exerciseName) {
     // Fetch exercise details including input type and previous values
-    console.log(`Fetching details for exercise ID: ${exerciseId}`);
+    console.log(`Fetching details for exercise ID: ${exerciseId}, Name: ${exerciseName}`);
     
     fetch(`/workout/api/exercise-details/${exerciseId}`)
-      .then(response => response.json())
+      .then(response => {
+          console.log(`Response status for exercise ${exerciseId}:`, response.status);
+          
+          if (!response.ok) {
+              return response.text().then(text => {
+                  console.error(`Server error response for exercise ${exerciseId}:`, text);
+                  throw new Error(`Server responded with status: ${response.status}`);
+              });
+          }
+          return response.json();
+      })
       .then(data => {
-            console.log('Exercise details:', data);
+            console.log(`Exercise details for ${exerciseName}:`, data);
+            
+            // Check if there was an error in the response
+            if (data.error) {
+                console.error(`API returned error for exercise ${exerciseId}:`, data.error);
+                throw new Error(data.error);
+            }
             
             // Create a new exercise structure
             const newExercise = {
@@ -114,8 +130,8 @@ let workoutData = {
             syncWorkoutTimer();
         })
         .catch(error => {
-            console.error('Error fetching exercise details:', error);
-            alert('Error adding exercise. Please try again.');
+            console.error(`Error adding exercise ${exerciseId} - ${exerciseName}:`, error);
+            alert(`Error adding exercise: ${error.message}. Please try again.`);
         });
   }
   
@@ -239,34 +255,67 @@ let workoutData = {
   }
   
   function showSetTypeModal(exerciseIndex, setIndex) {
-    console.log('Showing modal for:', exerciseIndex, setIndex); // Debug log
+    // Check if the modal exists
     const modal = document.getElementById('set-type-modal');
     const setTypeList = document.getElementById('set-type-list');
-    currentSetTypeSelection = { exerciseIndex, setIndex };
-  
-    // Clear and populate the set type list
-    setTypeList.innerHTML = Object.entries(SET_TYPES).map(([type, info]) => `
-        <div class="set-type-option" data-type="${type}">
+    
+    if (!modal || !setTypeList) {
+        console.error('Set type modal elements not found');
+        return;
+    }
+    
+    // Store the current selection indices as a global variable
+    window.currentSetTypeSelection = {
+        exerciseIndex: exerciseIndex,
+        setIndex: setIndex
+    };
+    
+    // Clear existing options
+    setTypeList.innerHTML = '';
+    
+    // Create options for each set type
+    for (const type in SET_TYPES) {
+        const option = document.createElement('div');
+        option.className = 'set-type-option';
+        option.dataset.type = type;
+        
+        option.innerHTML = `
             <div class="set-type-info">
-                <h4 style="color: ${info.color}">${info.displayName}${info.label}</h4>
+                <h4 style="color: ${SET_TYPES[type].color}">${SET_TYPES[type].displayName}${SET_TYPES[type].label}</h4>
+                <small>Click to select this set type</small>
             </div>
             <button class="select-btn">Select</button>
-        </div>
-    `).join('');
-  
-    // Add click handlers for the options
-    setTypeList.querySelectorAll('.set-type-option').forEach(option => {
-        const selectBtn = option.querySelector('.select-btn');
-        selectBtn.addEventListener('click', () => {
-            const newType = option.dataset.type;
-            console.log('Selected type:', newType); // Debug log
-            workoutData.exercises[exerciseIndex].sets[setIndex].set_type = newType;
-            modal.style.display = 'none';
-            renderExercises();
-        });
-    });
-  
+        `;
+        
+        setTypeList.appendChild(option);
+    }
+    
+    // Show the modal
     modal.style.display = 'block';
+    
+    console.log(`Showing set type modal for exercise ${exerciseIndex}, set ${setIndex}`);
+  }
+  
+  function updateSetType(exerciseIndex, setIndex, setType) {
+    console.log(`Updating set type for exercise ${exerciseIndex}, set ${setIndex} to ${setType}`);
+    
+    // Validate indices
+    if (exerciseIndex < 0 || exerciseIndex >= workoutData.exercises.length) {
+        console.error('Invalid exercise index');
+        return;
+    }
+    
+    const exercise = workoutData.exercises[exerciseIndex];
+    if (setIndex < 0 || setIndex >= exercise.sets.length) {
+        console.error('Invalid set index');
+        return;
+    }
+    
+    // Update the set type
+    exercise.sets[setIndex].set_type = setType;
+    
+    // Re-render the exercises to reflect the change
+    renderExercises();
   }
   
   function toggleSetCompletion(exerciseIndex, setIndex) {
@@ -376,56 +425,110 @@ let workoutData = {
     // Clear previous inputs
     rangeInputs.innerHTML = '';
 
-    // Add range inputs based on exercise type
-    if (exercise.input_type.includes('reps')) {
-        rangeInputs.innerHTML += `
-            <div class="range-input-group">
-                <label>Min Reps:</label>
-                <input type="number" id="min-reps" value="${exercise.min_reps || ''}" min="1">
-            </div>
-            <div class="range-input-group">
-                <label>Max Reps:</label>
-                <input type="number" id="max-reps" value="${exercise.max_reps || ''}" min="1">
-            </div>
-        `;
-    }
+    // Add appropriate range inputs based on exercise type
+    switch (exercise.input_type) {
+        case 'weight_reps':
+            // For weight exercises, we set rep ranges
+            rangeInputs.innerHTML += `
+                <div class="range-input-group">
+                    <label>Min Reps:</label>
+                    <input type="number" id="min-reps" value="${exercise.min_reps || ''}" min="1">
+                </div>
+                <div class="range-input-group">
+                    <label>Max Reps:</label>
+                    <input type="number" id="max-reps" value="${exercise.max_reps || ''}" min="1">
+                </div>
+            `;
+            break;
 
-    if (exercise.input_type.includes('duration')) {
-        // Convert seconds to formatted time for display
-        const minDurationFormatted = exercise.min_duration ? formatTime(exercise.min_duration) : '';
-        const maxDurationFormatted = exercise.max_duration ? formatTime(exercise.max_duration) : '';
-        
-        rangeInputs.innerHTML += `
-            <div class="range-input-group">
-                <label>Min Duration:</label>
-                <input type="text" id="min-duration" value="${minDurationFormatted}" 
-                       placeholder="hh:mm:ss" class="time-input" pattern="[0-9:]*"
-                       oninput="handleRangeTimeInput(this, 'min')"
-                       onkeydown="handleTimeKeyDown(this, event)">
-                <input type="hidden" id="min-duration-seconds" value="${exercise.min_duration || ''}">
-            </div>
-            <div class="range-input-group">
-                <label>Max Duration:</label>
-                <input type="text" id="max-duration" value="${maxDurationFormatted}" 
-                       placeholder="hh:mm:ss" class="time-input" pattern="[0-9:]*"
-                       oninput="handleRangeTimeInput(this, 'max')"
-                       onkeydown="handleTimeKeyDown(this, event)">
-                <input type="hidden" id="max-duration-seconds" value="${exercise.max_duration || ''}">
-            </div>
-        `;
-    }
+        case 'bodyweight_reps':
+        case 'weighted_bodyweight':
+        case 'assisted_bodyweight':
+            // For all bodyweight variations, we set rep ranges
+            rangeInputs.innerHTML += `
+                <div class="range-input-group">
+                    <label>Min Reps:</label>
+                    <input type="number" id="min-reps" value="${exercise.min_reps || ''}" min="1">
+                </div>
+                <div class="range-input-group">
+                    <label>Max Reps:</label>
+                    <input type="number" id="max-reps" value="${exercise.max_reps || ''}" min="1">
+                </div>
+            `;
+            break;
 
-    if (exercise.input_type.includes('distance')) {
-        rangeInputs.innerHTML += `
-            <div class="range-input-group">
-                <label>Min Distance (km):</label>
-                <input type="number" id="min-distance" value="${exercise.min_distance || ''}" min="0" step="0.01">
-            </div>
-            <div class="range-input-group">
-                <label>Max Distance (km):</label>
-                <input type="number" id="max-distance" value="${exercise.max_distance || ''}" min="0" step="0.01">
-            </div>
-        `;
+        case 'duration':
+        case 'duration_weight':
+            // For duration exercises (like planks), we set time ranges
+            const minDurationFormatted = exercise.min_duration ? formatTime(exercise.min_duration) : '';
+            const maxDurationFormatted = exercise.max_duration ? formatTime(exercise.max_duration) : '';
+            
+            rangeInputs.innerHTML += `
+                <div class="range-input-group">
+                    <label>Min Duration:</label>
+                    <input type="text" id="min-duration" value="${minDurationFormatted}" 
+                           placeholder="hh:mm:ss" class="time-input" pattern="[0-9:]*"
+                           oninput="handleRangeTimeInput(this, 'min')"
+                           onkeydown="handleTimeKeyDown(this, event)">
+                    <input type="hidden" id="min-duration-seconds" value="${exercise.min_duration || ''}">
+                </div>
+                <div class="range-input-group">
+                    <label>Max Duration:</label>
+                    <input type="text" id="max-duration" value="${maxDurationFormatted}" 
+                           placeholder="hh:mm:ss" class="time-input" pattern="[0-9:]*"
+                           oninput="handleRangeTimeInput(this, 'max')"
+                           onkeydown="handleTimeKeyDown(this, event)">
+                    <input type="hidden" id="max-duration-seconds" value="${exercise.max_duration || ''}">
+                </div>
+            `;
+            break;
+
+        case 'distance_duration':
+            // For distance/duration exercises (like running), we set both distance and time ranges
+            const minDurFormatted = exercise.min_duration ? formatTime(exercise.min_duration) : '';
+            const maxDurFormatted = exercise.max_duration ? formatTime(exercise.max_duration) : '';
+            
+            rangeInputs.innerHTML += `
+                <div class="range-input-group">
+                    <label>Min Distance (km):</label>
+                    <input type="number" id="min-distance" value="${exercise.min_distance || ''}" min="0" step="0.01">
+                </div>
+                <div class="range-input-group">
+                    <label>Max Distance (km):</label>
+                    <input type="number" id="max-distance" value="${exercise.max_distance || ''}" min="0" step="0.01">
+                </div>
+                <div class="range-input-group">
+                    <label>Min Duration:</label>
+                    <input type="text" id="min-duration" value="${minDurFormatted}" 
+                           placeholder="hh:mm:ss" class="time-input" pattern="[0-9:]*"
+                           oninput="handleRangeTimeInput(this, 'min')"
+                           onkeydown="handleTimeKeyDown(this, event)">
+                    <input type="hidden" id="min-duration-seconds" value="${exercise.min_duration || ''}">
+                </div>
+                <div class="range-input-group">
+                    <label>Max Duration:</label>
+                    <input type="text" id="max-duration" value="${maxDurFormatted}" 
+                           placeholder="hh:mm:ss" class="time-input" pattern="[0-9:]*"
+                           oninput="handleRangeTimeInput(this, 'max')"
+                           onkeydown="handleTimeKeyDown(this, event)">
+                    <input type="hidden" id="max-duration-seconds" value="${exercise.max_duration || ''}">
+                </div>
+            `;
+            break;
+
+        case 'weight_distance':
+            // For weight/distance exercises, we set distance ranges
+            rangeInputs.innerHTML += `
+                <div class="range-input-group">
+                    <label>Min Distance (km):</label>
+                    <input type="number" id="min-distance" value="${exercise.min_distance || ''}" min="0" step="0.01">
+                </div>
+                <div class="range-input-group">
+                    <label>Max Distance (km):</label>
+                    <input type="number" id="max-distance" value="${exercise.max_distance || ''}" min="0" step="0.01">
+                </div>
+            `;
+            break;
     }
 
     // Add event listeners for save and close buttons
@@ -809,88 +912,68 @@ let workoutData = {
   
   // Handle form submission
   function completeWorkout() {
+    // Validate workout has at least one exercise with one completed set
+    const hasCompletedSets = workoutData.exercises.some(exercise => 
+        exercise.sets && exercise.sets.some(set => set.completed)
+    );
+    
     if (workoutData.exercises.length === 0) {
-        alert("Please add at least one exercise to your workout.");
+        alert('Please add at least one exercise to your workout.');
         return;
     }
   
-    // Filter out exercises with no completed sets
-    const completedExercises = workoutData.exercises.map(exercise => ({
-        ...exercise,
-        sets: exercise.sets.filter(set => set.completed)
-    })).filter(exercise => exercise.sets.length > 0);
-  
-    if (completedExercises.length === 0) {
-        alert("Please complete at least one set before finishing the workout.");
+    if (!hasCompletedSets) {
+        alert('Please complete at least one set before finishing your workout.');
         return;
     }
   
-    const data = {
-        exercises: completedExercises,
-        title: document.getElementById('workout-title').value.trim() || 'Workout',
-        description: document.getElementById('workout-description').value,
-        rating: document.getElementById('workout-rating').value,
-        duration: calculateWorkoutDuration(),
-        exp_gained: sessionExpGained, // Include the session EXP
-        volume: totalVolume // Include total volume
-    };
-  
-    // Log the data being sent
-    console.log('Sending workout data:', data);
-  
-    // Show loading indicator
-    document.querySelector('.finish-workout-btn').disabled = true;
-    document.querySelector('.finish-workout-btn').textContent = 'Saving...';
-  
-    // Send data to server
-    fetch('/workout/log-workout', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
+    // Prepare workout data
+    const title = document.getElementById('workout-title').value;
+    const description = document.getElementById('workout-description').value;
+    const rating = document.getElementById('workout-rating').value;
+    
+    // Use the shared workout handler to save the workout
+    const success = workoutHandlers.saveWorkout(
+        workoutData, 
+        title, 
+        description, 
+        rating, 
+        null, // No routine_id for empty workouts
+        { 
+            volume: parseInt(document.getElementById('workout-volume').textContent), 
+            totalSets: parseInt(document.getElementById('sets-done').textContent), 
+            totalReps: parseInt(document.getElementById('reps-done').textContent) 
         },
-        body: JSON.stringify(data)
-    })
-    .then(response => {
-        console.log('Response status:', response.status);
-        // Check if response is OK before trying to parse as JSON
-        if (!response.ok) {
-            return response.text().then(text => {
-                console.error('Server error response:', text);
-                throw new Error(`Server returned ${response.status}: ${response.statusText}`);
-            });
-        }
-        return response.json();
-    })
-    .then(data => {
-        console.log('Server response:', data);
-        if (data.success) {
+        function(data) {
+            // Success callback
             window.location.href = '/workout/session/' + data.session_id;
-        } else {
-            alert('Error saving workout: ' + (data.error || 'Unknown error'));
-            // Re-enable button
+        },
+        function(error) {
+            // Error callback
+            alert('Error saving workout: ' + error);
             document.querySelector('.finish-workout-btn').disabled = false;
             document.querySelector('.finish-workout-btn').textContent = 'Complete Workout';
         }
-    })
-    .catch((error) => {
-        console.error('Error details:', error);
-        alert('Error saving workout: ' + error.message);
-        // Re-enable button
-        document.querySelector('.finish-workout-btn').disabled = false;
-        document.querySelector('.finish-workout-btn').textContent = 'Complete Workout';
-    });
-  }
+    );
+    
+    // If validation failed, don't disable the button
+    if (success) {
+        // Disable button to prevent multiple submissions
+        document.querySelector('.finish-workout-btn').disabled = true;
+        document.querySelector('.finish-workout-btn').textContent = 'Saving...';
+    }
+}
   
   // Calculate workout duration
   function calculateWorkoutDuration() {
     // Get timer duration in seconds
     const timerDurationSeconds = getWorkoutDuration();
     
-    // Find the longest exercise duration in seconds
+    // Find the longest exercise duration in seconds from completed sets only
     let maxExerciseDurationSeconds = 0;
     workoutData.exercises.forEach(exercise => {
         exercise.sets.forEach(set => {
-            if (set.time && set.time > maxExerciseDurationSeconds) {
+            if (set.completed && set.time && set.time > maxExerciseDurationSeconds) {
                 maxExerciseDurationSeconds = set.time;
             }
         });
@@ -898,14 +981,11 @@ let workoutData = {
     
     console.log('Timer duration (s):', timerDurationSeconds, 'Longest exercise (s):', maxExerciseDurationSeconds);
     
-    // Get the maximum between timer and exercise duration (in seconds)
+    // Use the maximum between timer and longest completed exercise duration
     const maxDurationSeconds = Math.max(timerDurationSeconds, maxExerciseDurationSeconds);
     
-    // Convert seconds to minutes before returning (to maintain compatibility with existing code)
-    const durationMinutes = Math.ceil(maxDurationSeconds / 60);
-    console.log('Final duration (min):', durationMinutes);
-    
-    return durationMinutes; // Return minutes for database storage
+    // Return the duration in seconds (not minutes anymore)
+    return maxDurationSeconds;
   }
 
   // Add this function above the handleTimeInput function
@@ -919,48 +999,26 @@ let workoutData = {
 
   function handleTimeInput(input, exerciseIndex, setIndex, field) {
     // Check if this is a digit being entered
-    if (/^\d$/.test(event.data)) {
-        // Store raw digits in a data attribute
-        if (!input.dataset.rawDigits) {
-            input.dataset.rawDigits = '';
-        }
-        
-        // Add the new digit
-        input.dataset.rawDigits += event.data;
-        
-        // Limit to 6 digits
-        if (input.dataset.rawDigits.length > 6) {
-            input.dataset.rawDigits = input.dataset.rawDigits.slice(-6);
-        }
-    } 
-    // Handle backspace/delete
-    else if (event.inputType === 'deleteContentBackward' || event.inputType === 'deleteContentForward') {
-        if (input.dataset.rawDigits) {
-            input.dataset.rawDigits = input.dataset.rawDigits.slice(0, -1);
-        }
-    }
-    
-    // Format the time based on raw digits
-    let formattedValue = '';
+    const value = input.value.replace(/[^0-9]/g, '');
+    let formattedValue = '00:00:00';
     let totalSeconds = 0;
-    const rawDigits = input.dataset.rawDigits || '';
     
-    if (rawDigits.length > 0) {
+    if (value.length > 0) {
         // Calculate seconds, minutes, hours from right to left
-        const len = rawDigits.length;
+        const len = value.length;
         
         // Right-align the digits (for values like seconds, minutes, hours)
         let seconds = 0, minutes = 0, hours = 0;
         
         // Process from right to left (least significant to most significant)
-        if (len >= 1) seconds += parseInt(rawDigits.charAt(len-1));  // 1s place
-        if (len >= 2) seconds += parseInt(rawDigits.charAt(len-2)) * 10;  // 10s place
+        if (len >= 1) seconds += parseInt(value.charAt(len-1));  // 1s place
+        if (len >= 2) seconds += parseInt(value.charAt(len-2)) * 10;  // 10s place
         
-        if (len >= 3) minutes += parseInt(rawDigits.charAt(len-3));  // 1s place
-        if (len >= 4) minutes += parseInt(rawDigits.charAt(len-4)) * 10;  // 10s place
+        if (len >= 3) minutes += parseInt(value.charAt(len-3));  // 1s place
+        if (len >= 4) minutes += parseInt(value.charAt(len-4)) * 10;  // 10s place
         
-        if (len >= 5) hours += parseInt(rawDigits.charAt(len-5));  // 1s place
-        if (len >= 6) hours += parseInt(rawDigits.charAt(len-6)) * 10;  // 10s place
+        if (len >= 5) hours += parseInt(value.charAt(len-5));  // 1s place
+        if (len >= 6) hours += parseInt(value.charAt(len-6)) * 10;  // 10s place
         
         formattedValue = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
         totalSeconds = hours * 3600 + minutes * 60 + seconds;
@@ -971,292 +1029,88 @@ let workoutData = {
     
     // Update data model
     workoutData.exercises[exerciseIndex].sets[setIndex][field] = totalSeconds;
-    
-    // Sync with workout timer if needed
-    syncWorkoutTimer();
   }
 
   // Function to synchronize the workout timer with the longest exercise duration
   function syncWorkoutTimer() {
-    // Find the longest duration across all exercises
-    let maxDuration = 0;
-    
-    workoutData.exercises.forEach(exercise => {
-        exercise.sets.forEach(set => {
-            if (set.time && set.time > maxDuration) {
-                maxDuration = set.time;
-            }
-        });
-    });
-    
-    console.log('Longest exercise duration:', maxDuration);
-    
-    // Skip if no significant duration found
-    if (maxDuration <= 0) return;
-    
-    // Get the current timer value
-    const timerElement = document.getElementById('workout-timer');
-    if (!timerElement) return;
-    
-    // Always use the longest duration from exercises as the minimum workout time
-    const currentTimerValue = parseInt(timerElement.dataset.seconds || 0);
-    
-    // Update the timer if exercise duration is longer than current timer
-    if (maxDuration > currentTimerValue) {
-        console.log('Updating workout timer to match longest exercise:', formatTime(maxDuration));
-        
-        // Update the timer value in the global scope
-        if (typeof window.seconds !== 'undefined') {
-            window.seconds = maxDuration;
-        }
-        
-        // Update the display
-        if (typeof updateTimerDisplay === 'function') {
-            updateTimerDisplay();
-        } else {
-            // Fallback if the function isn't available
-            timerElement.textContent = formatTime(maxDuration);
-            timerElement.dataset.seconds = maxDuration;
-        }
-    }
+    // We no longer automatically sync the timer with exercise durations
+    // This function is now only used when completing the workout
+    return;
   }
 
   // Function to calculate recommended values based on previous performance
   function calculateRecommendedValues(exerciseData, previousSets) {
-    console.log('Starting recommendation calculation with data:', { 
-      inputType: exerciseData.input_type,
-      rangeEnabled: exerciseData.range_enabled,
-      minReps: exerciseData.min_reps,
-      maxReps: exerciseData.max_reps,
-      previousSetsCount: previousSets?.length || 0
-    });
+    // Use the shared function if available
+    if (typeof workoutHandlers !== 'undefined' && workoutHandlers.calculateRecommendedValues) {
+        return workoutHandlers.calculateRecommendedValues(exerciseData, previousSets);
+    }
     
-    // If ranges are disabled or no previous sets, no recommendations
+    // Fallback to original implementation if shared function not available
     if (!exerciseData.range_enabled || !previousSets || previousSets.length === 0) {
-      console.log('Cannot make recommendations: ranges disabled or no previous sets');
-      return null;
+        return null;
     }
     
-    // Check if recommendations are enabled globally (gets passed from the server in exerciseData)
-    if (exerciseData.recommend_enabled === false) {
-      console.log('Recommendations are disabled in user settings');
-      return null;
+    // Get the last few completed sets
+    const recentSets = previousSets.filter(set => set.completed).slice(-3);
+    if (!recentSets.length) {
+        return null;
     }
     
-    const inputType = exerciseData.input_type;
-    // Get last 3 sets or all
-    const recentSets = previousSets.slice(-3);
-    console.log('Using most recent sets for calculation:', recentSets);
+    const result = {
+        isRecommended: {}
+    };
     
-    // Initialize recommendation object
-    const recommendation = {};
-    // Track which fields are recommendations vs copies from previous values
-    const isRecommended = {};
+    // Check if all sets were at the upper range
+    let allAtUpperRange = true;
+    let allAtLowerRange = true;
     
-    // Check if input type uses weight
-    if (inputType.includes('weight')) {
-      // Find the last weight value used
-      let lastWeight = 0;
-      for (const set of recentSets) {
-        if (set.weight) {
-          lastWeight = set.weight;
-          break;
-        } else if (set.additional_weight) {
-          lastWeight = set.additional_weight;
-          break;
-        }
-      }
-      
-      console.log(`Found last weight: ${lastWeight}`);
-      
-      // Check if all sets were within or above range for various metrics
-      let allUpperRange = true;
-      let allLowerRange = true;
-      
-      if (inputType === 'weight_reps' || inputType === 'bodyweight_reps' || inputType === 'weighted_bodyweight') {
-        // Check rep ranges
-        if (exerciseData.min_reps !== null && exerciseData.max_reps !== null) {
-          console.log(`Checking rep ranges: min=${exerciseData.min_reps}, max=${exerciseData.max_reps}`);
-          
-          for (const set of recentSets) {
-            console.log(`Set reps: ${set.reps}, comparing to min=${exerciseData.min_reps}, max=${exerciseData.max_reps}`);
-            
-            if (set.reps < exerciseData.max_reps) {
-              allUpperRange = false;
-              console.log(`Set with ${set.reps} reps is below max ${exerciseData.max_reps}, allUpperRange=${allUpperRange}`);
-            }
-            if (set.reps > exerciseData.min_reps) {
-              allLowerRange = false;
-              console.log(`Set with ${set.reps} reps is above min ${exerciseData.min_reps}, allLowerRange=${allLowerRange}`);
-            }
-          }
-          
-          // Make weight recommendations based on performance
-          if (allUpperRange && lastWeight > 0) {
-            // If all sets hit upper range, recommend higher weight
-            if (inputType === 'weight_reps') {
-              recommendation.weight = Math.round((lastWeight + 2.5) * 10) / 10; // Round to nearest 0.1
-              isRecommended.weight = true;
-              console.log(`All sets at upper range, recommending higher weight: ${recommendation.weight}`);
-            } else if (inputType === 'weighted_bodyweight') {
-              recommendation.additional_weight = Math.round((lastWeight + 2.5) * 10) / 10;
-              isRecommended.additional_weight = true;
-              console.log(`All sets at upper range, recommending higher additional weight: ${recommendation.additional_weight}`);
-            }
-          } else if (allLowerRange && lastWeight > 0) {
-            // If all sets below lower range, recommend lower weight
-            if (inputType === 'weight_reps') {
-              recommendation.weight = Math.max(0, Math.round((lastWeight - 2.5) * 10) / 10);
-              isRecommended.weight = true;
-              console.log(`All sets at lower range, recommending lower weight: ${recommendation.weight}`);
-            } else if (inputType === 'weighted_bodyweight') {
-              recommendation.additional_weight = Math.max(0, Math.round((lastWeight - 2.5) * 10) / 10);
-              isRecommended.additional_weight = true;
-              console.log(`All sets at lower range, recommending lower additional weight: ${recommendation.additional_weight}`);
-            }
-          } else if (lastWeight > 0) {
-            // If mixed performance, keep same weight
-            if (inputType === 'weight_reps') {
-              recommendation.weight = lastWeight;
-              console.log(`Mixed performance, keeping same weight: ${recommendation.weight}`);
-            } else if (inputType === 'weighted_bodyweight') {
-              recommendation.additional_weight = lastWeight;
-              console.log(`Mixed performance, keeping same additional weight: ${recommendation.additional_weight}`);
-            }
-          }
-        }
-      } else if (inputType === 'duration_weight') {
-        // Check duration ranges
-        if (exerciseData.min_duration !== null && exerciseData.max_duration !== null) {
-          for (const set of recentSets) {
-            if (set.time < exerciseData.max_duration) {
-              allUpperRange = false;
-            }
-            if (set.time > exerciseData.min_duration) {
-              allLowerRange = false;
-            }
-          }
-          
-          // Make weight recommendations based on duration performance
-          if (allUpperRange && lastWeight > 0) {
-            recommendation.weight = Math.round((lastWeight + 2.5) * 10) / 10;
-            isRecommended.weight = true;
-            console.log(`All duration at upper range, recommending higher weight: ${recommendation.weight}`);
-          } else if (allLowerRange && lastWeight > 0) {
-            recommendation.weight = Math.max(0, Math.round((lastWeight - 2.5) * 10) / 10);
-            isRecommended.weight = true;
-            console.log(`All duration at lower range, recommending lower weight: ${recommendation.weight}`);
-          } else if (lastWeight > 0) {
-            recommendation.weight = lastWeight;
-            console.log(`Mixed duration performance, keeping same weight: ${recommendation.weight}`);
-          }
-        }
-      } else if (inputType === 'weight_distance') {
-        // Check distance ranges
-        if (exerciseData.min_distance !== null && exerciseData.max_distance !== null) {
-          for (const set of recentSets) {
-            if (set.distance < exerciseData.max_distance) {
-              allUpperRange = false;
-            }
-            if (set.distance > exerciseData.min_distance) {
-              allLowerRange = false;
-            }
-          }
-          
-          // Make weight recommendations based on distance performance
-          if (allUpperRange && lastWeight > 0) {
-            recommendation.weight = Math.round((lastWeight + 2.5) * 10) / 10;
-            isRecommended.weight = true;
-            console.log(`All distance at upper range, recommending higher weight: ${recommendation.weight}`);
-          } else if (allLowerRange && lastWeight > 0) {
-            recommendation.weight = Math.max(0, Math.round((lastWeight - 2.5) * 10) / 10);
-            isRecommended.weight = true;
-            console.log(`All distance at lower range, recommending lower weight: ${recommendation.weight}`);
-          } else if (lastWeight > 0) {
-            recommendation.weight = lastWeight;
-            console.log(`Mixed distance performance, keeping same weight: ${recommendation.weight}`);
-          }
-        }
-      }
-    }
-    
-    // Handle pure duration exercises (like planks)
-    if (inputType === 'duration') {
-      // Get the last duration used
-      let lastDuration = 0;
-      for (const set of recentSets) {
-        if (set.time) {
-          lastDuration = set.time;
-          break;
-        }
-      }
-      
-      let allUpperRange = true;
-      let allLowerRange = true;
-      
-      // Check duration ranges
-      if (exerciseData.min_duration !== null && exerciseData.max_duration !== null) {
-        for (const set of recentSets) {
-          if (!set.time) continue;
-          // Check if all sets are at or above the max duration
-          if (set.time < exerciseData.max_duration) {
-            allUpperRange = false;
-          }
-          // Check if all sets are below the min duration
-          if (set.time > exerciseData.min_duration) {
-            allLowerRange = false;
-          }
-        }
-        
-        console.log('Duration check:', { lastDuration, min: exerciseData.min_duration, max: exerciseData.max_duration, allUpperRange, allLowerRange });
-        
-        // Make duration recommendations based on performance
-        if (allUpperRange && lastDuration > 0) {
-          // If all durations at or above max, recommend 10% longer duration
-          const increasedDuration = Math.ceil(lastDuration * 1.1);
-          recommendation.time = increasedDuration;
-          isRecommended.time = true;
-          console.log('Recommending increased duration:', increasedDuration);
-        } else if (allLowerRange && lastDuration > 0) {
-          // If all durations below min, recommend 10% shorter duration
-          const decreasedDuration = Math.max(5, Math.floor(lastDuration * 0.9));
-          recommendation.time = decreasedDuration;
-          isRecommended.time = true;
-          console.log('Recommending decreased duration:', decreasedDuration);
-        } else if (lastDuration > 0) {
-          // If mixed performance, keep the same duration
-          recommendation.time = lastDuration;
-          console.log('Keeping same duration:', lastDuration);
-        }
-      }
-    }
-    
-    // For all other values, just use the previous values
-    // This ensures we're only changing certain values based on performance in ranges
     for (const set of recentSets) {
-      if (!inputType.includes('duration') && set.reps && !recommendation.reps) {
-        recommendation.reps = set.reps;
-        console.log(`Using previous reps value: ${recommendation.reps}`);
-      }
-      if (!inputType.includes('weight') && !inputType.includes('duration') && set.time && !recommendation.time) {
-        recommendation.time = set.time;
-        console.log(`Using previous time value: ${recommendation.time}`);
-      }
-      if (!inputType.includes('distance') && set.distance && !recommendation.distance) {
-        recommendation.distance = set.distance;
-        console.log(`Using previous distance value: ${recommendation.distance}`);
-      }
-      if (set.assistance_weight && !recommendation.assistance_weight) {
-        recommendation.assistance_weight = set.assistance_weight;
-        console.log(`Using previous assistance weight value: ${recommendation.assistance_weight}`);
-      }
+        if (exerciseData.input_type.includes('reps')) {
+            if (exerciseData.max_reps && set.reps < exerciseData.max_reps) {
+                allAtUpperRange = false;
+            }
+            if (exerciseData.min_reps && set.reps > exerciseData.min_reps) {
+                allAtLowerRange = false;
+            }
+        } else if (exerciseData.input_type.includes('duration')) {
+            if (exerciseData.max_duration && set.time < exerciseData.max_duration) {
+                allAtUpperRange = false;
+            }
+            if (exerciseData.min_duration && set.time > exerciseData.min_duration) {
+                allAtLowerRange = false;
+            }
+        } else if (exerciseData.input_type.includes('distance')) {
+            if (exerciseData.max_distance && set.distance < exerciseData.max_distance) {
+                allAtUpperRange = false;
+            }
+            if (exerciseData.min_distance && set.distance > exerciseData.min_distance) {
+                allAtLowerRange = false;
+            }
+        }
     }
     
-    // Add isRecommended flags to the recommendation
-    recommendation.isRecommended = isRecommended;
+    // Handle weight-based exercises
+    if (['weight_reps', 'weighted_bodyweight', 'duration_weight', 'weight_distance'].includes(exerciseData.input_type)) {
+        const lastSet = recentSets[recentSets.length - 1];
+        
+        if (lastSet && lastSet.weight) {
+            let weight = parseFloat(lastSet.weight);
+            
+            if (allAtUpperRange) {
+                // Increase weight by 2.5kg
+                weight += 2.5;
+                result.isRecommended.weight = true;
+            } else if (allAtLowerRange) {
+                // Decrease weight by 2.5kg if consistently at lower range
+                weight = Math.max(0, weight - 2.5);
+                result.isRecommended.weight = true;
+            }
+            
+            result.weight = weight;
+        }
+    }
     
-    console.log('Final recommendation:', recommendation);
-    return recommendation;
+    return result;
   }
 
   // Rest timer variables
@@ -1435,45 +1289,84 @@ let workoutData = {
 
   // Add function to update workout stats
   function updateWorkoutStats(exercise, set, isCompleted) {
-    // Update completed sets count
-    completedSets = isCompleted ? completedSets + 1 : completedSets - 1;
-    document.getElementById('sets-done').textContent = completedSets;
+    const completedSetsCount = document.getElementById('sets-done');
+    const completedRepsCount = document.getElementById('reps-done');
+    const totalVolumeElement = document.getElementById('workout-volume');
     
-    // Update reps based on exercise input type
-    if (set.reps) {
-        totalReps = isCompleted ? totalReps + parseInt(set.reps) : totalReps - parseInt(set.reps);
-        document.getElementById('reps-done').textContent = totalReps;
+    // Get user weight from data attribute if available
+    const userWeight = totalVolumeElement.dataset.userWeight ? 
+        parseFloat(totalVolumeElement.dataset.userWeight) : 0;
+    
+    // Calculate volume based on exercise type and set data
+    let setVolume = 0;
+    
+    if (exercise.input_type === 'weight_reps') {
+        setVolume = (set.weight || 0) * (set.reps || 0);
+    } else if (exercise.input_type === 'bodyweight_reps') {
+        setVolume = userWeight * (set.reps || 0);
+    } else if (exercise.input_type === 'weighted_bodyweight') {
+        setVolume = (userWeight + (set.additional_weight || 0)) * (set.reps || 0);
+    } else if (exercise.input_type === 'assisted_bodyweight') {
+        // For assisted, we subtract the assistance from user's weight
+        const effectiveWeight = Math.max(0, userWeight - (set.assistance_weight || 0));
+        setVolume = effectiveWeight * (set.reps || 0);
+    } else if (exercise.input_type === 'duration_weight') {
+        setVolume = (set.weight || 0) * (set.time || 0);
+    } else if (exercise.input_type === 'weight_distance') {
+        setVolume = (set.weight || 0) * (set.distance || 0);
     }
     
-    // Calculate and update volume
-    const setVolume = calculateSetVolume(exercise, set);
-    totalVolume = isCompleted ? totalVolume + setVolume : totalVolume - setVolume;
-    document.getElementById('workout-volume').textContent = Math.round(totalVolume);
-  }
-
-  // Function to calculate the volume of a set
-  function calculateSetVolume(exercise, set) {
-    let volume = 0;
-    
-    if (exercise.input_type === 'weight_reps' && set.weight && set.reps) {
-        // Standard weight × reps volume calculation
-        volume = parseFloat(set.weight) * parseInt(set.reps);
-    } else if (exercise.input_type === 'weighted_bodyweight' && set.additional_weight && set.reps) {
-        // For weighted bodyweight exercises (estimated bodyweight + additional weight) × reps
-        const estimatedBodyweight = 75; // Default estimate - could be improved to use user's actual weight
-        volume = (estimatedBodyweight + parseFloat(set.additional_weight)) * parseInt(set.reps);
-    } else if (exercise.input_type === 'bodyweight_reps' && set.reps) {
-        // For bodyweight only, estimate bodyweight × reps
-        const estimatedBodyweight = 75; // Default estimate
-        volume = estimatedBodyweight * parseInt(set.reps);
-    } else if (exercise.input_type === 'assisted_bodyweight' && set.assistance_weight && set.reps) {
-        // For assisted bodyweight exercises (estimated bodyweight - assistance weight) × reps
-        const estimatedBodyweight = 75; // Default estimate
-        const assistWeight = parseFloat(set.assistance_weight);
-        volume = Math.max(0, estimatedBodyweight - assistWeight) * parseInt(set.reps);
+    if (isCompleted) {
+        // Calculate EXP only if we haven't already for this set
+        if (!set.expGained) {
+            if (set.hasPrevious && set.prevValues) {
+                set.expGained = calculateExpGain(exercise, set, set.prevValues);
+            } else {
+                // Base EXP for a set without previous values
+                set.expGained = 1;
+            }
+        }
+        
+        // Increment stats
+        completedSetsCount.textContent = (parseInt(completedSetsCount.textContent) || 0) + 1;
+        
+        if (set.reps) {
+            completedRepsCount.textContent = (parseInt(completedRepsCount.textContent) || 0) + parseInt(set.reps);
+        }
+        
+        if (setVolume > 0) {
+            const currentVolume = parseInt(totalVolumeElement.textContent) || 0;
+            totalVolumeElement.textContent = currentVolume + setVolume;
+        }
+        
+        // Add EXP
+        sessionExpGained += set.expGained;
+        
+        // Show EXP gain notification
+        showExpGain(set.expGained);
+    } else {
+        // Decrement stats
+        completedSetsCount.textContent = Math.max(0, (parseInt(completedSetsCount.textContent) || 0) - 1);
+        
+        if (set.reps) {
+            completedRepsCount.textContent = Math.max(0, (parseInt(completedRepsCount.textContent) || 0) - parseInt(set.reps));
+        }
+        
+        if (setVolume > 0) {
+            const currentVolume = parseInt(totalVolumeElement.textContent) || 0;
+            totalVolumeElement.textContent = Math.max(0, currentVolume - setVolume);
+        }
+        
+        // Remove the exact same amount of EXP that was added
+        if (set.expGained) {
+            sessionExpGained = Math.max(0, sessionExpGained - set.expGained);
+            // Clear the stored EXP so it will be recalculated if completed again
+            delete set.expGained;
+        }
     }
     
-    return volume;
+    // Update EXP display
+    updateExpDisplay();
   }
 
   function startRestTimer(seconds, exerciseName) {
@@ -1628,42 +1521,15 @@ let workoutData = {
         const newLevel = Math.floor((currentExp + sessionExpGained) / 100) + 1;
         
         if (newLevel > startingLevel) {
-            // User leveled up!
-            showLevelUpModal(newLevel);
-        }
-    }
-  }
-
-  // Function to show level up modal
-  function showLevelUpModal(newLevel) {
-    const modal = document.getElementById('levelUpModal');
-    if (modal) {
-        const levelSpan = document.getElementById('new-level');
-        if (levelSpan) {
-            levelSpan.textContent = newLevel;
-        }
-        
-        // Show the modal
-        $(modal).modal('show');
-        
-        // Play level up sound if available
-        try {
-            const audio = new Audio('/static/sounds/level-up.mp3');
-            audio.play().catch(e => console.log('Error playing level up sound:', e));
-        } catch (e) {
-            console.log('Sound not available');
+            // User leveled up! - But we don't show modal anymore
+            console.log("User leveled up to level " + newLevel + " (modal disabled)");
         }
     }
   }
 
   // Function to show EXP gain notification
   function showExpGain(amount) {
-    sessionExpGained += amount;
-    
-    // Update total EXP display
-    updateExpDisplay();
-    
-    // Show notification
+    // Only show the notification, don't modify sessionExpGained here
     const notification = document.getElementById('exp-notification');
     if (notification) {
         notification.textContent = `+${amount} EXP`;

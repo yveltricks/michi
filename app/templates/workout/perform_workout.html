@@ -1,0 +1,433 @@
+{% extends "base.html" %}
+{% block title %}Workout: {{ workout.name }}{% endblock %}
+
+{% block extra_head %}
+<style>
+    .exercise-card {
+        background-color: #f3f4f6;
+        border-radius: 8px;
+        padding: 16px;
+        margin-bottom: 16px;
+        border: 1px solid #e5e7eb;
+    }
+    
+    .set-row {
+        padding: 8px 12px;
+        margin-bottom: 4px;
+        border-radius: 4px;
+    }
+    
+    .set-row:nth-child(odd) {
+        background-color: #f9fafb;
+    }
+    
+    .set-row:nth-child(even) {
+        background-color: #ffffff;
+    }
+    
+    .set-row.completed {
+        background-color: #f0fff4;
+        border-left: 3px solid #31c48d;
+    }
+    
+    .rest-timer {
+        background-color: #ebf5ff;
+        padding: 12px;
+        border-radius: 8px;
+        border: 1px solid #93c5fd;
+        display: none;
+    }
+    
+    .timer-display {
+        font-size: 1.5rem;
+        text-align: center;
+        font-weight: bold;
+        font-family: monospace;
+    }
+    
+    .timer-controls {
+        display: flex;
+        justify-content: center;
+        gap: 8px;
+        margin-top: 8px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 min-h-screen pb-24">
+    <div class="flex items-center mb-6 pt-4">
+        <button id="end-workout-btn" class="inline-flex items-center text-gray-600 hover:text-red-600">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8 7a1 1 0 00-1 1v4a1 1 0 001 1h4a1 1 0 001-1V8a1 1 0 00-1-1H8z" clip-rule="evenodd" />
+            </svg>
+            End Workout
+        </button>
+        <h1 class="text-2xl font-bold mx-auto">{{ workout.name }}</h1>
+        <div id="workout-timer" class="text-gray-600 font-mono">00:00:00</div>
+    </div>
+    
+    <!-- Rest Timer -->
+    <div id="rest-timer" class="rest-timer mb-6">
+        <h3 class="text-lg font-medium text-center text-blue-800 mb-2">Rest Timer</h3>
+        <div id="timer-display" class="timer-display">00:00</div>
+        <div class="timer-controls">
+            <button id="pause-timer" class="bg-blue-100 hover:bg-blue-200 text-blue-800 py-1 px-3 rounded-md">
+                Pause
+            </button>
+            <button id="reset-timer" class="bg-blue-100 hover:bg-blue-200 text-blue-800 py-1 px-3 rounded-md">
+                Reset
+            </button>
+            <button id="skip-timer" class="bg-blue-500 hover:bg-blue-600 text-white py-1 px-3 rounded-md">
+                Skip
+            </button>
+        </div>
+    </div>
+
+    <!-- Exercises -->
+    <div id="exercises-container">
+        {% for exercise in exercises %}
+        <div class="exercise-card" data-exercise-id="{{ exercise.id }}" data-input-type="{{ exercise.input_type }}">
+            <div class="flex justify-between items-center mb-3">
+                <h2 class="text-xl font-bold">{{ exercise.name }}</h2>
+                <span class="text-sm text-gray-500">{{ exercise.muscles_worked }}</span>
+            </div>
+            
+            <!-- Sets -->
+            <div class="sets-container">
+                {% for set in exercise.sets %}
+                <div class="set-row {% if set.completed %}completed{% endif %}" data-set-id="{{ set.id }}">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center">
+                            <div class="w-8 h-8 mr-2 flex items-center justify-center rounded-full bg-gray-100 text-gray-700 font-medium">
+                                {{ loop.index }}
+                            </div>
+                            
+                            <!-- Input fields based on exercise type -->
+                            {% if exercise.input_type == 'weight_reps' %}
+                            <div class="flex items-center">
+                                <div class="mr-4">
+                                    <label class="block text-xs text-gray-500">Weight</label>
+                                    <input type="number" class="set-weight w-20 p-1 border rounded-md" value="{{ set.weight|default(0) }}" step="1.25" min="0">
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-gray-500">Reps</label>
+                                    <input type="number" class="set-reps w-16 p-1 border rounded-md" value="{{ set.reps|default(0) }}" step="1" min="0">
+                                </div>
+                            </div>
+                            
+                            {% elif exercise.input_type == 'bodyweight_reps' %}
+                            <div>
+                                <label class="block text-xs text-gray-500">Reps</label>
+                                <input type="number" class="set-reps w-16 p-1 border rounded-md" value="{{ set.reps|default(0) }}" step="1" min="0">
+                            </div>
+                            
+                            {% elif exercise.input_type == 'duration' %}
+                            <div>
+                                <label class="block text-xs text-gray-500">Duration (sec)</label>
+                                <input type="number" class="set-duration w-20 p-1 border rounded-md" value="{{ set.duration|default(0) }}" step="1" min="0">
+                            </div>
+                            
+                            {% elif exercise.input_type == 'distance_duration' %}
+                            <div class="flex items-center">
+                                <div class="mr-4">
+                                    <label class="block text-xs text-gray-500">Distance (m)</label>
+                                    <input type="number" class="set-distance w-20 p-1 border rounded-md" value="{{ set.distance|default(0) }}" step="10" min="0">
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-gray-500">Duration (sec)</label>
+                                    <input type="number" class="set-duration w-20 p-1 border rounded-md" value="{{ set.duration|default(0) }}" step="1" min="0">
+                                </div>
+                            </div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="flex items-center">
+                            {% if not set.completed %}
+                            <button class="complete-set-btn bg-green-500 hover:bg-green-600 text-white py-1 px-3 rounded-md mr-2">
+                                Complete
+                            </button>
+                            {% else %}
+                            <span class="text-green-500 mr-2">✓</span>
+                            {% endif %}
+                            
+                            <div class="text-xs text-gray-500">
+                                Rest: <span class="font-medium">{{ set.rest_duration|default(60) }}s</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            
+            <!-- Add Set Button -->
+            <button class="add-set-btn mt-2 text-sm text-blue-600 hover:text-blue-800">
+                + Add Set
+            </button>
+        </div>
+        {% endfor %}
+    </div>
+    
+    <!-- Complete Workout Button -->
+    <div class="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-200">
+        <button id="complete-workout-btn" class="w-full bg-red-600 hover:bg-red-700 text-white py-3 px-4 rounded-lg text-xl font-medium">
+            Complete Workout
+        </button>
+    </div>
+</div>
+
+<!-- Workout Completion Modal -->
+<div id="completion-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div class="bg-white rounded-lg p-6 w-11/12 max-w-md">
+        <h2 class="text-xl font-bold mb-4">Complete Workout</h2>
+        <p class="mb-4">You're about to complete this workout session. Add any notes or observations below:</p>
+        
+        <textarea id="workout-notes" class="w-full p-2 border border-gray-300 rounded-md mb-4" rows="3" placeholder="How was your workout?"></textarea>
+        
+        <div class="flex justify-end space-x-2">
+            <button id="cancel-completion" class="bg-gray-200 hover:bg-gray-300 text-gray-800 py-2 px-4 rounded-md">
+                Cancel
+            </button>
+            <button id="confirm-completion" class="bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded-md">
+                Complete
+            </button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Workout timer
+        let workoutStartTime = new Date();
+        let workoutTimer;
+        
+        function updateWorkoutTimer() {
+            const now = new Date();
+            const diff = Math.floor((now - workoutStartTime) / 1000);
+            
+            const hours = Math.floor(diff / 3600).toString().padStart(2, '0');
+            const minutes = Math.floor((diff % 3600) / 60).toString().padStart(2, '0');
+            const seconds = Math.floor(diff % 60).toString().padStart(2, '0');
+            
+            document.getElementById('workout-timer').textContent = `${hours}:${minutes}:${seconds}`;
+        }
+        
+        // Start workout timer
+        workoutTimer = setInterval(updateWorkoutTimer, 1000);
+        updateWorkoutTimer();
+        
+        // Rest timer
+        let restTimerInterval;
+        let restTimeRemaining = 0;
+        let restTimerRunning = false;
+        
+        function updateRestTimer() {
+            if (restTimeRemaining <= 0) {
+                clearInterval(restTimerInterval);
+                restTimerRunning = false;
+                
+                // Play sound and show notification
+                const audio = new Audio('/static/sounds/timer.mp3');
+                audio.play().catch(err => console.log('Error playing sound:', err));
+                
+                alert('Rest time completed!');
+                
+                document.getElementById('rest-timer').style.display = 'none';
+                return;
+            }
+            
+            const minutes = Math.floor(restTimeRemaining / 60).toString().padStart(2, '0');
+            const seconds = Math.floor(restTimeRemaining % 60).toString().padStart(2, '0');
+            
+            document.getElementById('timer-display').textContent = `${minutes}:${seconds}`;
+            restTimeRemaining--;
+        }
+        
+        function startRestTimer(duration) {
+            // Stop any existing timer
+            if (restTimerInterval) {
+                clearInterval(restTimerInterval);
+            }
+            
+            // Set up new timer
+            restTimeRemaining = duration;
+            restTimerRunning = true;
+            document.getElementById('rest-timer').style.display = 'block';
+            updateRestTimer();
+            
+            restTimerInterval = setInterval(updateRestTimer, 1000);
+        }
+        
+        // Rest timer controls
+        document.getElementById('pause-timer').addEventListener('click', function() {
+            if (restTimerRunning) {
+                clearInterval(restTimerInterval);
+                restTimerRunning = false;
+                this.textContent = 'Resume';
+            } else {
+                restTimerInterval = setInterval(updateRestTimer, 1000);
+                restTimerRunning = true;
+                this.textContent = 'Pause';
+            }
+        });
+        
+        document.getElementById('reset-timer').addEventListener('click', function() {
+            if (document.getElementById('pause-timer').textContent === 'Resume') {
+                document.getElementById('pause-timer').textContent = 'Pause';
+            }
+            clearInterval(restTimerInterval);
+            restTimeRemaining = parseInt(document.querySelector('.set-row:not(.completed)').querySelector('.text-xs.text-gray-500 .font-medium').textContent);
+            updateRestTimer();
+            restTimerInterval = setInterval(updateRestTimer, 1000);
+            restTimerRunning = true;
+        });
+        
+        document.getElementById('skip-timer').addEventListener('click', function() {
+            clearInterval(restTimerInterval);
+            document.getElementById('rest-timer').style.display = 'none';
+            if (document.getElementById('pause-timer').textContent === 'Resume') {
+                document.getElementById('pause-timer').textContent = 'Pause';
+            }
+        });
+        
+        // Handle completing a set
+        document.querySelectorAll('.complete-set-btn').forEach(button => {
+            button.addEventListener('click', function() {
+                const setRow = this.closest('.set-row');
+                const setId = setRow.getAttribute('data-set-id');
+                
+                // Get the input values
+                const inputType = this.closest('.exercise-card').getAttribute('data-input-type');
+                let setData = {
+                    completed: true
+                };
+                
+                if (inputType === 'weight_reps') {
+                    setData.weight = parseFloat(setRow.querySelector('.set-weight').value);
+                    setData.reps = parseInt(setRow.querySelector('.set-reps').value);
+                } else if (inputType === 'bodyweight_reps') {
+                    setData.reps = parseInt(setRow.querySelector('.set-reps').value);
+                } else if (inputType === 'duration') {
+                    setData.duration = parseInt(setRow.querySelector('.set-duration').value);
+                } else if (inputType === 'distance_duration') {
+                    setData.distance = parseFloat(setRow.querySelector('.set-distance').value);
+                    setData.duration = parseInt(setRow.querySelector('.set-duration').value);
+                }
+                
+                // Make API call to update the set
+                fetch(`/workout/api/sets/${setId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(setData)
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Mark set as completed
+                        setRow.classList.add('completed');
+                        this.parentNode.innerHTML = '<span class="text-green-500 mr-2">✓</span>';
+                        
+                        // Get rest duration for the next set
+                        const restDuration = parseInt(setRow.querySelector('.text-xs.text-gray-500 .font-medium').textContent);
+                        
+                        // Start the rest timer
+                        startRestTimer(restDuration);
+                    } else {
+                        alert('Error updating set: ' + data.error);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('An error occurred while updating the set.');
+                });
+            });
+        });
+        
+        // Add a new set
+        document.querySelectorAll('.add-set-btn').forEach(button => {
+            button.addEventListener('click', function() {
+                const exerciseCard = this.closest('.exercise-card');
+                const exerciseId = exerciseCard.getAttribute('data-exercise-id');
+                const inputType = exerciseCard.getAttribute('data-input-type');
+                const setCount = exerciseCard.querySelectorAll('.set-row').length;
+                
+                // Create new set data with default values
+                const setData = {
+                    set_number: setCount + 1,
+                    rest_duration: 60
+                };
+                
+                // Make API call to add a new set
+                fetch(`/workout/api/exercises/${exerciseId}/sets`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(setData)
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Reload the page to show the new set
+                        location.reload();
+                    } else {
+                        alert('Error adding set: ' + data.error);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('An error occurred while adding a new set.');
+                });
+            });
+        });
+        
+        // End workout button
+        document.getElementById('end-workout-btn').addEventListener('click', function() {
+            if (confirm('Are you sure you want to end this workout without completing it?')) {
+                window.location.href = "{{ url_for('workout.workout_page') }}";
+            }
+        });
+        
+        // Complete workout button
+        document.getElementById('complete-workout-btn').addEventListener('click', function() {
+            document.getElementById('completion-modal').classList.remove('hidden');
+        });
+        
+        // Cancel completion
+        document.getElementById('cancel-completion').addEventListener('click', function() {
+            document.getElementById('completion-modal').classList.add('hidden');
+        });
+        
+        // Confirm completion
+        document.getElementById('confirm-completion').addEventListener('click', function() {
+            const notes = document.getElementById('workout-notes').value;
+            
+            fetch('/workout/api/workouts/{{ workout.id }}/complete', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    notes: notes
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    window.location.href = "{{ url_for('workout.workout_page') }}";
+                } else {
+                    alert('Error completing workout: ' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while completing the workout.');
+            });
+        });
+    });
+</script>
+{% endblock %} 

@@ -1,12 +1,13 @@
 from flask import Blueprint, render_template, redirect, url_for, request, flash
 from flask_login import login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
-from .models import User, Session, Measurement
+from .models import User, Session, Measurement, Workout
 from sqlalchemy import desc
 from . import db
 from datetime import datetime, timedelta
 from dataclasses import dataclass
 import re
+import json
 
 @dataclass
 class YearRange:
@@ -53,13 +54,87 @@ def home():
     following_ids = [user.id for user in current_user.following]
     following_ids.append(current_user.id)  # Include current user's sessions
 
+    # Get sessions from the Session model (older workouts)
     sessions = Session.query\
         .filter(Session.user_id.in_(following_ids))\
         .order_by(desc(Session.session_date))\
         .limit(10)\
         .all()
+    
+    # Get sessions from the Workout model (newer workouts)
+    workouts = Workout.query\
+        .filter(Workout.user_id.in_(following_ids))\
+        .order_by(desc(Workout.date))\
+        .limit(10)\
+        .all()
+    
+    # Convert workouts to have the same interface as sessions
+    for workout in workouts:
+        # Add session_date attribute to be compatible with the template
+        workout.session_date = workout.date
+        # Add any other attributes needed for compatibility
+        if not hasattr(workout, 'session_rating'):
+            workout.session_rating = workout.rating if hasattr(workout, 'rating') else 3
+        
+        # Ensure user object is loaded
+        if workout.user is None:
+            workout.user = User.query.get(workout.user_id)
+            
+        # Handle exercises data carefully
+        try:
+            # Start with a safe default list
+            exercise_list = []
+            
+            # Case 1: If workout has WorkoutExercise relation objects
+            if hasattr(workout, 'exercises') and workout.exercises:
+                # If it's a SQLAlchemy relationship, convert to safe dict format
+                if hasattr(workout.exercises, '__iter__'):
+                    for ex in workout.exercises:
+                        # Extract exercise info safely
+                        if hasattr(ex, 'name') or hasattr(ex, 'exercise_name'):
+                            exercise_dict = {
+                                'name': getattr(ex, 'name', getattr(ex, 'exercise_name', "Unknown Exercise")),
+                                'sets': getattr(ex, 'sets', 1),
+                            }
+                            exercise_list.append(exercise_dict)
+                
+                    # Override the exercises attribute with our safe list
+                    workout.exercises = exercise_list
+                
+            # Case 2: If workout has data field with JSON
+            elif hasattr(workout, 'data') and workout.data:
+                try:
+                    # Try to parse the JSON data
+                    json_data = json.loads(workout.data)
+                    # Ensure it's a list
+                    if isinstance(json_data, list):
+                        workout.exercises = json_data
+                    else:
+                        workout.exercises = []
+                except:
+                    # If parsing fails, set to empty string that will parse to empty list
+                    workout.exercises = "[]"
+            
+            # Case 3: Fallback to empty string that will parse to empty list
+            else:
+                workout.exercises = "[]"
+            
+        except Exception as e:
+            print(f"Error processing workout exercises: {e}")
+            workout.exercises = "[]"
+    
+    # Combine and sort all sessions
+    combined_sessions = []
+    combined_sessions.extend(sessions)
+    combined_sessions.extend(workouts)
+    
+    # Sort by date (newest first)
+    combined_sessions.sort(key=lambda x: x.session_date if hasattr(x, 'session_date') else x.date, reverse=True)
+    
+    # Limit to the most recent 10
+    combined_sessions = combined_sessions[:10]
 
-    return render_template('home.html', sessions=sessions)
+    return render_template('home.html', sessions=combined_sessions)
 
 @auth.route('/login')
 def login():
@@ -358,6 +433,7 @@ def delete_account():
         # Delete all related data first
         Measurement.query.filter_by(user_id=user_id).delete()
         Session.query.filter_by(user_id=user_id).delete()
+        Workout.query.filter_by(user_id=user_id).delete()
         # Add any other related data deletions here
 
         # Now delete the user

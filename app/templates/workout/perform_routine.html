@@ -1,0 +1,650 @@
+{% extends "base.html" %}
+{% block title %}Perform Routine - {{ routine.name }}{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/workout.css') }}">
+<!-- jQuery must be loaded before Bootstrap -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<!-- Bootstrap JS for modal functionality -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+
+<!-- Add immediate script for modal emergency closing -->
+<script>
+// Emergency modal closing function
+function emergencyCloseModals() {
+    console.log("Emergency modal close triggered");
+    
+    // Try bootstrap way
+    if (typeof bootstrap !== 'undefined') {
+        const modals = document.querySelectorAll('.modal.show');
+        modals.forEach(modal => {
+            try {
+                const bsModal = bootstrap.Modal.getInstance(modal);
+                if (bsModal) bsModal.hide();
+            } catch (e) {
+                console.error('Bootstrap hide error:', e);
+            }
+        });
+    }
+    
+    // Try jQuery way
+    if (typeof jQuery !== 'undefined') {
+        jQuery('.modal.show').modal('hide');
+    }
+    
+    // Direct DOM manipulation as last resort
+    document.querySelectorAll('.modal.show').forEach(modal => {
+        modal.classList.remove('show');
+        modal.style.display = 'none';
+    });
+    
+    document.body.classList.remove('modal-open');
+    document.querySelectorAll('.modal-backdrop').forEach(backdrop => {
+        backdrop.remove();
+    });
+    
+    return false;
+}
+
+// Add key listeners
+document.addEventListener('keydown', function(event) {
+    // Escape key
+    if (event.key === 'Escape' || event.key === 'Esc') {
+        emergencyCloseModals();
+    }
+    
+    // Enter key on modals
+    if (event.key === 'Enter' && document.querySelector('.modal.show')) {
+        emergencyCloseModals();
+    }
+});
+
+// Add a global click handler for modals
+document.addEventListener('click', function(event) {
+    // Check if we clicked on a modal backdrop or close button
+    if (event.target.classList.contains('modal') || 
+        event.target.classList.contains('btn-close') ||
+        event.target.parentElement && event.target.parentElement.classList.contains('btn-close')) {
+        emergencyCloseModals();
+    }
+});
+</script>
+
+<script src="{{ url_for('static', filename='js/workout.js') }}"></script>
+<script src="{{ url_for('static', filename='js/workout-timer.js') }}"></script>
+<script src="{{ url_for('static', filename='js/workout-handlers.js') }}"></script>
+<script src="{{ url_for('static', filename='js/modal-handlers.js') }}"></script>
+{% endblock %}
+
+{% block content %}
+<div class="workout-stats-bar">
+    <div class="timer-container" onclick="toggleTimerMenu()">
+        <span id="workout-timer" data-seconds="0">00:00:00</span>
+        <div id="timer-menu" class="timer-menu">
+            <button id="pause-timer" onclick="event.stopPropagation(); toggleTimer()">Pause Timer</button>
+            <button id="reset-timer" onclick="event.stopPropagation(); confirmReset()">Reset Timer</button>
+        </div>
+    </div>
+    
+    <div id="rest-timer-container" class="rest-timer-container" style="display: none;">
+        <span class="rest-label">REST</span>
+        <span id="rest-timer" data-seconds="0">00:00</span>
+        <div class="rest-timer-controls">
+            <button id="cancel-rest" onclick="cancelRestTimer()">Cancel</button>
+            <button id="restart-rest" onclick="restartRestTimer()">Restart</button>
+            <button id="pause-rest" onclick="toggleRestTimer()">Pause</button>
+        </div>
+    </div>
+
+    <div class="workout-stats">
+        <div class="time-container">
+            <div class="time-info">
+                <span class="time-label">TOTAL TIME</span>
+                <span class="time-value" id="workout-timer">00:00:00</span>
+            </div>
+            <div class="timer-buttons">
+                <button class="timer-control" id="start-timer"><i class="fas fa-play"></i></button>
+                <button class="timer-control" id="pause-timer"><i class="fas fa-pause"></i></button>
+                <button class="timer-control" id="reset-timer"><i class="fas fa-redo"></i></button>
+            </div>
+        </div>
+        
+        <!-- Add EXP display container -->
+        <div class="exp-container">
+            <div class="exp-notification" id="exp-notification" style="display: none;"></div>
+            <div class="exp-info">
+                <span class="exp-label">EXP Gained</span>
+                <span class="exp-value" id="session-exp">0</span>
+            </div>
+            <div class="level-progress-container">
+                <div class="level-progress-bar" id="level-progress" data-current-exp="{{ current_user.exp }}" data-current-level="{{ current_user.level }}"></div>
+            </div>
+            <div class="level-badge">{{ current_user.level }}</div>
+        </div>
+        
+        <!-- Add volume, sets, and reps counters -->
+        <div class="stats-container volume-container">
+            <div class="stats-info">
+                <span class="stats-label">VOLUME</span>
+                <span class="stats-value" id="workout-volume" data-user-weight="{{ user_weight }}">0</span>
+            </div>
+        </div>
+        
+        <div class="stats-container sets-container">
+            <div class="stats-info">
+                <span class="stats-label">SETS</span>
+                <span class="stats-value" id="sets-done">0</span>
+            </div>
+        </div>
+        
+        <div class="stats-container reps-container">
+            <div class="stats-info">
+                <span class="stats-label">REPS</span>
+                <span class="stats-value" id="reps-done">0</span>
+            </div>
+        </div>
+
+        <!-- Add overall performance indicator -->
+        <div class="stats-container performance-container">
+            <div class="stats-info">
+                <span class="stats-label">PERFORMANCE</span>
+                <div class="performance-indicator">
+                    <span class="performance-value" id="performance-icon">?</span>
+                    <span class="performance-percent" id="performance-percent"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="workout-container">
+    <h1 class="text-2xl font-bold mb-4">{{ routine.name }}</h1>
+
+    <!-- Exercise List -->
+    <button id="add-exercise-btn" class="add-exercise-btn">
+        <i class="fas fa-plus"></i> Add Exercise
+    </button>
+
+    <div id="exercises-container" class="exercise-list">
+        <!-- Exercises will be dynamically added here -->
+    </div>
+
+    <!-- Exercise Selection Modal -->
+    <div id="exercise-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Add Exercise</h2>
+                <span class="close">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="search-container">
+                    <input type="text" id="exercise-search" placeholder="Search exercises..." class="form-control">
+                    <select id="muscle-filter" class="form-control">
+                        <option value="all">All Muscles</option>
+                        <option value="chest">Chest</option>
+                        <option value="back">Back</option>
+                        <option value="legs">Legs</option>
+                        <option value="shoulders">Shoulders</option>
+                        <option value="arms">Arms</option>
+                        <option value="core">Core</option>
+                        <option value="cardio">Cardio</option>
+                    </select>
+                </div>
+                <div id="exercise-list" class="exercise-options">
+                    {% for exercise in exercises %}
+                    <div class="exercise-option" data-id="{{ exercise.id }}" data-name="{{ exercise.name }}" data-muscles="{{ exercise.muscles_worked }}">
+                        <div class="exercise-info">
+                            <h4>{{ exercise.name }}</h4>
+                            <small>{{ exercise.muscles_worked }}</small>
+                        </div>
+                        <button class="add-btn">Add</button>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Set Type Modal -->
+    <div id="set-type-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Set Type</h2>
+                <span class="close">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div id="set-type-list" class="set-type-options"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Range Settings Modal -->
+    <div id="range-settings-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Set Range</h2>
+                <span class="close">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="range-setting-header">
+                    <div class="range-toggle">
+                        <label for="range-enabled-checkbox">Enable Range:</label>
+                        <input type="checkbox" id="range-enabled-checkbox" checked>
+                    </div>
+                </div>
+                <div id="range-inputs">
+                    <!-- Range inputs will be dynamically added here -->
+                </div>
+                <button id="save-range-settings" class="btn btn-primary">Save Range Settings</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="workout-form">
+        <div class="form-group">
+            <label for="workout-title">Workout Title (optional):</label>
+            <input type="text" id="workout-title" class="form-control" value="{{ routine.name }}" placeholder="Enter a title for your workout">
+        </div>
+        <div class="form-group">
+            <label for="workout-description">Description (optional):</label>
+            <textarea id="workout-description" class="form-control" rows="3" placeholder="How was your workout?"></textarea>
+        </div>
+        <div class="form-group">
+            <label for="workout-rating">Rate your workout (1-5):</label>
+            <select id="workout-rating" class="form-control">
+                <option value="1">1 - Poor</option>
+                <option value="2">2 - Fair</option>
+                <option value="3">3 - Good</option>
+                <option value="4">4 - Very Good</option>
+                <option value="5">5 - Excellent</option>
+            </select>
+        </div>
+        <button id="complete-workout" class="finish-workout-btn">Complete Workout</button>
+    </div>
+</div>
+
+<!-- Add this section where you handle sets for exercises -->
+<div id="set-container">
+    <!-- Placeholder for dynamically added sets -->
+</div>
+
+<!-- Rest Timer Settings Modal -->
+<div id="rest-timer-modal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Set Rest Timer</h2>
+            <span class="close">&times;</span>
+        </div>
+        <div class="modal-body">
+            <p>Set a rest timer for this exercise. This timer will start automatically after completing a set.</p>
+            
+            <div class="rest-timer-form">
+                <div class="rest-input-group">
+                    <label for="rest-minutes">Minutes:</label>
+                    <input type="number" id="rest-minutes" min="0" max="10" value="0">
+                </div>
+                <div class="rest-input-group">
+                    <label for="rest-seconds">Seconds:</label>
+                    <input type="number" id="rest-seconds" min="0" max="59" value="0">
+                </div>
+                <div class="rest-toggle">
+                    <label for="rest-enabled">Enable rest timer:</label>
+                    <input type="checkbox" id="rest-enabled" checked>
+                </div>
+            </div>
+            
+            <button id="save-rest-settings" class="btn btn-primary">Save Rest Timer</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Add a global variable to store the modal instance
+    let levelUpModalInstance = null;
+    
+    document.addEventListener('DOMContentLoaded', function() {
+        // Make sure jQuery is available
+        if (typeof jQuery === 'undefined') {
+            console.error('jQuery is not loaded! Attempting to load it dynamically...');
+            var script = document.createElement('script');
+            script.src = 'https://code.jquery.com/jquery-3.6.0.min.js';
+            document.head.appendChild(script);
+            script.onload = function() {
+                console.log('jQuery loaded dynamically.');
+                initializeWorkout();
+            };
+        } else {
+            console.log('jQuery is loaded, version:', jQuery.fn.jquery);
+            initializeWorkout();
+        }
+        
+        function initializeWorkout() {
+            // Make sure workoutData is properly initialized
+            if (typeof workoutData === 'undefined') {
+                window.workoutData = {
+                    exercises: [],
+                    title: '',
+                    notes: '',
+                    rating: 3,
+                    started_at: new Date().toISOString()
+                };
+            }
+            
+            // Initialize workout with routine exercises
+            let routineData;
+            try {
+                routineData = JSON.parse('{{ routine_json|safe }}');
+            } catch (e) {
+                console.error("Error parsing routine data:", e);
+                routineData = { exercises: [] };
+            }
+            
+            let sessionExp = 0;
+            let totalSets = 0;
+            let totalReps = 0;
+            let totalVolume = 0;
+            
+            // For each exercise in the routine, fetch details and add to workout
+            if (routineData && routineData.exercises && Array.isArray(routineData.exercises)) {
+                routineData.exercises.forEach(exerciseData => {
+                    if (exerciseData.id) {
+                        // Fetch the exercise details
+                        fetch(`/workout/api/exercise-details/${exerciseData.id}`)
+                            .then(response => response.json())
+                            .then(data => {
+                                // Add the exercise to the workout data
+                                const newExercise = {
+                                    id: exerciseData.id,
+                                    name: data.name,
+                                    input_type: data.input_type,
+                                    sets: [],
+                                    range_enabled: data.range_enabled,
+                                    min_reps: data.min_reps,
+                                    max_reps: data.max_reps,
+                                    min_duration: data.min_duration,
+                                    max_duration: data.max_duration,
+                                    min_distance: data.min_distance,
+                                    max_distance: data.max_distance,
+                                    rest_duration: exerciseData.rest_duration || data.rest_duration,
+                                    previousSets: data.previousSets || []
+                                };
+                                
+                                // Add to workout data
+                                workoutData.exercises.push(newExercise);
+                                const exerciseIndex = workoutData.exercises.length - 1;
+                                
+                                // Add each set from the routine with proper set types
+                                if (exerciseData.sets && Array.isArray(exerciseData.sets)) {
+                                    exerciseData.sets.forEach(setData => {
+                                        // Preserve the set_type from the routine (important for warmup sets)
+                                        const setType = setData.set_type || 'normal';
+                                        
+                                        // Create a new set based on exercise type
+                                        const newSet = {
+                                            ...generateDefaultSetValues(data.input_type),
+                                            completed: false,
+                                            set_type: setType,  // Ensure we keep warmup, dropset, etc.
+                                            hasPrevious: data.previousSets && data.previousSets.length > 0,
+                                            prevValues: data.previousSets && data.previousSets.length > 0 ? 
+                                                data.previousSets[0] : null
+                                        };
+                                        
+                                        // Copy values from the routine
+                                        if (data.input_type === 'weight_reps') {
+                                            if (setData.weight !== undefined) newSet.weight = setData.weight;
+                                            if (setData.reps !== undefined) newSet.reps = setData.reps;
+                                        } else if (data.input_type === 'bodyweight_reps') {
+                                            if (setData.reps !== undefined) newSet.reps = setData.reps;
+                                        } else if (data.input_type === 'duration') {
+                                            if (setData.duration !== undefined) newSet.duration = setData.duration;
+                                        } else if (data.input_type === 'distance_duration') {
+                                            if (setData.distance !== undefined) newSet.distance = setData.distance;
+                                            if (setData.duration !== undefined) newSet.duration = setData.duration;
+                                        }
+                                        
+                                        // Add the set
+                                        workoutData.exercises[exerciseIndex].sets.push(newSet);
+                                    });
+                                } else {
+                                    // Add default sets if none specified in routine
+                                    for (let i = 0; i < 3; i++) {
+                                        const newSet = {
+                                            ...generateDefaultSetValues(data.input_type),
+                                            completed: false,
+                                            set_type: 'normal',
+                                            hasPrevious: data.previousSets && data.previousSets.length > i,
+                                            prevValues: data.previousSets && data.previousSets.length > i ? 
+                                                data.previousSets[i] : null
+                                        };
+                                        workoutData.exercises[exerciseIndex].sets.push(newSet);
+                                    }
+                                }
+                                
+                                // Apply recommended values if range is enabled 
+                                if (data.range_enabled && data.previousSets && data.previousSets.length > 0) {
+                                    workoutData.exercises[exerciseIndex].sets.forEach((set, setIndex) => {
+                                        // Get recommended values using the shared function
+                                        if (typeof workoutHandlers !== 'undefined' && workoutHandlers.calculateRecommendedValues) {
+                                            const recommendedValues = workoutHandlers.calculateRecommendedValues(data, data.previousSets);
+                                            
+                                            if (recommendedValues) {
+                                                // Save which fields are recommendations
+                                                if (recommendedValues.isRecommended) {
+                                                    set.isRecommended = recommendedValues.isRecommended;
+                                                }
+                                                
+                                                // Apply each recommended value
+                                                Object.keys(recommendedValues).forEach(field => {
+                                                    if (field !== 'isRecommended' && recommendedValues[field] !== null && recommendedValues[field] !== undefined) {
+                                                        set[field] = recommendedValues[field];
+                                                    }
+                                                });
+                                            }
+                                        }
+                                    });
+                                }
+                                
+                                // Update the UI
+                                renderExercises();
+                                
+                                // Sync workout timer in case this is a duration exercise
+                                if (typeof syncWorkoutTimer === 'function') {
+                                    syncWorkoutTimer();
+                                }
+                            })
+                            .catch(error => {
+                                console.error('Error fetching exercise details:', error);
+                            });
+                    }
+                });
+            }
+            
+            // Function to update stats
+            function updateStats(set) {
+                if (!set.completed) return;
+                
+                // Use the shared workoutHandlers methods
+                if (typeof workoutHandlers !== 'undefined' && workoutHandlers.updateStats) {
+                    // Find the exercise for this set
+                    const exercise = workoutData.exercises.find(ex => ex.sets.includes(set));
+                    if (exercise) {
+                        // Update all stats in one call
+                        const stats = workoutHandlers.updateStats(exercise, set, {
+                            totalSets,
+                            totalReps,
+                            totalVolume,
+                            sessionExp
+                        });
+                        
+                        // Update our local variables with the new values
+                        totalSets = stats.totalSets;
+                        totalReps = stats.totalReps;
+                        totalVolume = stats.totalVolume;
+                        sessionExp = stats.sessionExp;
+                        
+                        // Update the UI
+                        document.getElementById('sets-done').textContent = totalSets;
+                        document.getElementById('reps-done').textContent = totalReps;
+                        document.getElementById('workout-volume').textContent = totalVolume;
+                        document.getElementById('session-exp').textContent = sessionExp;
+                    }
+                } else {
+                    // Fallback to original implementation
+                    totalSets++;
+                    document.getElementById('sets-done').textContent = totalSets;
+                    
+                    if (set.reps) {
+                        totalReps += parseInt(set.reps);
+                        document.getElementById('reps-done').textContent = totalReps;
+                        
+                        // Get user weight from data attribute if available
+                        const volumeElement = document.getElementById('workout-volume');
+                        const userWeight = volumeElement && volumeElement.dataset.userWeight ? 
+                            parseFloat(volumeElement.dataset.userWeight) : null;
+                        
+                        if (set.weight) {
+                            // For weight exercises
+                            const setVolume = parseInt(set.weight) * parseInt(set.reps);
+                            totalVolume += setVolume;
+                            document.getElementById('workout-volume').textContent = totalVolume;
+                        }
+                        
+                        // Calculate EXP gain
+                        const setExp = set.weight ? parseInt(set.weight) * parseInt(set.reps) * 0.1 : parseInt(set.reps);
+                        sessionExp += Math.max(1, Math.round(setExp));
+                        document.getElementById('session-exp').textContent = sessionExp;
+                    }
+                }
+            }
+            
+            // Override the markSetComplete function to update stats
+            const originalMarkSetComplete = window.markSetComplete;
+            window.markSetComplete = function(exerciseIndex, setIndex) {
+                // Call original function
+                originalMarkSetComplete(exerciseIndex, setIndex);
+                
+                // Update our stats
+                updateStats(workoutData.exercises[exerciseIndex].sets[setIndex]);
+                
+                // Start rest timer if available
+                const exercise = workoutData.exercises[exerciseIndex];
+                if (exercise && exercise.rest_duration) {
+                    const restTimerContainer = document.getElementById('rest-timer-container');
+                    const restTimer = document.getElementById('rest-timer');
+                    
+                    let duration = exercise.rest_duration;
+                    const minutes = Math.floor(duration / 60);
+                    const seconds = duration % 60;
+                    restTimer.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+                    
+                    restTimerContainer.style.display = 'block';
+                    
+                    // Rest timer functionality is handled by workout-timer.js
+                }
+            };
+            
+            // Set up exercise modal handlers
+            const exerciseModal = document.getElementById('exercise-modal');
+            const addExerciseBtn = document.getElementById('add-exercise-btn');
+            const closeExerciseModal = exerciseModal.querySelector('.close');
+            
+            addExerciseBtn.addEventListener('click', function() {
+                exerciseModal.style.display = 'block';
+            });
+            
+            closeExerciseModal.addEventListener('click', function() {
+                exerciseModal.style.display = 'none';
+            });
+            
+            window.addEventListener('click', function(event) {
+                if (event.target === exerciseModal) {
+                    exerciseModal.style.display = 'none';
+                }
+            });
+            
+            // Complete workout button
+            document.getElementById('complete-workout').addEventListener('click', function() {
+                console.log("Workout completion initiated");
+                
+                // Validate workout has at least one exercise with one completed set
+                const hasCompletedSets = workoutData.exercises.some(exercise => 
+                    exercise.sets && exercise.sets.some(set => set.completed)
+                );
+                
+                if (workoutData.exercises.length === 0) {
+                    alert('Please add at least one exercise to your workout.');
+                    return;
+                }
+                
+                if (!hasCompletedSets) {
+                    alert('Please complete at least one set before finishing your workout.');
+                    return;
+                }
+                
+                // Calculate total volume from all completed sets
+                let totalVolume = 0;
+                workoutData.exercises.forEach(exercise => {
+                    exercise.sets.forEach(set => {
+                        if (set.completed) {
+                            if (set.weight && set.reps) {
+                                totalVolume += set.weight * set.reps;
+                            }
+                        }
+                    });
+                });
+                
+                // Log data before saving
+                console.log("Workout data before saving:", {
+                    exerciseCount: workoutData.exercises.length,
+                    completedSets: workoutData.exercises.reduce((count, ex) => 
+                        count + (ex.sets ? ex.sets.filter(set => set.completed).length : 0), 0),
+                    totalSets: totalSets,
+                    totalReps: totalReps,
+                    totalVolume: totalVolume
+                });
+                
+                // Disable button to prevent multiple submissions
+                this.disabled = true;
+                this.textContent = 'Saving...';
+                
+                // Get form values
+                const title = document.getElementById('workout-title').value.trim();
+                const description = document.getElementById('workout-description').value;
+                const rating = document.getElementById('workout-rating').value;
+                
+                // Use the shared workout handler to save the workout
+                const success = workoutHandlers.saveWorkout(
+                    workoutData,
+                    title,
+                    description,
+                    rating,
+                    routineData.id, // Pass the routine ID
+                    {
+                        volume: totalVolume,
+                        totalSets: totalSets,
+                        totalReps: totalReps
+                    },
+                    function(data) {
+                        // Success callback
+                        window.location.href = '/workout/session/' + data.session_id;
+                    },
+                    function(error) {
+                        // Error callback
+                        alert('Error saving workout: ' + error);
+                        this.disabled = false;
+                        this.textContent = 'Complete Workout';
+                    }
+                );
+                
+                // If validation failed, don't disable the button
+                if (!success) {
+                    this.disabled = false;
+                    this.textContent = 'Complete Workout';
+                }
+            });
+        }
+    });
+</script>
+{% endblock %} 

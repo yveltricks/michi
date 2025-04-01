@@ -4,7 +4,34 @@ import json
 def init_filters(app):
     @app.template_filter('from_json')
     def from_json_filter(value):
-        return json.loads(value) if value else []
+        """Safely convert a JSON string to a Python object.
+        Returns an empty list if conversion fails."""
+        if not value:
+            return []
+        
+        try:
+            if isinstance(value, str):
+                result = json.loads(value)
+                # Ensure the result is iterable for template safety
+                if not isinstance(result, (list, dict)):
+                    print(f"Warning: JSON parsed to non-iterable type: {type(result)}")
+                    return []
+                return result
+            # If it's already an object (dict, list, etc.), return it unchanged
+            elif isinstance(value, (list, dict)):
+                return value
+            # If it's an SQLAlchemy model or another object, try to convert to dict if possible
+            elif hasattr(value, '__iter__') and not isinstance(value, str):
+                # It's an iterable object, return it
+                return value
+            else:
+                # Non-iterable type that can't be used in templates safely
+                print(f"Warning: from_json received non-iterable type: {type(value)}")
+                return []
+        except (json.JSONDecodeError, TypeError) as e:
+            # Log the error for debugging
+            print(f"Error parsing JSON ({type(e).__name__}): {value}")
+            return []
     
     @app.template_filter('format_duration')
     def format_duration_filter(duration):

@@ -3,6 +3,14 @@
 
 {% block title %}Start Workout{% endblock %}
 
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/workout.css') }}">
+<script src="{{ url_for('static', filename='js/workout.js') }}"></script>
+<script src="{{ url_for('static', filename='js/workout-timer.js') }}"></script>
+<script src="{{ url_for('static', filename='js/workout-handlers.js') }}"></script>
+<script src="{{ url_for('static', filename='js/modal-handlers.js') }}"></script>
+{% endblock %}
+
 {% block content %}
 <div class="workout-stats-bar">
     <div class="timer-container" onclick="toggleTimerMenu()">
@@ -53,7 +61,7 @@
         <div class="stats-container volume-container">
             <div class="stats-info">
                 <span class="stats-label">VOLUME</span>
-                <span class="stats-value" id="workout-volume">0</span>
+                <span class="stats-value" id="workout-volume" data-user-weight="{{ user_weight }}">0</span>
             </div>
         </div>
         
@@ -224,35 +232,4 @@
         </div>
     </div>
 </div>
-
-<!-- Add after the existing modals -->
-<div class="modal fade" id="levelUpModal" tabindex="-1" role="dialog" aria-labelledby="levelUpModalLabel" aria-hidden="true">
-    <div class="modal-dialog" role="document">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="levelUpModalLabel">Level Up!</h5>
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                    <span aria-hidden="true">&times;</span>
-                </button>
-            </div>
-            <div class="modal-body text-center">
-                <div class="level-up-animation">
-                    <i class="fas fa-arrow-up fa-3x mb-3" style="color: #6200ea;"></i>
-                </div>
-                <h3>Congratulations!</h3>
-                <p>You've reached <strong>Level <span id="new-level">1</span></strong>!</p>
-                <p>Keep up the good work and continue improving your workouts.</p>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-primary" data-dismiss="modal">Continue</button>
-            </div>
-        </div>
-    </div>
-</div>
-{% endblock %}
-
-{% block scripts %}
-<script src="{{ url_for('static', filename='js/modal-handlers.js') }}"></script>
-<script src="{{ url_for('static', filename='js/workout.js') }}"></script>
-<script src="{{ url_for('static', filename='js/workout-timer.js') }}"></script>
 {% endblock %}

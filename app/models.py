@@ -70,12 +70,38 @@ class User(UserMixin, db.Model):
 
     @property
     def next_level_exp(self):
+        """Calculate the experience needed for the next level"""
+        # Simple linear progression: 100 * next level
         return (self.level + 1) * 100
 
     def update_level(self):
-        self.level = self.exp // 100
-        if self.level == 0:
-            self.level = 1
+        """Update the user's level based on experience points"""
+        try:
+            # Calculate new level based on the current experience points
+            # Simple formula: level = exp / 100 (rounded down to nearest integer)
+            new_level = max(1, self.exp // 100)
+            
+            # Check if level has changed
+            level_changed = new_level != self.level
+            
+            # Update the level if needed
+            if level_changed:
+                self.level = new_level
+            
+            # Return level info
+            return {
+                'leveled_up': level_changed,
+                'new_level': self.level,
+                'next_level_exp': (self.level + 1) * 100
+            }
+        except Exception as e:
+            print(f"Error in update_level: {str(e)}")
+            # Return safe values if there's an error
+            return {
+                'leveled_up': False,
+                'new_level': self.level,
+                'next_level_exp': (self.level + 1) * 100
+            }
 
 class Session(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -98,7 +124,7 @@ class Exercise(db.Model):
     equipment = db.Column(db.String(100))
     muscles_worked = db.Column(db.String(200))
     exercise_type = db.Column(db.String(20))
-    input_type = db.Column(db.String(50), nullable=False)
+    input_type = db.Column(db.String(20), default='weight_reps')  # weight_reps, bodyweight_reps, duration, distance_duration
     user_created = db.Column(db.Boolean, default=False)
     created_by = db.Column(db.Integer, db.ForeignKey('user.id'))
     photo = db.Column(db.String(200))
@@ -255,15 +281,170 @@ class Exercise(db.Model):
             # Keep the same weight
             return last_weight
 
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+            'muscles_worked': self.muscles_worked,
+            'input_type': self.input_type,
+            'range_enabled': self.range_enabled,
+            'range_min': self.min_reps,
+            'range_max': self.max_reps
+        }
+
 class Routine(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     name = db.Column(db.String(100), nullable=False)
-    level = db.Column(db.String(50))
-    goal = db.Column(db.String(100))
-    muscle_groups = db.Column(db.String(200))
-    exercises = db.Column(db.Text)  # Store as JSON string
-    rest_time = db.Column(db.Integer)
+    level = db.Column(db.String(20), default='Beginner')  # Beginner, Intermediate, Advanced
+    goal = db.Column(db.String(20))  # Strength, Hypertrophy, etc.
+    muscle_groups = db.Column(db.String(200))  # Comma-separated list of muscles
+    exercises = db.Column(db.JSON)  # JSON data with exercises and their details
+    is_public = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    description = db.Column(db.Text)
+    
+    # Foreign key to the user who created the routine
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+            'level': self.level,
+            'goal': self.goal,
+            'muscle_groups': self.muscle_groups.split(',') if self.muscle_groups else [],
+            'exercises': self.exercises,
+            'is_public': self.is_public,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'description': self.description,
+            'user_id': self.user_id
+        }
+
+# New Workout models for the routine feature
+class Workout(db.Model):
+    """Model for tracking a workout session"""
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    title = db.Column(db.String(100), nullable=False)
+    notes = db.Column(db.Text, nullable=True)
+    rating = db.Column(db.Integer, default=0)
+    date = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    duration = db.Column(db.Integer, default=0)  # in seconds
+    data = db.Column(db.Text, nullable=True)  # JSON string of workout data
+    routine_id = db.Column(db.Integer, db.ForeignKey('routine.id'), nullable=True)
+    exp_gained = db.Column(db.Integer, default=0)  # Store experience gained
+    volume = db.Column(db.Float, default=0)  # Store total volume
+    total_reps = db.Column(db.Integer, default=0)  # Total reps performed
+    sets_completed = db.Column(db.Integer, default=0)  # Total sets completed
+    
+    # Relationships
+    exercises = db.relationship('WorkoutExercise', backref='workout', cascade='all, delete-orphan', lazy=True)
+    user = db.relationship('User', backref='workouts', lazy=True)
+    
+    def __repr__(self):
+        return f'<Workout {self.title}>'
+
+    def to_dict(self):
+        """Convert workout to dictionary"""
+        return {
+            'id': self.id,
+            'title': self.title,
+            'notes': self.notes,
+            'description': self.notes,  # Alias for compatibility
+            'rating': self.rating,
+            'date': self.date.isoformat() if self.date else None,
+            'duration': self.duration,
+            'data': self.data,
+            'routine_id': self.routine_id,
+            'exercise_count': len(self.exercises),
+            'exercises': [exercise.to_dict() for exercise in self.exercises],
+            'exp_gained': self.exp_gained,
+            'volume': self.volume,
+            'total_reps': self.total_reps,
+            'sets_completed': self.sets_completed
+        }
+        
+    @property
+    def description(self):
+        """Alias for notes field for compatibility"""
+        return self.notes
+        
+    @description.setter
+    def description(self, value):
+        """Setter for notes via description alias"""
+        self.notes = value
+
+class WorkoutExercise(db.Model):
+    """Model for an exercise in a workout"""
+    id = db.Column(db.Integer, primary_key=True)
+    workout_id = db.Column(db.Integer, db.ForeignKey('workout.id'), nullable=False)
+    exercise_id = db.Column(db.Integer, db.ForeignKey('exercise.id'), nullable=False)
+    order = db.Column(db.Integer, default=1)  # Order in the workout
+    notes = db.Column(db.Text, nullable=True)
+    
+    # Relationships
+    exercise = db.relationship('Exercise', lazy=True)
+    sets = db.relationship('WorkoutSet', backref='workout_exercise', cascade='all, delete-orphan', lazy=True)
+
+    def to_dict(self):
+        """Convert workout exercise to dictionary"""
+        return {
+            'id': self.id,
+            'exercise_id': self.exercise_id,
+            'exercise_name': self.exercise.name,
+            'exercise_muscles': self.exercise.muscles_worked,
+            'input_type': self.exercise.input_type,
+            'order': self.order,
+            'notes': self.notes,
+            'sets': [workout_set.to_dict() for workout_set in self.sets]
+        }
+
+class WorkoutSet(db.Model):
+    """Model for a set in a workout exercise"""
+    id = db.Column(db.Integer, primary_key=True)
+    workout_exercise_id = db.Column(db.Integer, db.ForeignKey('workout_exercise.id'), nullable=False)
+    set_number = db.Column(db.Integer, default=1)
+    
+    # Common fields
+    rest_duration = db.Column(db.Integer, nullable=True)  # in seconds
+    completed = db.Column(db.Boolean, default=False)
+    completion_time = db.Column(db.DateTime, nullable=True)
+    
+    # Specific input fields - only some will be used based on exercise input_type
+    weight = db.Column(db.Float, nullable=True)
+    reps = db.Column(db.Integer, nullable=True)
+    duration = db.Column(db.Integer, nullable=True)  # in seconds
+    distance = db.Column(db.Float, nullable=True)  # in meters
+    additional_weight = db.Column(db.Float, nullable=True)  # for weighted bodyweight
+    assistance_weight = db.Column(db.Float, nullable=True)  # for assisted bodyweight
+    
+    def to_dict(self):
+        """Convert workout set to dictionary"""
+        result = {
+            'id': self.id,
+            'set_number': self.set_number,
+            'rest_duration': self.rest_duration,
+            'completed': self.completed,
+            'completion_time': self.completion_time.isoformat() if self.completion_time else None
+        }
+        
+        # Add specific fields based on what's set
+        if self.weight is not None:
+            result['weight'] = self.weight
+        if self.reps is not None:
+            result['reps'] = self.reps
+        if self.duration is not None:
+            result['duration'] = self.duration
+        if self.distance is not None:
+            result['distance'] = self.distance
+        if self.additional_weight is not None:
+            result['additional_weight'] = self.additional_weight
+        if self.assistance_weight is not None:
+            result['assistance_weight'] = self.assistance_weight
+            
+        return result
 
 class Measurement(db.Model):
     id = db.Column(db.Integer, primary_key=True)

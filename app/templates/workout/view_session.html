@@ -15,22 +15,34 @@
                 <span class="username">@{{ session.user.username }}</span>
                 <span class="badge {{ session.user.badge.lower() }}">{{ session.user.badge }}</span>
             </div>
-            <span class="workout-time">{{ session.session_date.strftime('%B %d, %Y') }}</span>
+            <span class="workout-time">
+                {% if session.date %}
+                    {{ session.date.strftime('%B %d, %Y') }}
+                {% elif session.session_date %}
+                    {{ session.session_date.strftime('%B %d, %Y') }}
+                {% endif %}
+            </span>
         </div>
 
         <div class="workout-content">
-            <h4>{{ session.description or 'Workout' }}</h4>
+            <h4>{{ session.title or session.description or session.notes or 'Workout' }}</h4>
             <div class="exercise-summary">
-                {% for exercise in exercises %}
-                <div class="exercise-item">
-                    <span class="exercise-name">{{ exercise.name }}</span>
-                    {% if exercise.weight %}
-                    <span class="exercise-details">{{ exercise.sets }}x{{ exercise.reps }} @ {{ exercise.weight }}kg</span>
-                    {% else %}
-                    <span class="exercise-details">{{ exercise.duration }} mins</span>
-                    {% endif %}
-                </div>
-                {% endfor %}
+                {% if exercises %}
+                    {% for exercise in exercises %}
+                    <div class="exercise-item">
+                        <span class="exercise-name">{{ exercise.name }}</span>
+                        {% if exercise.get('weight') %}
+                            <span class="exercise-details">{{ exercise.sets }}x{{ exercise.reps }} @ {{ exercise.weight }}kg</span>
+                        {% elif exercise.get('duration') %}
+                            <span class="exercise-details">{{ exercise.sets }} sets, {{ exercise.duration }} mins</span>
+                        {% else %}
+                            <span class="exercise-details">{{ exercise.sets }} sets</span>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="no-data">No exercise data available</div>
+                {% endif %}
             </div>
         </div>
 
@@ -43,7 +55,11 @@
         <div class="workout-stats">
             <div class="stat">
                 <i class="fas fa-stopwatch"></i>
-                {{ session.duration }}
+                {% if session.duration is number %}
+                    {{ (session.duration // 60)|int }} mins
+                {% else %}
+                    {{ session.duration }}
+                {% endif %}
             </div>
             <div class="stat">
                 <i class="fas fa-dumbbell"></i>
@@ -51,9 +67,173 @@
             </div>
             <div class="stat">
                 <i class="fas fa-star"></i>
-                {{ session.session_rating }}/5
+                {% if session.rating %}
+                    {{ session.rating }}/5
+                {% elif session.session_rating %}
+                    {{ session.session_rating }}/5
+                {% else %}
+                    3/5
+                {% endif %}
             </div>
+            {% if session.exp_gained %}
+            <div class="stat">
+                <i class="fas fa-award"></i>
+                {{ session.exp_gained }} XP
+            </div>
+            {% endif %}
         </div>
     </div>
+    
+    <div class="action-buttons">
+        <a href="{{ url_for('workout.workout_page') }}" class="btn btn-primary">Back to Workouts</a>
+    </div>
 </div>
+
+<style>
+    .workout-container {
+        max-width: 800px;
+        margin: 2rem auto;
+        padding: 0 1rem;
+    }
+    
+    .workout-card {
+        background-color: #fff;
+        border-radius: 8px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        overflow: hidden;
+        margin-bottom: 2rem;
+    }
+    
+    .workout-header {
+        display: flex;
+        align-items: center;
+        padding: 1rem;
+        background-color: #f8f9fa;
+        border-bottom: 1px solid #eee;
+    }
+    
+    .profile-pic {
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        object-fit: cover;
+        margin-right: 1rem;
+    }
+    
+    .workout-info {
+        flex: 1;
+    }
+    
+    .workout-info h3 {
+        margin: 0;
+    }
+    
+    .username {
+        color: #6c757d;
+        font-size: 0.9rem;
+    }
+    
+    .badge {
+        display: inline-block;
+        padding: 0.25rem 0.5rem;
+        font-size: 0.8rem;
+        border-radius: 4px;
+        margin-left: 0.5rem;
+    }
+    
+    .badge.beginner {
+        background-color: #28a745;
+        color: white;
+    }
+    
+    .badge.intermediate {
+        background-color: #007bff;
+        color: white;
+    }
+    
+    .badge.expert {
+        background-color: #dc3545;
+        color: white;
+    }
+    
+    .workout-time {
+        font-size: 0.9rem;
+        color: #6c757d;
+    }
+    
+    .workout-content {
+        padding: 1.5rem;
+    }
+    
+    .workout-content h4 {
+        margin-top: 0;
+    }
+    
+    .exercise-summary {
+        margin-top: 1rem;
+    }
+    
+    .exercise-item {
+        display: flex;
+        justify-content: space-between;
+        padding: 0.5rem 0;
+        border-bottom: 1px solid #eee;
+    }
+    
+    .exercise-name {
+        font-weight: 500;
+    }
+    
+    .exercise-details {
+        color: #6c757d;
+    }
+    
+    .workout-photo img {
+        width: 100%;
+        height: auto;
+    }
+    
+    .workout-stats {
+        display: flex;
+        justify-content: space-around;
+        padding: 1rem;
+        background-color: #f8f9fa;
+        border-top: 1px solid #eee;
+    }
+    
+    .stat {
+        text-align: center;
+    }
+    
+    .stat i {
+        display: block;
+        font-size: 1.5rem;
+        margin-bottom: 0.5rem;
+        color: #007bff;
+    }
+    
+    .no-data {
+        text-align: center;
+        color: #6c757d;
+        padding: 1rem 0;
+    }
+    
+    .action-buttons {
+        text-align: center;
+        margin-bottom: 2rem;
+    }
+    
+    .btn {
+        display: inline-block;
+        padding: 0.5rem 1rem;
+        border-radius: 4px;
+        text-decoration: none;
+        font-weight: 500;
+    }
+    
+    .btn-primary {
+        background-color: #007bff;
+        color: white;
+    }
+</style>
 {% endblock %}
