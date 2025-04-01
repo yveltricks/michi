@@ -188,12 +188,19 @@
                     <textarea id="routine-description" class="form-control" rows="3" placeholder="Describe your routine...">{% if routine %}{{ routine.description }}{% endif %}</textarea>
                 </div>
 
-                <div class="form-group flex items-center">
-                    <label class="toggle-switch mr-3">
-                        <input type="checkbox" id="routine-public" {% if routine and routine.is_public %}checked{% endif %}>
-                        <span class="toggle-slider"></span>
-                    </label>
-                    <span>Share Publicly</span>
+                <div class="form-group sharing-options mb-4 p-3 border rounded bg-light">
+                    <h4 class="mb-2">Sharing Options</h4>
+                    <div class="flex items-center">
+                        <label class="toggle-switch mr-3">
+                            <input type="checkbox" id="routine-public" {% if routine and routine.is_public %}checked{% endif %}>
+                            <span class="toggle-slider"></span>
+                        </label>
+                        <span class="font-weight-bold">Share Publicly</span>
+                    </div>
+                    <small class="text-muted mt-2 d-block">
+                        When enabled, your routine will appear in the "Explore Routines" section for other users to view and copy.
+                        Share your workout expertise with the community!
+                    </small>
                 </div>
             </div>
         </div>
@@ -312,6 +319,21 @@
             </div>
         </div>
         
+        <!-- Sharing Options -->
+        <div class="section mb-4">
+            <h3>Sharing Options</h3>
+            <div class="alert alert-info">
+                <div class="custom-control custom-checkbox">
+                    <input type="checkbox" class="custom-control-input" id="isPublic" {% if is_edit and routine.is_public %}checked{% endif %}>
+                    <label class="custom-control-label font-weight-bold" for="isPublic">Share this routine publicly</label>
+                </div>
+                <small class="form-text mt-2">
+                    When you share your routine publicly, it will appear in the "Explore Routines" section where other users can view and copy it to their own library.
+                    Share your workout expertise with the community!
+                </small>
+            </div>
+        </div>
+        
         <!-- Save Routine Button -->
         <button id="save-routine" class="save-routine-btn">
             {% if is_edit %}Update{% else %}Save{% endif %} Routine
@@ -338,6 +360,8 @@
             console.log('Loading existing routine data for editing');
             try {
                 const routineExercises = JSON.parse('{{ routine.exercises|safe }}');
+                
+                // Set initial form values - already set from HTML attributes
                 
                 if (Array.isArray(routineExercises)) {
                     console.log('Found', routineExercises.length, 'exercises to load');
@@ -499,13 +523,13 @@
                 };
             });
             
-            // Create routine data
+            // Create routine data object
             const routineData = {
                 name: name,
                 level: document.getElementById('routine-level').value,
                 goal: document.getElementById('routine-goal').value,
                 muscle_groups: muscleGroups,
-                description: document.getElementById('routine-description').value,
+                description: document.getElementById('routine-description').value.trim(),
                 is_public: document.getElementById('routine-public').checked,
                 exercises: formattedExercises
             };

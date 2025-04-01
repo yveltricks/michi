@@ -1,0 +1,220 @@
+{% extends "base.html" %}
+
+{% block title %}{{ routine.name }} | Shared Routine{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <h2>{{ routine.name }}</h2>
+            <p>
+                <span class="badge badge-primary">{{ routine.level }}</span>
+                <span class="badge badge-secondary">{{ routine.goal }}</span>
+                {% if routine.muscle_groups %}
+                    {% for muscle in routine.muscle_groups.split(',') %}
+                        <span class="badge badge-info">{{ muscle }}</span>
+                    {% endfor %}
+                {% endif %}
+            </p>
+            <p class="text-muted">Shared by {{ creator_name }}</p>
+            {% if routine.description %}
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <h5 class="card-title">Description</h5>
+                        <p class="card-text">{{ routine.description }}</p>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+        <div class="col-md-4 text-right">
+            <button id="copy-routine-btn" class="btn btn-success" data-id="{{ routine.id }}">
+                <i class="fas fa-copy"></i> Add to My Routines
+            </button>
+            <a href="{{ url_for('workout.explore_routines') }}" class="btn btn-outline-secondary mt-2">
+                <i class="fas fa-arrow-left"></i> Back to Explore
+            </a>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <h4>Exercises</h4>
+        </div>
+        <div class="card-body p-0">
+            {% if exercises|length > 0 %}
+                <div class="table-responsive">
+                    <table class="table table-striped mb-0">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Exercise</th>
+                                <th>Muscles</th>
+                                <th>Sets</th>
+                                <th>Details</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for exercise in exercises %}
+                                <tr>
+                                    <td>{{ loop.index }}</td>
+                                    <td>{{ exercise.name }}</td>
+                                    <td>{{ exercise.muscles_worked }}</td>
+                                    <td>{{ exercise.sets|length }}</td>
+                                    <td>
+                                        <button class="btn btn-sm btn-outline-primary view-sets-btn" 
+                                                data-toggle="collapse" 
+                                                data-target="#exercise-sets-{{ loop.index }}">
+                                            View Sets
+                                        </button>
+                                    </td>
+                                </tr>
+                                <tr class="collapse" id="exercise-sets-{{ loop.index }}">
+                                    <td colspan="5" class="p-0">
+                                        <div class="p-3 bg-light">
+                                            <h6>Sets</h6>
+                                            <table class="table table-sm">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Set</th>
+                                                        {% if exercise.input_type == 'weight_reps' %}
+                                                            <th>Weight (kg)</th>
+                                                            <th>Reps</th>
+                                                        {% elif exercise.input_type == 'bodyweight_reps' %}
+                                                            <th>Reps</th>
+                                                        {% elif exercise.input_type == 'weighted_bodyweight' %}
+                                                            <th>Added Weight (kg)</th>
+                                                            <th>Reps</th>
+                                                        {% elif exercise.input_type == 'assisted_bodyweight' %}
+                                                            <th>Assistance (kg)</th>
+                                                            <th>Reps</th>
+                                                        {% elif exercise.input_type == 'duration' %}
+                                                            <th>Duration</th>
+                                                        {% elif exercise.input_type == 'duration_weight' %}
+                                                            <th>Weight (kg)</th>
+                                                            <th>Duration</th>
+                                                        {% elif exercise.input_type == 'distance_duration' %}
+                                                            <th>Distance (km)</th>
+                                                            <th>Duration</th>
+                                                        {% elif exercise.input_type == 'weight_distance' %}
+                                                            <th>Weight (kg)</th>
+                                                            <th>Distance (km)</th>
+                                                        {% endif %}
+                                                        <th>Type</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {% for set in exercise.sets %}
+                                                        <tr>
+                                                            <td>{{ loop.index }}</td>
+                                                            {% if exercise.input_type == 'weight_reps' %}
+                                                                <td>{{ set.weight }}</td>
+                                                                <td>{{ set.reps }}</td>
+                                                            {% elif exercise.input_type == 'bodyweight_reps' %}
+                                                                <td>{{ set.reps }}</td>
+                                                            {% elif exercise.input_type == 'weighted_bodyweight' %}
+                                                                <td>{{ set.additional_weight }}</td>
+                                                                <td>{{ set.reps }}</td>
+                                                            {% elif exercise.input_type == 'assisted_bodyweight' %}
+                                                                <td>{{ set.assistance_weight }}</td>
+                                                                <td>{{ set.reps }}</td>
+                                                            {% elif exercise.input_type == 'duration' %}
+                                                                <td>{{ set.time|format_duration }}</td>
+                                                            {% elif exercise.input_type == 'duration_weight' %}
+                                                                <td>{{ set.weight }}</td>
+                                                                <td>{{ set.time|format_duration }}</td>
+                                                            {% elif exercise.input_type == 'distance_duration' %}
+                                                                <td>{{ set.distance }}</td>
+                                                                <td>{{ set.time|format_duration }}</td>
+                                                            {% elif exercise.input_type == 'weight_distance' %}
+                                                                <td>{{ set.weight }}</td>
+                                                                <td>{{ set.distance }}</td>
+                                                            {% endif %}
+                                                            <td>{{ set.set_type|default('Normal') }}</td>
+                                                        </tr>
+                                                    {% endfor %}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="alert alert-info m-3">
+                    This routine doesn't have any exercises yet.
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div class="toast-container position-fixed bottom-0 right-0 p-3" style="z-index: 5; right: 0; bottom: 0;"></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    $(document).ready(function() {
+        // Handle routine copy
+        $('#copy-routine-btn').click(function() {
+            const routineId = $(this).data('id');
+            const button = $(this);
+            
+            button.prop('disabled', true)
+                .html('<i class="fas fa-spinner fa-spin"></i> Adding...');
+            
+            fetch(`/api/routines/explore/${routineId}/copy`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    button.removeClass('btn-success').addClass('btn-secondary')
+                        .html('<i class="fas fa-check"></i> Added to Your Routines');
+                    showToast('Success', 'Routine added to your library');
+                } else {
+                    button.prop('disabled', false)
+                        .html('<i class="fas fa-copy"></i> Add to My Routines');
+                    showToast('Error', data.error || 'Failed to copy routine');
+                }
+            })
+            .catch(error => {
+                console.error('Error copying routine:', error);
+                button.prop('disabled', false)
+                    .html('<i class="fas fa-copy"></i> Add to My Routines');
+                showToast('Error', 'An error occurred while copying the routine');
+            });
+        });
+        
+        // Show toast message
+        function showToast(title, message) {
+            const toast = $(`
+                <div class="toast" role="alert" aria-live="assertive" aria-atomic="true" data-delay="5000">
+                    <div class="toast-header">
+                        <strong class="mr-auto">${title}</strong>
+                        <button type="button" class="ml-2 mb-1 close" data-dismiss="toast" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <div class="toast-body">
+                        ${message}
+                    </div>
+                </div>
+            `);
+            
+            $('.toast-container').append(toast);
+            toast.toast('show');
+            
+            // Remove toast after it's hidden
+            toast.on('hidden.bs.toast', function() {
+                $(this).remove();
+            });
+        }
+    });
+</script>
+{% endblock %} 

@@ -242,5 +242,10 @@
             document.getElementById('from-value').value = result.toFixed(2);
         }
     </script>
+
+    <!-- Add this at the end of the body but before scripts -->
+    {% if not toast_container_exists %}
+    <div class="toast-container position-fixed bottom-0 right-0 p-3" style="z-index: 1050; right: 0; bottom: 0;"></div>
+    {% endif %}
 </body>
 </html>

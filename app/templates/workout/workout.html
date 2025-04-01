@@ -10,11 +10,22 @@
     <h1 class="text-2xl font-bold mb-2 mt-4">Workouts & Routines</h1>
     <p class="mb-6 text-gray-700">Track your fitness progress and create workout routines.</p>
     
-    <a href="{{ url_for('workout.start_workout') }}" class="start-workout-btn block w-full py-4 bg-red-600 text-white text-center font-semibold rounded-md mb-6 hover:bg-red-700 transition">
-        Start Empty Workout
-    </a>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+        <a href="{{ url_for('workout.start_workout') }}" class="start-workout-btn block py-4 bg-red-600 text-white text-center font-semibold rounded-md hover:bg-red-700 transition">
+            <i class="fas fa-play"></i> Start Empty Workout
+        </a>
+        <a href="{{ url_for('workout.explore_routines') }}" class="block py-4 bg-blue-600 text-white text-center font-semibold rounded-md hover:bg-blue-700 transition">
+            <i class="fas fa-search"></i> Explore Routines
+        </a>
+    </div>
     
-    <h2 class="text-xl font-bold mt-8 mb-4">Your Routines ({{ routines|length }})</h2>
+    <div class="flex justify-between items-center mb-4">
+        <h2 class="text-xl font-bold">Your Routines ({{ routines|length }})</h2>
+        <a href="{{ url_for('workout.create_routine') }}" class="create-routine-btn">
+            <i class="fas fa-plus"></i> Create New Routine
+        </a>
+    </div>
+    
     <p class="mb-4 text-sm text-gray-600">To edit or delete a routine, click the menu button <i class="fas fa-ellipsis-v"></i> in the top-right corner of each routine card.</p>
     
     <div class="routines-grid">
@@ -23,7 +34,7 @@
             <div class="routine-header">
                 <h3 class="routine-title">{{ routine.name }}</h3>
                 <div class="routine-dropdown">
-                    <button class="routine-dropdown-toggle highlight-button" onclick="toggleDropdown(event, {{ routine.id }})">
+                    <button class="routine-dropdown-toggle highlight-button" onclick="toggleDropdown(event, '{{ routine.id }}')">
                         <i class="fas fa-ellipsis-v"></i>
                     </button>
                     <div class="routine-dropdown-menu" id="dropdown-{{ routine.id }}">
@@ -33,7 +44,7 @@
                         <a href="{{ url_for('workout.edit_routine', routine_id=routine.id) }}" class="dropdown-item">
                             <i class="fas fa-edit"></i> Edit
                         </a>
-                        <a href="#" class="dropdown-item text-danger" onclick="deleteRoutine(event, {{ routine.id }})">
+                        <a href="#" class="dropdown-item text-danger" onclick="deleteRoutine(event, '{{ routine.id }}')">
                             <i class="fas fa-trash"></i> Delete
                         </a>
                     </div>
@@ -78,15 +89,10 @@
         {% endfor %}
     </div>
     
-    <a href="{{ url_for('workout.create_routine') }}" class="create-routine-btn">
-        <i class="fas fa-plus"></i> Create New Routine
-    </a>
-    
-    <h2 class="text-xl font-bold mt-10 mb-4">Explore Public Routines</h2>
-    
-    <div id="public-routines-container" class="routines-grid">
+    <h2 class="text-xl font-bold mt-10 mb-4">Workout History</h2>
+    <div id="workout-history-container" class="routines-grid">
         <div class="skeleton-loader">
-            Loading public routines...
+            Loading workout history...
         </div>
     </div>
 </div>
@@ -177,92 +183,27 @@
     
     // Load public routines
     window.addEventListener('DOMContentLoaded', function() {
-        fetch('/workout/api/public-routines')
+        fetch('/api/routines/explore')
         .then(response => response.json())
         .then(data => {
             const container = document.getElementById('public-routines-container');
-            container.innerHTML = '';
-            
-            if (data.routines && data.routines.length > 0) {
-                data.routines.forEach(routine => {
-                    // Simple estimate of exercise count from string length
-                    let exerciseCount = 0;
-                    if (routine.exercises) {
-                        try {
-                            // Try to parse the JSON if possible
-                            const exercisesData = JSON.parse(routine.exercises);
-                            exerciseCount = Array.isArray(exercisesData) ? exercisesData.length : 0;
-                        } catch (e) {
-                            // If parsing fails, make a rough estimate based on string length
-                            exerciseCount = Math.floor((routine.exercises.length / 10));
-                        }
-                    }
-                    
-                    const routineCard = document.createElement('div');
-                    routineCard.className = 'routine-card';
-                    
-                    let muscleGroupsHTML = '';
-                    if (routine.muscle_groups) {
-                        const muscleGroups = routine.muscle_groups.split(',');
-                        muscleGroups.forEach(muscle => {
-                            muscleGroupsHTML += `<span class="badge badge-accent">${muscle}</span>`;
-                        });
-                    }
-                    
-                    routineCard.innerHTML = `
-                        <div class="routine-header">
-                            <h3 class="routine-title">${routine.name}</h3>
-                            <span class="routine-author">by ${routine.creator_username}</span>
-                        </div>
-                        
-                        <div class="routine-details">
-                            <div class="routine-badges">
-                                <span class="badge badge-primary">${routine.level}</span>
-                                <span class="badge badge-secondary">${routine.goal}</span>
-                            </div>
-                            
-                            <div class="routine-muscle-groups">
-                                ${muscleGroupsHTML}
-                            </div>
-                            
-                            <span class="exercise-count">${exerciseCount} exercises</span>
-                        </div>
-                        
-                        <div class="routine-actions">
-                            <a href="/workout/view-routine/${routine.id}" class="view-routine-btn">
-                                <i class="fas fa-eye"></i> View Routine
-                            </a>
-                        </div>
-                    `;
-                    
-                    container.appendChild(routineCard);
-                });
-            } else {
-                container.innerHTML = `
-                    <div class="empty-state">
-                        <p>No public routines available.</p>
-                    </div>
-                `;
+            if (container) {
+                container.innerHTML = '';
+                // Process public routines if needed
             }
         })
         .catch(error => {
             console.error('Error fetching public routines:', error);
-            const container = document.getElementById('public-routines-container');
-            container.innerHTML = `
-                <div class="empty-state">
-                    <p>Error loading public routines.</p>
-                </div>
-            `;
         });
-    });
-    
-    // Close dropdowns when clicking outside
-    document.addEventListener('click', function(event) {
-        if (!event.target.closest('.routine-dropdown')) {
-            document.querySelectorAll('.routine-dropdown-menu').forEach(menu => {
-                menu.classList.remove('show');
-            });
-        }
+        
+        // Close dropdowns when clicking outside
+        document.addEventListener('click', function(event) {
+            if (!event.target.closest('.routine-dropdown')) {
+                document.querySelectorAll('.routine-dropdown-menu').forEach(menu => {
+                    menu.classList.remove('show');
+                });
+            }
+        });
     });
 </script>
 {% endblock %}

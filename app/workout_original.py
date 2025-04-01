@@ -5,11 +5,6 @@ from . import db
 import json
 from datetime import datetime, timedelta, time
 
-# Constants for workout options
-WORKOUT_LEVELS = ['Beginner', 'Intermediate', 'Advanced']
-WORKOUT_GOALS = ['Strength', 'Hypertrophy', 'Endurance', 'Weight Loss', 'General Fitness']
-MUSCLE_GROUPS = ['Chest', 'Back', 'Shoulders', 'Arms', 'Core', 'Legs', 'Full Body']
-
 workout = Blueprint('workout', __name__)
 
 @workout.route('/start-workout')
@@ -1068,12 +1063,15 @@ def update_routine_api(routine_id):
     routine.exercises = json.dumps(data.get('exercises', []))
     routine.updated_at = datetime.now()
     
-    # If the routine is now public, we need to create or update the shared version
+    db.session.commit()
+    
+    # If the routine became public or was toggled (public -> private -> public),
+    # create or update the shared version
     if is_public_now:
         # Check if there's already a shared version
         shared_routine = SharedRoutine.query.filter_by(original_id=routine.id).first()
         
-        print(f"Checking shared routine for routine {routine.id}: exists={shared_routine is not None}")
+        print(f"Existing shared routine found: {shared_routine is not None}")
         
         if shared_routine:
             # Update the existing shared version
@@ -1084,6 +1082,7 @@ def update_routine_api(routine_id):
             shared_routine.muscle_groups = routine.muscle_groups
             shared_routine.description = routine.description
             shared_routine.exercises = routine.exercises
+            shared_routine.created_at = datetime.now()
             db.session.commit()
             print(f"Shared routine updated successfully")
         else:
@@ -1098,18 +1097,15 @@ def update_routine_api(routine_id):
                 description=routine.description,
                 exercises=routine.exercises,
                 user_id=routine.user_id,
-                created_at=datetime.now(),
-                copy_count=0
+                created_at=datetime.now()
             )
             db.session.add(shared_routine)
             db.session.commit()
             print(f"New shared routine created with ID {shared_routine.id}")
-    elif not is_public_now and was_public:
+    else:
         # If the routine is no longer public, we might want to keep the shared version
-        # but update it to reflect the latest state before it was made private
-        shared_routine = SharedRoutine.query.filter_by(original_id=routine.id).first()
-        if shared_routine:
-            print(f"Routine is now private but keeping shared version {shared_routine.id}")
+        # for historical purposes, so we don't delete it here
+        print(f"Routine is not public, keeping any existing shared version for reference")
     
     return jsonify({'success': True, 'routine_id': routine.id})
 
@@ -1954,6 +1950,14 @@ def debug_explore_page():
     """Debug page for viewing shared routines data"""
     return render_template('workout/debug_explore.html')
 
+@workout.route('/explore')
+@login_required
+def explore_routines():
+    """Render the explore routines page"""
+    return render_template('workout/explore_routines.html',
+                         levels=WORKOUT_LEVELS,
+                         goals=WORKOUT_GOALS,
+                         muscle_groups=MUSCLE_GROUPS)
 
 @workout.route('/api/routines/explore', methods=['GET'])
 @login_required
@@ -1967,15 +1971,15 @@ def explore_routines_api():
     goal = request.args.get('goal')
     muscle_group = request.args.get('muscle_group')
     
-    # Build query - get from SharedRoutine table
+    # Build query
     query = SharedRoutine.query
     
     # Apply filters
-    if level and level != 'Any':
+    if level:
         query = query.filter(SharedRoutine.level == level)
-    if goal and goal != 'Any':
+    if goal:
         query = query.filter(SharedRoutine.goal == goal)
-    if muscle_group and muscle_group != 'Any':
+    if muscle_group:
         query = query.filter(SharedRoutine.muscle_groups.like(f'%{muscle_group}%'))
     
     # Get paginated results
@@ -2001,7 +2005,7 @@ def explore_routines_api():
             'goal': routine.goal,
             'muscle_groups': routine.muscle_groups.split(',') if routine.muscle_groups else [],
             'description': routine.description,
-            'exercises': exercises,
+            'exercises': routine.exercises,
             'exercise_count': exercise_count,
             'copy_count': routine.copy_count or 0,
             'creator': {
@@ -2017,38 +2021,3 @@ def explore_routines_api():
         'pages': pagination.pages,
         'current_page': page
     })
-
-@workout.route('/explore/routines/<int:shared_id>')
-@login_required
-def view_shared_routine(shared_id):
-    """View a specific shared routine"""
-    shared_routine = SharedRoutine.query.get_or_404(shared_id)
-    
-    # Get the creator's username
-    creator = User.query.get(shared_routine.user_id)
-    creator_name = creator.username if creator else "Unknown"
-    
-    # Parse routine exercises
-    exercises = []
-    if shared_routine.exercises:
-        try:
-            routine_exercises = json.loads(shared_routine.exercises)
-            for exercise_data in routine_exercises:
-                exercise_id = exercise_data.get('id')
-                if exercise_id:
-                    exercise = Exercise.query.get(exercise_id)
-                    if exercise:
-                        exercises.append({
-                            'id': exercise.id,
-                            'name': exercise.name,
-                            'muscles_worked': exercise.muscles_worked,
-                            'input_type': exercise.input_type,
-                            'sets': exercise_data.get('sets', [])
-                        })
-        except Exception as e:
-            print(f"Error parsing shared routine exercises: {str(e)}")
-    
-    return render_template('workout/view_shared_routine.html', 
-                          routine=shared_routine,
-                          creator_name=creator_name,
-                          exercises=exercises)

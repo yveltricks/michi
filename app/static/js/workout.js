@@ -1035,9 +1035,9 @@ let workoutData = {
   function syncWorkoutTimer() {
     // We no longer automatically sync the timer with exercise durations
     // This function is now only used when completing the workout
-    return;
-  }
-
+        return;
+    }
+  
   // Function to calculate recommended values based on previous performance
   function calculateRecommendedValues(exerciseData, previousSets) {
     // Use the shared function if available

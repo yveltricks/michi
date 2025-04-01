@@ -1,0 +1,337 @@
+{% extends "base.html" %}
+
+{% block title %}Explore Routines{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1>Explore Routines</h1>
+    <p class="lead">Discover and copy workout routines shared by the community</p>
+    
+    <!-- Filter Section -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <h5 class="card-title">Filters</h5>
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="form-group">
+                        <label for="level-filter">Level</label>
+                        <select class="form-control" id="level-filter">
+                            <option value="">All Levels</option>
+                            {% for level in levels %}
+                            <option value="{{ level }}">{{ level }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="form-group">
+                        <label for="goal-filter">Goal</label>
+                        <select class="form-control" id="goal-filter">
+                            <option value="">All Goals</option>
+                            {% for goal in goals %}
+                            <option value="{{ goal }}">{{ goal }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="form-group">
+                        <label for="muscle-filter">Muscle Group</label>
+                        <select class="form-control" id="muscle-filter">
+                            <option value="">All Muscle Groups</option>
+                            {% for muscle in muscle_groups %}
+                            <option value="{{ muscle }}">{{ muscle }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <button id="apply-filters" class="btn btn-primary mt-2">Apply Filters</button>
+            <button id="reset-filters" class="btn btn-secondary mt-2 ml-2">Reset</button>
+        </div>
+    </div>
+
+    <!-- Loading Indicator -->
+    <div id="loading" class="text-center d-none">
+        <div class="spinner-border text-primary" role="status">
+            <span class="sr-only">Loading...</span>
+        </div>
+    </div>
+
+    <!-- Routines Grid -->
+    <div id="routines-grid" class="row">
+        <!-- Routines will be loaded here -->
+    </div>
+
+    <!-- Pagination -->
+    <nav aria-label="Page navigation" class="mt-4">
+        <ul class="pagination justify-content-center" id="pagination">
+            <!-- Pagination will be loaded here -->
+        </ul>
+    </nav>
+</div>
+
+<!-- Routine Card Template -->
+<template id="routine-card-template">
+    <div class="col-md-4 mb-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <h5 class="card-title">{name}</h5>
+                <p class="card-text">{description}</p>
+                <div class="mb-2">
+                    <span class="badge badge-primary">{level}</span>
+                    <span class="badge badge-info">{goal}</span>
+                </div>
+                <div class="mb-2 creator-info">
+                    <small class="text-muted">Created by {creator}</small>
+                </div>
+                <div class="mb-2 exercise-info">
+                    <small class="text-muted">{exercise_count} exercises • {copy_count} copies</small>
+                </div>
+                <div class="d-flex justify-content-between align-items-center">
+                    <a href="/workout/explore/routines/{id}" class="btn btn-outline-primary">View Details</a>
+                    <button class="btn btn-primary copy-routine" data-id="{id}">Copy</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</template>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentPage = 1;
+let currentFilters = {
+    level: '',
+    goal: '',
+    muscle_group: ''
+};
+
+function loadRoutines(page = 1) {
+    const loading = document.getElementById('loading');
+    const routinesGrid = document.getElementById('routines-grid');
+    loading.classList.remove('d-none');
+    routinesGrid.innerHTML = '';
+
+    // Build query parameters
+    const queryParams = new URLSearchParams({
+        page: page,
+        per_page: 9,
+        ...currentFilters
+    });
+
+    // Log the request URL for debugging
+    const requestUrl = `/workout/api/routines/explore?${queryParams}`;
+    console.log('Fetching routines from:', requestUrl);
+
+    // Fetch routines
+    fetch(requestUrl)
+        .then(response => {
+            console.log('Response status:', response.status);
+            if (!response.ok) {
+                throw new Error(`HTTP error! Status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('API response:', data);
+            if (data.success) {
+                // Display routines
+                if (!data.routines || data.routines.length === 0) {
+                    routinesGrid.innerHTML = '<div class="col-12 text-center"><p class="text-info">No routines found matching your filters. Make sure you have shared some routines as public.</p></div>';
+                    return;
+                }
+                
+                const template = document.getElementById('routine-card-template');
+                data.routines.forEach(routine => {
+                    try {
+                        const card = template.content.cloneNode(true);
+                        
+                        // Replace placeholders with safe text replacement
+                        const elements = {
+                            '.card-title': routine.name || 'Untitled Routine',
+                            '.card-text': routine.description || 'No description available',
+                            '.badge-primary': routine.level || 'Unknown',
+                            '.badge-info': routine.goal || 'General',
+                            '.creator-info .text-muted': `Created by ${routine.creator ? routine.creator.username : 'Unknown'}`,
+                            '.exercise-info .text-muted': `${routine.exercise_count || 0} exercises • ${routine.copy_count || 0} copies`
+                        };
+                        
+                        // Set text content safely
+                        Object.entries(elements).forEach(([selector, text]) => {
+                            const element = card.querySelector(selector);
+                            if (element) {
+                                element.textContent = text;
+                            }
+                        });
+                        
+                        // Set up view link
+                        const viewLink = card.querySelector('.btn-outline-primary');
+                        if (viewLink) {
+                            viewLink.href = `/workout/explore/routines/${routine.id}`;
+                        }
+                        
+                        // Set up copy button
+                        const copyBtn = card.querySelector('.copy-routine');
+                        if (copyBtn) {
+                            copyBtn.dataset.id = routine.id;
+                            copyBtn.addEventListener('click', () => copyRoutine(routine.id));
+                        }
+                        
+                        routinesGrid.appendChild(card);
+                    } catch (error) {
+                        console.error('Error creating routine card:', error, routine);
+                    }
+                });
+
+                // Update pagination
+                updatePagination(data.current_page, data.pages);
+            } else {
+                routinesGrid.innerHTML = `<div class="col-12 text-center"><p class="text-danger">Error: ${data.error || 'Unknown error'}</p></div>`;
+            }
+        })
+        .catch(error => {
+            console.error('Error loading routines:', error);
+            routinesGrid.innerHTML = `<div class="col-12 text-center"><p class="text-danger">Error loading routines: ${error.message}</p></div>`;
+        })
+        .finally(() => {
+            loading.classList.add('d-none');
+        });
+}
+
+function updatePagination(currentPage, totalPages) {
+    const pagination = document.getElementById('pagination');
+    pagination.innerHTML = '';
+
+    // Previous button
+    const prevLi = document.createElement('li');
+    prevLi.className = `page-item ${currentPage === 1 ? 'disabled' : ''}`;
+    prevLi.innerHTML = `
+        <a class="page-link" href="#" data-page="${currentPage - 1}">Previous</a>
+    `;
+    pagination.appendChild(prevLi);
+
+    // Page numbers
+    for (let i = 1; i <= totalPages; i++) {
+        const li = document.createElement('li');
+        li.className = `page-item ${i === currentPage ? 'active' : ''}`;
+        li.innerHTML = `
+            <a class="page-link" href="#" data-page="${i}">${i}</a>
+        `;
+        pagination.appendChild(li);
+    }
+
+    // Next button
+    const nextLi = document.createElement('li');
+    nextLi.className = `page-item ${currentPage === totalPages ? 'disabled' : ''}`;
+    nextLi.innerHTML = `
+        <a class="page-link" href="#" data-page="${currentPage + 1}">Next</a>
+    `;
+    pagination.appendChild(nextLi);
+
+    // Add click handlers
+    pagination.querySelectorAll('.page-link').forEach(link => {
+        link.addEventListener('click', (e) => {
+            e.preventDefault();
+            const page = parseInt(e.target.dataset.page);
+            if (page && page !== currentPage) {
+                loadRoutines(page);
+            }
+        });
+    });
+}
+
+function copyRoutine(routineId) {
+    fetch(`/workout/api/routines/explore/${routineId}/copy`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Show success message
+            const toast = document.createElement('div');
+            toast.className = 'toast position-fixed bottom-0 end-0 m-3';
+            toast.setAttribute('role', 'alert');
+            toast.setAttribute('aria-live', 'assertive');
+            toast.setAttribute('aria-atomic', 'true');
+            toast.innerHTML = `
+                <div class="toast-header">
+                    <strong class="me-auto">Success</strong>
+                    <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+                </div>
+                <div class="toast-body">
+                    Routine copied successfully!
+                </div>
+            `;
+            document.body.appendChild(toast);
+            const bsToast = new bootstrap.Toast(toast);
+            bsToast.show();
+            
+            // Remove toast after it's hidden
+            toast.addEventListener('hidden.bs.toast', () => {
+                toast.remove();
+            });
+            
+            // Reload routines to update copy count
+            loadRoutines(currentPage);
+        } else {
+            throw new Error(data.error || 'Failed to copy routine');
+        }
+    })
+    .catch(error => {
+        console.error('Error copying routine:', error);
+        // Show error message
+        const toast = document.createElement('div');
+        toast.className = 'toast position-fixed bottom-0 end-0 m-3';
+        toast.setAttribute('role', 'alert');
+        toast.setAttribute('aria-live', 'assertive');
+        toast.setAttribute('aria-atomic', 'true');
+        toast.innerHTML = `
+            <div class="toast-header">
+                <strong class="me-auto">Error</strong>
+                <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+            <div class="toast-body">
+                ${error.message}
+            </div>
+        `;
+        document.body.appendChild(toast);
+        const bsToast = new bootstrap.Toast(toast);
+        bsToast.show();
+        
+        // Remove toast after it's hidden
+        toast.addEventListener('hidden.bs.toast', () => {
+            toast.remove();
+        });
+    });
+}
+
+// Event Listeners
+document.getElementById('apply-filters').addEventListener('click', () => {
+    currentFilters = {
+        level: document.getElementById('level-filter').value,
+        goal: document.getElementById('goal-filter').value,
+        muscle_group: document.getElementById('muscle-filter').value
+    };
+    loadRoutines(1);
+});
+
+document.getElementById('reset-filters').addEventListener('click', () => {
+    document.getElementById('level-filter').value = '';
+    document.getElementById('goal-filter').value = '';
+    document.getElementById('muscle-filter').value = '';
+    currentFilters = {
+        level: '',
+        goal: '',
+        muscle_group: ''
+    };
+    loadRoutines(1);
+});
+
+// Initial load
+loadRoutines();
+</script>
+{% endblock %} 

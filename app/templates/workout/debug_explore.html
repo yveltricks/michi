@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Debug Explore Routines{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1>Debug Shared Routines</h1>
+    <p>This page shows raw data from the SharedRoutine table.</p>
+    
+    <div id="loading">Loading shared routines data...</div>
+    
+    <div id="result" class="mt-4">
+        <h3>API Response:</h3>
+        <pre id="api-response" style="background-color: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;"></pre>
+    </div>
+    
+    <div class="mt-4">
+        <a href="{{ url_for('workout.workout_page') }}" class="btn btn-primary">Back to Workouts</a>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        fetch('/api/routines/explore')
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('api-response').textContent = JSON.stringify(data, null, 2);
+            })
+            .catch(error => {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('api-response').innerHTML = `<span style="color: red;">Error: ${error.message}</span>`;
+            });
+    });
+</script>
+{% endblock %} 

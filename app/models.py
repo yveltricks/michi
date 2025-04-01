@@ -562,3 +562,39 @@ class Set(db.Model):
             distance = self.distance
             return self.exercise.min_distance <= distance <= self.exercise.max_distance
         return None
+
+class SharedRoutine(db.Model):
+    """Model for public routine snapshots that appear in the explore page"""
+    id = db.Column(db.Integer, primary_key=True)
+    original_id = db.Column(db.Integer, db.ForeignKey('routine.id'))
+    name = db.Column(db.String(100), nullable=False)
+    level = db.Column(db.String(20), default='Beginner')
+    goal = db.Column(db.String(20))
+    muscle_groups = db.Column(db.String(200))
+    exercises = db.Column(db.JSON)
+    description = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Foreign key to the user who created the routine
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    
+    # Copy count - tracks how many times this routine has been copied
+    copy_count = db.Column(db.Integer, default=0)
+    
+    # Define a relationship to the original routine
+    original_routine = db.relationship('Routine', backref='shared_version')
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'original_id': self.original_id,
+            'name': self.name,
+            'level': self.level,
+            'goal': self.goal,
+            'muscle_groups': self.muscle_groups.split(',') if self.muscle_groups else [],
+            'exercises': self.exercises,
+            'description': self.description,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'user_id': self.user_id,
+            'copy_count': self.copy_count
+        }

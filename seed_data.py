@@ -9,7 +9,7 @@ from werkzeug.security import generate_password_hash
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app import create_app, db
-from app.models import User, Session, Exercise, Routine, Measurement, Goal, Statistic, SavedItem, Notification, BodyweightLog
+from app.models import User, Session, Exercise, Routine, Measurement, Goal, Statistic, SavedItem, Notification, BodyweightLog, SharedRoutine
 
 def create_sample_exercises():
     """Create a list of common exercises"""
@@ -260,6 +260,8 @@ def create_sample_routines(users, exercises):
     routine_names = ['Push Day', 'Pull Day', 'Leg Day', 'Full Body', 'Upper Body']
     levels = ['beginner', 'intermediate', 'advanced']
     goals = ['strength', 'hypertrophy', 'endurance']
+    
+    routines = []
 
     for user in users:
         num_routines = random.randint(1, 3)
@@ -268,21 +270,55 @@ def create_sample_routines(users, exercises):
             exercise_data = []
             for exercise in routine_exercises:
                 exercise_data.append({
-                    'exercise_id': exercise.id,
-                    'sets': random.randint(3, 5),
-                    'reps': f'{random.randint(8, 12)}-{random.randint(12, 15)}',
-                    'rest': random.randint(60, 120)
+                    'id': exercise.id,
+                    'name': exercise.name,
+                    'input_type': exercise.input_type,
+                    'sets': [
+                        {
+                            'weight': random.randint(20, 100) if 'weight' in exercise.input_type else None,
+                            'reps': random.randint(8, 12) if 'reps' in exercise.input_type else None,
+                            'time': random.randint(30, 180) if 'duration' in exercise.input_type else None,
+                            'distance': round(random.uniform(1, 5), 2) if 'distance' in exercise.input_type else None,
+                            'additional_weight': random.randint(5, 25) if exercise.input_type == 'weighted_bodyweight' else None,
+                            'assistance_weight': random.randint(5, 25) if exercise.input_type == 'assisted_bodyweight' else None,
+                            'set_type': 'normal'
+                        } for _ in range(random.randint(3, 5))
+                    ]
                 })
 
+            # Create routine
+            is_public = random.random() < 0.4  # 40% chance of being public
             routine = Routine(
                 user_id=user.id,
                 name=random.choice(routine_names),
                 level=random.choice(levels),
                 goal=random.choice(goals),
-                muscle_groups='Full Body',
+                muscle_groups=','.join(random.sample(['Chest', 'Back', 'Shoulders', 'Arms', 'Legs', 'Core'], random.randint(1, 3))),
                 exercises=json.dumps(exercise_data),
+                is_public=is_public,
+                description=f"A sample {random.choice(['beginner', 'intermediate', 'advanced'])} {random.choice(['strength', 'hypertrophy', 'endurance'])} routine."
             )
             db.session.add(routine)
+            routines.append(routine)
+    
+    # Commit routines first so they have IDs
+    db.session.commit()
+    
+    # Create shared versions of public routines
+    for routine in routines:
+        if routine.is_public:
+            shared_routine = SharedRoutine(
+                original_id=routine.id,
+                name=routine.name,
+                level=routine.level,
+                goal=routine.goal,
+                muscle_groups=routine.muscle_groups,
+                exercises=routine.exercises,
+                description=routine.description,
+                user_id=routine.user_id,
+                copy_count=random.randint(0, 10)
+            )
+            db.session.add(shared_routine)
 
 def create_sample_sessions(users, exercises):
     """Create workout sessions for users"""
