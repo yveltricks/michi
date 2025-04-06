@@ -92,7 +92,7 @@ let workoutData = {
     // Fetch exercise details including input type and previous values
     console.log(`Fetching details for exercise ID: ${exerciseId}, Name: ${exerciseName}`);
     
-    fetch(`/workout/api/exercise-details/${exerciseId}`)
+    fetch(`/api/exercise-details/${exerciseId}`)
       .then(response => {
           console.log(`Response status for exercise ${exerciseId}:`, response.status);
           
@@ -728,7 +728,7 @@ let workoutData = {
     console.log("Sending range settings:", payload); // Debug log
 
     // Save to server
-    fetch(`/workout/api/exercise-ranges/${exercise.id}`, {
+    fetch(`/api/exercise-ranges/${exercise.id}`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -1019,66 +1019,143 @@ let workoutData = {
     );
     
     if (workoutData.exercises.length === 0) {
-        alert('Please add at least one exercise to your workout.');
+        showErrorMessage('Please add at least one exercise to your workout.');
         return;
     }
   
     if (!hasCompletedSets) {
-        alert('Please complete at least one set before finishing your workout.');
+        showErrorMessage('Please complete at least one set before finishing your workout.');
         return;
     }
   
+    // Show loading overlay
+    showLoadingOverlay('Completing workout...');
+
     // Prepare workout data
     const title = document.getElementById('workout-title').value;
     const description = document.getElementById('workout-description').value;
     const rating = document.getElementById('workout-rating').value;
+    const notes = document.getElementById('workout-notes')?.value || '';
     
-    // Use the shared workout handler to save the workout
-    const success = workoutHandlers.saveWorkout(
-        workoutData, 
-        title, 
-        description, 
-        rating, 
-        null, // No routine_id for empty workouts
-        { 
-            volume: parseInt(document.getElementById('workout-volume').textContent), 
-            totalSets: parseInt(document.getElementById('sets-done').textContent), 
-            totalReps: parseInt(document.getElementById('reps-done').textContent) 
-        },
-        function(data) {
-            // Success callback
-            if (data.redirect_url) {
-                // Use the redirect URL provided by the server
-                console.log(`Redirecting to: ${data.redirect_url}`);
-                window.location.href = data.redirect_url;
-            } else if (data.session_id && data.session_id !== 'null') {
-                // Fallback to using session_id if redirect_url is not available
-                console.log(`Redirecting to session: ${data.session_id}`);
-                window.location.href = '/workout/session/' + data.session_id;
-            } else {
-                // If neither redirect_url nor session_id is available, go to workout page
-                console.log('No redirect information available, going to workout page');
-                window.location.href = '/workout/workout';
-            }
-        },
-        function(error) {
-            // Error callback
-            alert('Error saving workout: ' + error);
-            document.querySelector('.finish-workout-btn').disabled = false;
-            document.querySelector('.finish-workout-btn').textContent = 'Complete Workout';
-        }
-    );
-    
-    // If validation failed, don't disable the button
-    if (success) {
-        // Disable button to prevent multiple submissions
-        document.querySelector('.finish-workout-btn').disabled = true;
-        document.querySelector('.finish-workout-btn').textContent = 'Saving...';
+    // Get photo if available
+    let photoBase64 = null;
+    const photoInput = document.getElementById('workout-photo');
+    if (photoInput && photoInput.files && photoInput.files[0]) {
+        const reader = new FileReader();
+        reader.readAsDataURL(photoInput.files[0]);
+        reader.onload = function(e) {
+            photoBase64 = e.target.result;
+            
+            // Now complete the workout with the photo
+            completeWorkoutWithData(title, description, rating, notes, photoBase64);
+        };
+    } else {
+        // Complete workout without photo
+        completeWorkoutWithData(title, description, rating, notes, null);
     }
 }
-  
-  // Calculate workout duration
-  function calculateWorkoutDuration() {
+
+// Helper function to complete workout with all data
+function completeWorkoutWithData(title, description, rating, notes, photoBase64) {
+    // Clean up exercise data for API
+    const cleanedExercises = workoutData.exercises.map(exercise => {
+        // Create a clean copy of the exercise
+        const cleanExercise = {
+            id: exercise.id,
+            name: exercise.name,
+            input_type: exercise.input_type
+        };
+        
+        // Only include completed sets
+        if (exercise.sets) {
+            cleanExercise.sets = exercise.sets.filter(set => set.completed).map(set => {
+                // Start with a clean set object
+                const cleanSet = {
+                    completed: true,
+                    set_type: set.set_type || 'normal'
+                };
+                
+                // Copy all relevant properties
+                ['weight', 'reps', 'time', 'distance', 'additional_weight', 'assistance_weight'].forEach(prop => {
+                    if (set[prop] !== undefined) {
+                        cleanSet[prop] = set[prop];
+                    }
+                });
+                
+                return cleanSet;
+            });
+        }
+        
+        return cleanExercise;
+    });
+
+    // Prepare final data
+    const apiData = {
+        exercises: cleanedExercises,
+        title: title || 'Workout',
+        description: description || '',
+        notes: notes || '',
+        rating: parseInt(rating) || 3,
+        photo: photoBase64,
+        volume: parseInt(document.getElementById('workout-volume').textContent),
+        sets_completed: parseInt(document.getElementById('sets-done').textContent),
+        total_reps: parseInt(document.getElementById('reps-done').textContent),
+        exp_gained: parseInt(document.getElementById('session-exp').textContent || '0')
+    };
+    
+    // Make API call to save workout
+    fetch('/api/log-workout', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(apiData)
+    })
+    .then(response => {
+        if (!response.ok) {
+            if (response.status === 404) {
+                throw new Error('API endpoint not found. Please check the URL.');
+            }
+            return response.text().then(text => {
+                try {
+                    // Try to parse as JSON first
+                    const data = JSON.parse(text);
+                    throw new Error(data.error || 'Server error');
+                } catch (e) {
+                    // If it's not valid JSON, return the raw text (likely HTML error page)
+                    if (text.includes('<!doctype') || text.includes('<html>')) {
+                        throw new Error('Server returned HTML instead of JSON. Check server logs.');
+                    }
+                    throw new Error('Invalid server response: ' + text);
+                }
+            });
+        }
+        return response.json();
+    })
+    .then(data => {
+        hideLoadingOverlay();
+        
+        if (data.success) {
+            // Show success message
+            showSuccessMessage('Workout completed successfully!');
+            
+            // Redirect to home after a short delay
+            setTimeout(() => {
+                window.location.href = '/home';
+            }, 1500);
+        } else {
+            showErrorMessage('Failed to complete workout: ' + (data.error || 'Unknown error'));
+        }
+    })
+    .catch(error => {
+        hideLoadingOverlay();
+        console.error('Error completing workout:', error);
+        showErrorMessage('Failed to complete workout: ' + error.message);
+    });
+}
+
+// Calculate workout duration
+function calculateWorkoutDuration() {
     // Get timer duration in seconds
     const timerDurationSeconds = getWorkoutDuration();
     
@@ -1099,18 +1176,18 @@ let workoutData = {
     
     // Return the duration in seconds (not minutes anymore)
     return maxDurationSeconds;
-  }
+}
 
-  // Add this function above the handleTimeInput function
-  function handleTimeKeyDown(input, event) {
+// Add this function above the handleTimeInput function
+function handleTimeKeyDown(input, event) {
     // Only allow digits, backspace, delete, tab, arrows
     const allowedKeys = ['Backspace', 'Delete', 'Tab', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'];
     if (!/^\d$/.test(event.key) && !allowedKeys.includes(event.key)) {
         event.preventDefault();
     }
-  }
+}
 
-  function handleTimeInput(input, exerciseIndex, setIndex, field) {
+function handleTimeInput(input, exerciseIndex, setIndex, field) {
     // Check if this is a digit being entered
     const value = input.value.replace(/[^0-9]/g, '');
     let formattedValue = '00:00:00';
@@ -1142,10 +1219,10 @@ let workoutData = {
     
     // Update data model
     workoutData.exercises[exerciseIndex].sets[setIndex][field] = totalSeconds;
-  }
+}
 
-  // Function to synchronize the workout timer with the longest exercise duration
-  function syncWorkoutTimer() {
+// Function to synchronize the workout timer with the longest exercise duration
+function syncWorkoutTimer() {
     // We no longer automatically sync the timer with exercise durations
     // This function is now only used when completing the workout
         return;
@@ -1304,7 +1381,7 @@ let workoutData = {
     console.log("Sending rest timer settings:", payload); // Debug log
     
     // Save to server
-    fetch(`/workout/api/exercise-rest/${exercise.id}`, {
+    fetch(`/api/exercise-rest/${exercise.id}`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -2040,4 +2117,73 @@ let workoutData = {
     
     // Update the UI
     renderExercises();
+  }
+
+  // Show success message
+  function showSuccessMessage(message) {
+    showMessage(message, 'success');
+  }
+
+  // Show error message
+  function showErrorMessage(message) {
+    showMessage(message, 'error');
+  }
+
+  // Generic message display
+  function showMessage(message, type) {
+    // Create message element
+    const messageEl = document.createElement('div');
+    messageEl.className = `fixed top-5 left-1/2 transform -translate-x-1/2 p-4 rounded-lg shadow-lg z-50 ${
+        type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+    }`;
+    messageEl.textContent = message;
+    
+    // Add to document
+    document.body.appendChild(messageEl);
+    
+    // Remove after delay
+    setTimeout(() => {
+        messageEl.classList.add('opacity-0', 'transition-opacity');
+        setTimeout(() => {
+            if (document.body.contains(messageEl)) {
+                document.body.removeChild(messageEl);
+            }
+        }, 300);
+    }, 3000);
+  }
+
+  // Show loading overlay
+  function showLoadingOverlay(message) {
+    // Create overlay
+    const overlay = document.createElement('div');
+    overlay.id = 'loading-overlay';
+    overlay.className = 'fixed inset-0 bg-gray-900 bg-opacity-70 flex items-center justify-center z-50';
+    overlay.innerHTML = `
+        <div class="bg-white p-5 rounded-lg shadow-lg text-center">
+            <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mx-auto mb-3"></div>
+            <p class="text-gray-700">${message || 'Loading...'}</p>
+        </div>
+    `;
+    
+    // Add to document
+    document.body.appendChild(overlay);
+  }
+
+  // Hide loading overlay
+  function hideLoadingOverlay() {
+    const overlay = document.getElementById('loading-overlay');
+    if (overlay) {
+        document.body.removeChild(overlay);
+    }
+  }
+
+  // Ask for confirmation before completing the workout
+  function confirmWorkoutCompletion() {
+    const unfinishedSetCount = document.querySelectorAll('.set-row:not(.completed)').length;
+    
+    if (unfinishedSetCount > 0) {
+        return confirm(`You have ${unfinishedSetCount} unfinished sets. Are you sure you want to complete this workout?`);
+    }
+    
+    return true;
   }

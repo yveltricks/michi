@@ -5,71 +5,166 @@
 
 {% block content %}
 <div class="container mx-auto px-4 min-h-screen pb-24">
-    <h1 class="text-3xl font-bold text-center pt-6 pb-4">Feed</h1>
+    <!-- Weekly summary with arrows -->
+    <div class="bg-white rounded-lg shadow-md p-4 mb-6">
+        <h2 class="text-xl font-bold mb-3">This Week:</h2>
+        <div class="grid grid-cols-4 gap-4 text-center">
+            <div class="flex flex-col items-center">
+                <div class="text-xl font-bold">{{ weekly_stats.current_week.total_exp }}</div>
+                <div class="text-sm text-gray-500">Exp Gained</div>
+                {% if weekly_stats.comparisons.total_exp == 1 %}
+                    <div class="text-green-500"><i class="fas fa-arrow-up"></i></div>
+                {% elif weekly_stats.comparisons.total_exp == -1 %}
+                    <div class="text-red-500"><i class="fas fa-arrow-down"></i></div>
+                {% else %}
+                    <div class="text-gray-400"><i class="fas fa-minus"></i></div>
+                {% endif %}
+            </div>
+            <div class="flex flex-col items-center">
+                <div class="text-xl font-bold">{{ weekly_stats.current_week.workout_count }}</div>
+                <div class="text-sm text-gray-500">Workouts</div>
+                {% if weekly_stats.comparisons.workout_count == 1 %}
+                    <div class="text-green-500"><i class="fas fa-arrow-up"></i></div>
+                {% elif weekly_stats.comparisons.workout_count == -1 %}
+                    <div class="text-red-500"><i class="fas fa-arrow-down"></i></div>
+                {% else %}
+                    <div class="text-gray-400"><i class="fas fa-minus"></i></div>
+                {% endif %}
+            </div>
+            <div class="flex flex-col items-center">
+                {% set duration_hours = (weekly_stats.current_week.total_duration // 3600) %}
+                {% set duration_minutes = ((weekly_stats.current_week.total_duration % 3600) // 60) %}
+                <div class="text-xl font-bold">{{ duration_hours }}h {{ duration_minutes }}m</div>
+                <div class="text-sm text-gray-500">Duration</div>
+                {% if weekly_stats.comparisons.total_duration == 1 %}
+                    <div class="text-green-500"><i class="fas fa-arrow-up"></i></div>
+                {% elif weekly_stats.comparisons.total_duration == -1 %}
+                    <div class="text-red-500"><i class="fas fa-arrow-down"></i></div>
+                {% else %}
+                    <div class="text-gray-400"><i class="fas fa-minus"></i></div>
+                {% endif %}
+            </div>
+            <div class="flex flex-col items-center">
+                <div class="text-xl font-bold">{{ weekly_stats.current_week.total_volume|round(1) }}{{ current_user.preferred_weight_unit }}</div>
+                <div class="text-sm text-gray-500">Volume</div>
+                {% if weekly_stats.comparisons.total_volume == 1 %}
+                    <div class="text-green-500"><i class="fas fa-arrow-up"></i></div>
+                {% elif weekly_stats.comparisons.total_volume == -1 %}
+                    <div class="text-red-500"><i class="fas fa-arrow-down"></i></div>
+                {% else %}
+                    <div class="text-gray-400"><i class="fas fa-minus"></i></div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- User stats summary -->
+    <div class="bg-white rounded-lg shadow-md p-4 mb-6 flex justify-around items-center">
+        <div class="text-center">
+            <div class="text-lg font-semibold">LEVEL: {{ current_user.level }}</div>
+            <div class="text-sm text-gray-500">Beginner</div>
+        </div>
+        <div class="text-center">
+            <div class="text-lg font-semibold">Streak: {{ weekly_stats.streak }}</div>
+            <div class="text-sm text-gray-500">days</div>
+        </div>
+    </div>
 
+    <!-- Feed tabs -->
     <div class="flex justify-center mb-6">
         <div class="inline-flex rounded-md shadow-sm" role="group">
-            <button type="button" class="px-4 py-2 text-sm font-medium text-gray-900 bg-white rounded-l-lg border border-gray-300 hover:bg-gray-100 focus:z-10 focus:bg-gray-100">
-                Following
+            <button type="button" id="tab-home" class="px-4 py-2 text-sm font-medium text-gray-900 bg-white rounded-l-lg border border-gray-300 hover:bg-gray-100 focus:z-10 focus:bg-gray-100 active">
+                Home
             </button>
-            <button type="button" class="px-4 py-2 text-sm font-medium text-gray-900 bg-gray-50 rounded-r-lg border border-gray-300 hover:bg-gray-100 focus:z-10 focus:bg-gray-100">
+            <button type="button" id="tab-discover" class="px-4 py-2 text-sm font-medium text-gray-900 bg-gray-50 rounded-r-lg border border-gray-300 hover:bg-gray-100 focus:z-10 focus:bg-gray-100">
                 Discover
             </button>
         </div>
     </div>
 
+    <!-- Workout feed -->
     <div class="workout-feed space-y-6">
         {% for session in sessions %}
-        <div class="bg-white rounded-lg overflow-hidden shadow-md">
-            <div class="p-4 flex items-start">
-                <img src="{{ session.user.profile_pic or url_for('static', filename='default_profile.jpg') }}" 
-                     alt="Profile" class="w-12 h-12 rounded-full mr-4">
-                <div class="flex-1">
-                    <div class="flex justify-between items-start">
-                        <div>
+        <div class="bg-white rounded-lg overflow-hidden shadow-md workout-post" data-workout-id="{{ session.id }}">
+            <!-- Post header -->
+            <div class="p-4 flex items-start justify-between">
+                <div class="flex items-start">
+                    <img src="{{ session.user.profile_pic or url_for('static', filename='default_profile.jpg') }}" 
+                         alt="Profile" class="w-12 h-12 rounded-full mr-4">
+                    <div>
+                        <div class="flex items-center">
                             <h3 class="font-bold text-gray-900">{{ session.user.first_name }} {{ session.user.last_name }}</h3>
-                            <span class="text-gray-600 text-sm">@{{ session.user.username }}</span>
-                            <span class="ml-2 px-2 py-1 bg-blue-500 text-white text-xs rounded-full">{{ session.user.badge }}</span>
+                            <span class="ml-2 text-xs px-2 py-1 bg-blue-100 text-blue-800 rounded-full">Lvl {{ session.user_level }}</span>
                         </div>
                         <span class="text-gray-600 text-sm">{{ session.session_date.strftime('%b %d, %Y') }}</span>
                     </div>
-                    
-                    <h4 class="font-bold mt-3 text-gray-900">{{ session.title }}</h4>
-                    {% if session.description %}
-                        <p class="text-gray-700 mt-1">{{ session.description }}</p>
-                    {% endif %}
-                    
-                    <div class="mt-3 text-sm text-gray-700">
-                        {% for exercise in session.exercises %}
-                            {% if exercise.name is defined %}
-                                <div class="mb-1">
-                                    {% if exercise.sets_count is defined %}
-                                        {% set sets_count = exercise.sets_count %}
-                                    {% elif exercise.sets is defined and exercise.sets is number %}
-                                        {% set sets_count = exercise.sets %}
-                                    {% elif exercise is mapping and exercise.sets is defined and exercise.sets is iterable and exercise.sets is not string %}
-                                        {% set sets_count = exercise.sets|length %}
-                                    {% else %}
-                                        {% set sets_count = 1 %}
-                                    {% endif %}
-                                    
-                                    {{ sets_count }} {% if sets_count == 1 %}set{% else %}sets{% endif %} 
-                                    <a href="{{ url_for('workout.view_exercise', exercise_id=exercise.id) }}" class="text-blue-600 hover:text-blue-800">
-                                        {{ exercise.name }}
-                                    </a>
-                                </div>
-                            {% endif %}
-                        {% endfor %}
+                </div>
+                
+                {% if session.is_own %}
+                <div class="relative" id="menu-container-{{ session.id }}">
+                    <button class="text-gray-500 hover:text-gray-700 p-1 menu-button" data-id="{{ session.id }}">
+                        <i class="fas fa-ellipsis-h"></i>
+                    </button>
+                    <div class="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-10 hidden menu-dropdown" id="menu-dropdown-{{ session.id }}">
+                        <a href="javascript:void(0)" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center delete-workout" data-id="{{ session.id }}">
+                            <i class="fas fa-trash mr-2"></i> Delete Workout
+                        </a>
+                        <a href="{{ url_for('workout.perform_workout', workout_id=session.id) }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center">
+                            <i class="fas fa-redo mr-2"></i> Repeat Workout
+                        </a>
                     </div>
                 </div>
+                {% endif %}
             </div>
             
+            <!-- Post title and description -->
+            <div class="px-4 pb-3">
+                <h4 class="font-bold text-gray-900">{{ session.title }}</h4>
+                {% if session.description %}
+                    <p class="text-gray-700 mt-1">{{ session.description }}</p>
+                {% endif %}
+            </div>
+            
+            <!-- Exercises -->
+            <div class="px-4 pb-4 text-sm text-gray-700">
+                {% for exercise in session.exercises %}
+                    {% if exercise.name is defined %}
+                        <div class="mb-1 flex items-center">
+                            {% if exercise.sets_count is defined %}
+                                {% set sets_count = exercise.sets_count %}
+                            {% elif exercise.sets is defined and exercise.sets is number %}
+                                {% set sets_count = exercise.sets %}
+                            {% elif exercise is mapping and exercise.sets is defined and exercise.sets is iterable and exercise.sets is not string %}
+                                {% set sets_count = exercise.sets|length %}
+                            {% else %}
+                                {% set sets_count = 1 %}
+                            {% endif %}
+                            
+                            {{ sets_count }} {% if sets_count == 1 %}set{% else %}sets{% endif %}&nbsp;
+                            <a href="{{ url_for('workout.view_exercise', exercise_id=exercise.id) }}" class="text-blue-600 hover:text-blue-800">
+                                {{ exercise.name }}
+                            </a>
+                            
+                            {% if exercise.comparison is defined %}
+                                {% if exercise.comparison == 1 %}
+                                    <span class="ml-2 text-green-500"><i class="fas fa-arrow-up"></i></span>
+                                {% elif exercise.comparison == -1 %}
+                                    <span class="ml-2 text-red-500"><i class="fas fa-arrow-down"></i></span>
+                                {% endif %}
+                            {% endif %}
+                        </div>
+                    {% endif %}
+                {% endfor %}
+            </div>
+            
+            <!-- Workout photo -->
             {% if session.photo %}
-            <div class="workout-photo">
-                <img src="{{ session.photo }}" alt="Workout photo" class="w-full h-64 object-cover">
+            <div class="workout-photo mb-3">
+                <img src="{{ session.photo }}" alt="Workout photo" class="w-full h-auto max-h-60 object-contain rounded-md">
             </div>
             {% endif %}
 
+            <!-- Workout stats -->
             <div class="flex justify-between p-4 bg-gray-50 text-sm">
                 <div class="flex items-center text-gray-700">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -81,7 +176,7 @@
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2" />
                     </svg>
-                    {{ session.volume }}{{ current_user.preferred_weight_unit }}
+                    {{ session.volume|round(1) }}{{ current_user.preferred_weight_unit }}
                 </div>
                 <div class="flex items-center text-gray-700">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -90,42 +185,409 @@
                     {{ session.session_rating }}/5
                 </div>
             </div>
+            
+            <!-- Social interaction section -->
+            <div class="px-4 py-2 border-t border-gray-100">
+                <div class="flex justify-between">
+                    <div class="flex space-x-4">
+                        <button class="flex items-center space-x-1 text-gray-500 hover:text-blue-500 like-button {% if session.user_liked %}text-blue-500{% endif %}" data-id="{{ session.id }}">
+                            <i class="{% if session.user_liked %}fas{% else %}far{% endif %} fa-thumbs-up"></i>
+                            <span class="like-count">{{ session.like_count }}</span>
+                        </button>
+                        <button class="flex items-center space-x-1 text-gray-500 hover:text-blue-500 comment-button" data-id="{{ session.id }}">
+                            <i class="far fa-comment"></i>
+                            <span>{{ session.comment_count }}</span>
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Comments section (hidden by default) -->
+                <div class="mt-3 hidden comments-section" id="comments-{{ session.id }}">
+                    <div class="comments-list space-y-2 mb-3" id="comments-list-{{ session.id }}">
+                        <!-- Comments will be loaded dynamically -->
+                        <div class="text-center text-sm text-gray-500 py-2">Loading comments...</div>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <input type="text" class="flex-grow p-2 border rounded-lg text-sm comment-input" id="comment-input-{{ session.id }}" placeholder="Write a comment...">
+                        <button class="bg-blue-500 text-white px-3 py-2 rounded-lg text-sm submit-comment" data-id="{{ session.id }}">Post</button>
+                    </div>
+                </div>
+            </div>
         </div>
         {% endfor %}
     </div>
 
-    <!-- Top Exercises Card -->
-    <div class="stats-card">
-        <h3 class="card-title">Top Exercises</h3>
-        <div class="top-exercises">
-            {% for exercise in top_exercises %}
-            <div class="exercise-item">
-                <div class="exercise-name">{{ exercise.name }}</div>
-                <div class="exercise-meta">
-                    <span class="sets">{{ exercise.sets }} sets</span>
-                    <span class="volume">{{ exercise.volume|default(0)|int }} {{ current_user.preferred_weight_unit }}</span>
-                </div>
-                <a href="{{ url_for('workout.view_exercise', exercise_id=exercise.id) }}" class="text-blue-600 hover:text-blue-800">
-                    View Details
-                </a>
+    <!-- Notification panel (hidden by default) -->
+    <div id="notification-panel" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-md mx-auto mt-20 overflow-hidden">
+            <div class="flex justify-between items-center bg-gray-100 px-4 py-3">
+                <h3 class="text-lg font-semibold">Notifications</h3>
+                <button id="close-notifications" class="text-gray-600 hover:text-gray-800">
+                    <i class="fas fa-times"></i>
+                </button>
             </div>
-            {% endfor %}
-        </div>
-    </div>
-    
-    <!-- Recently Used Exercises -->
-    <div class="stats-card">
-        <h3 class="card-title">Recent Exercises</h3>
-        <div class="recent-exercises">
-            {% for exercise in recent_exercises %}
-            <div class="exercise-item">
-                <div class="exercise-name">{{ exercise.name }}</div>
-                <a href="{{ url_for('workout.view_exercise', exercise_id=exercise.id) }}" class="text-blue-600 hover:text-blue-800">
-                    View Details
-                </a>
+            <div id="notifications-container" class="p-4 max-h-96 overflow-y-auto">
+                <div class="text-center text-gray-500 py-4">Loading notifications...</div>
             </div>
-            {% endfor %}
         </div>
     </div>
 </div>
+
+<!-- Font Awesome for icons -->
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" rel="stylesheet">
+
+<!-- JavaScript for interactions -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Tab switching
+    const tabHome = document.getElementById('tab-home');
+    const tabDiscover = document.getElementById('tab-discover');
+    
+    if (tabHome && tabDiscover) {
+        tabHome.addEventListener('click', function() {
+            tabHome.classList.add('active', 'bg-white');
+            tabHome.classList.remove('bg-gray-50');
+            tabDiscover.classList.remove('active', 'bg-white');
+            tabDiscover.classList.add('bg-gray-50');
+            // Implement feed filtering if needed
+        });
+        
+        tabDiscover.addEventListener('click', function() {
+            tabDiscover.classList.add('active', 'bg-white');
+            tabDiscover.classList.remove('bg-gray-50');
+            tabHome.classList.remove('active', 'bg-white');
+            tabHome.classList.add('bg-gray-50');
+            // Implement feed filtering if needed
+        });
+    }
+    
+    // Menu dropdown toggling
+    const menuButtons = document.querySelectorAll('.menu-button');
+    menuButtons.forEach(button => {
+        button.addEventListener('click', function(e) {
+            e.stopPropagation();
+            const workoutId = this.getAttribute('data-id');
+            const dropdown = document.getElementById(`menu-dropdown-${workoutId}`);
+            dropdown.classList.toggle('hidden');
+        });
+    });
+    
+    // Close menu when clicking outside
+    document.addEventListener('click', function() {
+        document.querySelectorAll('.menu-dropdown').forEach(dropdown => {
+            dropdown.classList.add('hidden');
+        });
+    });
+    
+    // Like button functionality
+    const likeButtons = document.querySelectorAll('.like-button');
+    likeButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            const workoutId = this.getAttribute('data-id');
+            
+            // Show loading state
+            this.classList.add('opacity-50');
+            
+            fetch(`/api/workouts/${workoutId}/like`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`Server responded with status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                // Remove loading state
+                this.classList.remove('opacity-50');
+                
+                if (data.success) {
+                    // Update like count
+                    const likeCountEl = this.querySelector('.like-count');
+                    likeCountEl.textContent = data.like_count;
+                    
+                    // Toggle thumbs up icon
+                    const iconEl = this.querySelector('i');
+                    if (data.liked) {
+                        iconEl.classList.remove('far');
+                        iconEl.classList.add('fas');
+                        this.classList.add('text-blue-500');
+                    } else {
+                        iconEl.classList.remove('fas');
+                        iconEl.classList.add('far');
+                        this.classList.remove('text-blue-500');
+                    }
+                } else {
+                    console.error('Error liking workout:', data.error);
+                    alert('Could not like this workout. Please try again later.');
+                }
+            })
+            .catch(error => {
+                // Remove loading state
+                this.classList.remove('opacity-50');
+                console.error('Error:', error);
+                alert('Could not like this workout. Please try again later.');
+            });
+        });
+    });
+    
+    // Comment button functionality
+    const commentButtons = document.querySelectorAll('.comment-button');
+    commentButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            const workoutId = this.getAttribute('data-id');
+            const commentsSection = document.getElementById(`comments-${workoutId}`);
+            const commentsList = document.getElementById(`comments-list-${workoutId}`);
+            
+            if (commentsSection.classList.contains('hidden')) {
+                commentsSection.classList.remove('hidden');
+                
+                // Show loading state
+                commentsList.innerHTML = '<div class="text-center text-sm text-gray-500 py-2">Loading comments...</div>';
+                
+                // Load comments
+                fetch(`/api/workouts/${workoutId}/comments`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`Server responded with status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.success) {
+                        if (data.comments.length === 0) {
+                            commentsList.innerHTML = '<div class="text-center text-sm text-gray-500 py-2">No comments yet</div>';
+                        } else {
+                            commentsList.innerHTML = '';
+                            data.comments.forEach(comment => {
+                                const commentEl = document.createElement('div');
+                                commentEl.className = 'p-2 border-b border-gray-100';
+                                commentEl.innerHTML = `
+                                    <div class="flex justify-between">
+                                        <span class="font-semibold text-xs">${comment.user_name}</span>
+                                        <span class="text-gray-500 text-xs">${comment.created_at}</span>
+                                    </div>
+                                    <p class="text-sm mt-1">${comment.text}</p>
+                                `;
+                                commentsList.appendChild(commentEl);
+                            });
+                        }
+                    } else {
+                        commentsList.innerHTML = '<div class="text-center text-sm text-red-500 py-2">Failed to load comments</div>';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    commentsList.innerHTML = '<div class="text-center text-sm text-red-500 py-2">Failed to load comments</div>';
+                });
+            } else {
+                commentsSection.classList.add('hidden');
+            }
+        });
+    });
+    
+    // Submit comment functionality
+    const submitCommentButtons = document.querySelectorAll('.submit-comment');
+    submitCommentButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            const workoutId = this.getAttribute('data-id');
+            const inputEl = document.getElementById(`comment-input-${workoutId}`);
+            const commentText = inputEl.value.trim();
+            
+            if (commentText) {
+                // Disable button during submission
+                this.disabled = true;
+                this.textContent = 'Posting...';
+                
+                fetch(`/api/workouts/${workoutId}/comments`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ text: commentText })
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`Server responded with status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    // Re-enable button
+                    this.disabled = false;
+                    this.textContent = 'Post';
+                    
+                    if (data.success) {
+                        // Clear input
+                        inputEl.value = '';
+                        
+                        // Refresh comments by simulating clicks
+                        const commentButton = document.querySelector(`.comment-button[data-id="${workoutId}"]`);
+                        commentButton.click(); // First click hides
+                        commentButton.click(); // Second click shows and refreshes
+                        
+                        // Update comment count
+                        const countEl = document.querySelector(`.comment-button[data-id="${workoutId}"] span`);
+                        countEl.textContent = parseInt(countEl.textContent) + 1;
+                    } else {
+                        alert('Failed to post comment: ' + (data.error || 'Unknown error'));
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    // Re-enable button
+                    this.disabled = false;
+                    this.textContent = 'Post';
+                    alert('Failed to post comment. Please try again.');
+                });
+            }
+        });
+    });
+    
+    // Delete workout functionality
+    const deleteButtons = document.querySelectorAll('.delete-workout');
+    deleteButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            const workoutId = this.getAttribute('data-id');
+            
+            if (confirm('Are you sure you want to delete this workout? This action cannot be undone.')) {
+                // Show loading state
+                this.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Deleting...';
+                this.disabled = true;
+                
+                fetch(`/api/workouts/${workoutId}/delete`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`Server responded with status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.success) {
+                        // Remove workout from feed
+                        const workoutEl = document.querySelector(`.workout-post[data-workout-id="${workoutId}"]`);
+                        workoutEl.remove();
+                    } else {
+                        alert('Failed to delete workout: ' + (data.error || 'Unknown error'));
+                        // Reset button
+                        this.innerHTML = '<i class="fas fa-trash mr-2"></i> Delete Workout';
+                        this.disabled = false;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('An error occurred while deleting the workout');
+                    // Reset button
+                    this.innerHTML = '<i class="fas fa-trash mr-2"></i> Delete Workout';
+                    this.disabled = false;
+                });
+            }
+        });
+    });
+    
+    // Add notifications button to the navbar
+    const navbarRight = document.querySelector('nav .flex.items-center.space-x-4');
+    
+    if (navbarRight) {
+        const notificationButton = document.createElement('a');
+        notificationButton.href = 'javascript:void(0)';
+        notificationButton.id = 'notifications-button';
+        notificationButton.className = 'text-gray-600 hover:text-gray-900 relative';
+        
+        // Use unread count from the server
+        let unreadCount = 0;
+        // Check if the variable is available from the server
+        {% if unread_notification_count is defined %}
+            unreadCount = {{ unread_notification_count }};
+        {% endif %}
+        
+        notificationButton.innerHTML = `
+            <i class="far fa-bell"></i>
+            ${unreadCount > 0 ? `<span class="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-4 w-4 flex items-center justify-center">${unreadCount}</span>` : ''}
+        `;
+        
+        // Insert before Settings
+        const settingsLink = Array.from(navbarRight.children).find(el => el.textContent.trim() === 'Settings');
+        if (settingsLink) {
+            navbarRight.insertBefore(notificationButton, settingsLink);
+        } else {
+            navbarRight.appendChild(notificationButton);
+        }
+        
+        // Notification panel functionality
+        const notificationPanel = document.getElementById('notification-panel');
+        const closeNotificationsButton = document.getElementById('close-notifications');
+        const notificationsContainer = document.getElementById('notifications-container');
+        
+        notificationButton.addEventListener('click', function() {
+            notificationPanel.classList.remove('hidden');
+            
+            // Clear previous notifications and show loading state
+            notificationsContainer.innerHTML = '<div class="text-center text-gray-500 py-4">Loading notifications...</div>';
+            
+            // Load notifications
+            fetch('/api/notifications')
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Failed to load notifications');
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    notificationsContainer.innerHTML = '';
+                    
+                    if (data.notifications.length === 0) {
+                        notificationsContainer.innerHTML = '<div class="text-center text-gray-500 py-4">No notifications</div>';
+                    } else {
+                        data.notifications.forEach(notification => {
+                            const notificationEl = document.createElement('div');
+                            notificationEl.className = `p-3 border-b ${notification.is_read ? 'bg-white' : 'bg-blue-50'}`;
+                            notificationEl.innerHTML = `
+                                <div class="text-sm">${notification.message}</div>
+                                <div class="text-xs text-gray-500">${notification.date_sent}</div>
+                            `;
+                            notificationsContainer.appendChild(notificationEl);
+                        });
+                    }
+                    
+                    // Mark notifications as read
+                    fetch('/api/notifications/mark-read', {
+                        method: 'POST'
+                    });
+                    
+                    // Remove unread badge
+                    const badge = notificationButton.querySelector('span');
+                    if (badge) badge.remove();
+                } else {
+                    notificationsContainer.innerHTML = '<div class="text-center text-red-500 py-4">Failed to load notifications</div>';
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                notificationsContainer.innerHTML = '<div class="text-center text-red-500 py-4">Error loading notifications</div>';
+            });
+        });
+        
+        closeNotificationsButton.addEventListener('click', function() {
+            notificationPanel.classList.add('hidden');
+        });
+        
+        // Close panel when clicking outside
+        notificationPanel.addEventListener('click', function(e) {
+            if (e.target === notificationPanel) {
+                notificationPanel.classList.add('hidden');
+            }
+        });
+    }
+});
+</script>
 {% endblock %}

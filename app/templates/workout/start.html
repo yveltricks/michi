@@ -202,6 +202,35 @@
                 <option value="5">5 - Excellent</option>
             </select>
         </div>
+        
+        <!-- Photo upload section -->
+        <div class="form-group photo-upload-section">
+            <label>Add a photo (optional):</label>
+            <div class="flex flex-col space-y-2">
+                <input type="file" id="workout-photo" accept="image/*" class="hidden">
+                <div class="flex space-x-2">
+                    <button type="button" id="photo-upload-btn" class="bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-lg">
+                        Choose Photo
+                    </button>
+                    <button type="button" id="photo-camera-btn" class="bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded-lg">
+                        Take Photo
+                    </button>
+                </div>
+                <div id="photo-preview-container" class="hidden mt-2">
+                    <img id="photo-preview" class="max-w-full h-40 object-contain" alt="Workout photo preview">
+                    <button type="button" id="remove-photo-btn" class="mt-1 text-red-500 hover:text-red-700">
+                        Remove photo
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Notes section -->
+        <div class="form-group">
+            <label for="workout-notes">Add notes (optional):</label>
+            <textarea id="workout-notes" class="form-control" rows="3" placeholder="Any additional notes about your workout"></textarea>
+        </div>
+        
         <button onclick="completeWorkout()" class="finish-workout-btn">Complete Workout</button>
     </div>
 </div>
@@ -240,4 +269,53 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Handle photo upload buttons
+    const photoInput = document.getElementById('workout-photo');
+    const uploadBtn = document.getElementById('photo-upload-btn');
+    const cameraBtn = document.getElementById('photo-camera-btn');
+    const previewContainer = document.getElementById('photo-preview-container');
+    const photoPreview = document.getElementById('photo-preview');
+    const removePhotoBtn = document.getElementById('remove-photo-btn');
+    
+    if (uploadBtn && photoInput) {
+        uploadBtn.addEventListener('click', function() {
+            photoInput.click();
+        });
+    }
+    
+    if (cameraBtn && photoInput) {
+        cameraBtn.addEventListener('click', function() {
+            photoInput.setAttribute('capture', 'environment');
+            photoInput.click();
+        });
+    }
+    
+    if (photoInput) {
+        photoInput.addEventListener('change', function() {
+            if (this.files && this.files[0]) {
+                const reader = new FileReader();
+                
+                reader.onload = function(e) {
+                    photoPreview.src = e.target.result;
+                    previewContainer.classList.remove('hidden');
+                };
+                
+                reader.readAsDataURL(this.files[0]);
+            }
+        });
+    }
+    
+    if (removePhotoBtn) {
+        removePhotoBtn.addEventListener('click', function() {
+            photoInput.value = '';
+            previewContainer.classList.add('hidden');
+        });
+    }
+});
+</script>
 {% endblock %}

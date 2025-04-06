@@ -37,7 +37,7 @@ def create_app():
 
     # Add this after registering the auth blueprint
     from .workout import workout as workout_blueprint
-    app.register_blueprint(workout_blueprint, url_prefix='/workout')
+    app.register_blueprint(workout_blueprint)
 
     # Load the user loader function
     from .models import User

@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import login_required, current_user
-from .models import Exercise, Session, User, Measurement, Set, Routine, Workout, WorkoutExercise, WorkoutSet, SharedRoutine
+from .models import Exercise, Session, User, Measurement, Set, Routine, Workout, WorkoutExercise, WorkoutSet, SharedRoutine, WorkoutLike, WorkoutComment, Notification
 from . import db
 import json
 from datetime import datetime, timedelta, time
@@ -44,7 +44,7 @@ def start_workout():
     
     print(f"Recent exercise IDs: {recent_exercise_ids}")
     
-    # Sort exercises - recently used first, then alphabetically
+    # Define sort_key function
     def sort_key(exercise):
         try:
             # Get the index in recent exercises (lower is more recent)
@@ -61,7 +61,16 @@ def start_workout():
         .order_by(Measurement.date.desc()).first()
     user_weight = latest_bodyweight.value if latest_bodyweight else None
     
-    return render_template('workout/start.html', exercises=sorted_exercises, user_weight=user_weight)
+    # Get unread notification count for the notification badge
+    unread_notification_count = Notification.query.filter_by(
+        user_id=current_user.id,
+        is_read=False
+    ).count()
+    
+    return render_template('workout/start.html', 
+                          exercises=sorted_exercises, 
+                          user_weight=user_weight,
+                          unread_notification_count=unread_notification_count)
 
 @workout.route('/log-workout', methods=['POST'])
 @login_required
@@ -1169,6 +1178,15 @@ def workout_page():
     """Display the user's workouts and routines"""
     routines = Routine.query.filter_by(user_id=current_user.id).all()
     
+    # Define sort_key function for exercise sorting
+    def sort_key(exercise):
+        try:
+            # Sort alphabetically by name by default
+            return exercise.name
+        except Exception as e:
+            print(f"Error sorting exercise {exercise.id}: {e}")
+            return ""
+    
     # Process routines to add exercise count
     for routine in routines:
         try:
@@ -1687,10 +1705,78 @@ def perform_workout(workout_id):
         flash('You do not have permission to perform this workout.', 'error')
         return redirect(url_for('workout.workout_page'))
     
-    # Check if workout is already completed
+    # We'll create a new workout if the user is repeating a completed workout
     if workout.completed:
-        flash('This workout is already completed.', 'info')
-        return redirect(url_for('workout.workout_page'))
+        try:
+            # Get workout data to extract exercises
+            workout_data = json.loads(workout.data) if workout.data else {}
+            exercises_data = workout_data.get('exercises', [])
+            
+            # Create a new workout with the same exercises
+            new_workout = Workout(
+                user_id=current_user.id,
+                title=f"{workout.title} (Repeated)",
+                date=datetime.utcnow(),
+                start_time=datetime.utcnow(),
+                completed=False,
+                data=json.dumps({"exercises": exercises_data})
+            )
+            db.session.add(new_workout)
+            db.session.flush()  # Get the new ID without committing
+            
+            # Create workout exercises and sets for the new workout
+            for idx, exercise_data in enumerate(exercises_data):
+                exercise_id = exercise_data.get('id')
+                exercise_name = exercise_data.get('name')
+                
+                # Find the exercise in the database
+                exercise = None
+                if exercise_id:
+                    exercise = Exercise.query.get(exercise_id)
+                
+                if not exercise and exercise_name:
+                    exercise = Exercise.query.filter_by(name=exercise_name).first()
+                
+                if not exercise:
+                    continue  # Skip if we can't find the exercise
+                
+                # Create workout exercise
+                workout_exercise = WorkoutExercise(
+                    workout_id=new_workout.id,
+                    exercise_id=exercise.id,
+                    order=idx + 1  # 1-based indexing
+                )
+                db.session.add(workout_exercise)
+                db.session.flush()  # Get the new ID
+                
+                # Create sets for the exercise
+                sets_data = exercise_data.get('sets', [])
+                for set_idx, set_data in enumerate(sets_data):
+                    new_set = WorkoutSet(
+                        workout_exercise_id=workout_exercise.id,
+                        set_number=set_idx + 1,  # 1-based indexing
+                        weight=set_data.get('weight'),
+                        reps=set_data.get('reps'),
+                        duration=set_data.get('duration'),
+                        distance=set_data.get('distance'),
+                        additional_weight=set_data.get('additional_weight'),
+                        assistance_weight=set_data.get('assistance_weight'),
+                        rest_duration=set_data.get('rest_duration', 60),
+                        completed=False
+                    )
+                    db.session.add(new_set)
+            
+            db.session.commit()
+            flash('Created a new workout based on your previous one.', 'success')
+            
+            # Redirect to the perform page for the new workout
+            return redirect(url_for('workout.perform_workout', workout_id=new_workout.id))
+            
+        except Exception as e:
+            db.session.rollback()
+            print(f"Error repeating workout: {str(e)}")
+            flash('Could not repeat this workout. Please try again.', 'error')
+            return redirect(url_for('workout.workout_page'))
     
     # Get workout exercises and sets
     workout_exercises = WorkoutExercise.query.filter_by(workout_id=workout_id).order_by(WorkoutExercise.order).all()
@@ -1827,36 +1913,24 @@ def complete_workout(workout_id):
     data = request.json
     
     try:
-        # Mark workout as completed - check if the column exists
-        try:
-            workout.completed = True
-        except Exception as e:
-            print(f"Warning: Could not set completed field: {str(e)}")
-            # Continue without setting this field
-            
-        # Set end time - check if the column exists
-        try:
-            workout.end_time = datetime.utcnow()
-        except Exception as e:
-            print(f"Warning: Could not set end_time field: {str(e)}")
-            # Continue without setting this field
-            
-        # Calculate duration in seconds if start_time exists
-        try:
-            if hasattr(workout, 'start_time') and workout.start_time:
-                duration = (workout.end_time - workout.start_time).total_seconds()
-                # Store the timer duration in data for later comparison with exercise durations
-                if data and isinstance(data, dict):
-                    data['duration'] = int(duration)
-        except Exception as e:
-            print(f"Warning: Could not calculate duration: {str(e)}")
+        # Mark workout as completed
+        workout.completed = True
+        workout.end_time = datetime.utcnow()
+        
+        # Calculate duration in seconds
+        if workout.start_time:
+            duration = (workout.end_time - workout.start_time).total_seconds()
+            workout.duration = int(duration)
         
         # Save any notes
         if 'notes' in data:
             workout.notes = data['notes']
         
-        # Parse workout data and update it
-        workout_data = {}
+        # Save photo URL if provided
+        if 'photo' in data and data['photo']:
+            workout.photo = data['photo']
+        
+        # Update workout data
         if workout.data:
             try:
                 workout_data = json.loads(workout.data)
@@ -1869,9 +1943,6 @@ def complete_workout(workout_id):
                 workout_data = data if data else {}
         else:
             workout_data = data if data else {}
-        
-        # Save updated workout data
-        workout.data = json.dumps(workout_data)
         
         # Calculate metrics with our helper function
         metrics = calculate_workout_metrics(workout_data)
@@ -2176,6 +2247,9 @@ def log_workout_api():
         # Calculate metrics with our helper function
         metrics = calculate_workout_metrics(data)
 
+        # Get photo from request data
+        photo_data = data.get('photo', None)
+        
         # Create new workout
         workout = Workout(
             user_id=current_user.id,
@@ -2186,7 +2260,9 @@ def log_workout_api():
             duration=metrics['duration'],
             rating=data.get('rating', metrics['rating']),
             start_time=datetime.utcnow(),  # Set start time
-            completed=False  # Not completed yet
+            end_time=datetime.utcnow(),    # Set end time to now since we're completing immediately
+            completed=True,                # Mark as completed
+            photo=photo_data               # Save photo URL to workout
         )
         db.session.add(workout)
         db.session.flush()  # Get the ID without committing
@@ -2202,7 +2278,8 @@ def log_workout_api():
             title=data.get('title', 'Workout'),
             description=data.get('notes', ''),
             session_rating=data.get('rating', 5),
-            exp_gained=data.get('exp_gained', 10)  # Default 10 XP if not provided
+            exp_gained=data.get('exp_gained', 10),  # Default 10 XP if not provided
+            photo=photo_data  # Also save photo to session
         )
         
         # Format description
@@ -2378,9 +2455,16 @@ def log_workout_api():
         total_exp_gained = base_exp + consistency_bonus
         new_session.exp_gained = total_exp_gained
         
+        # Also save EXP to the workout object
+        workout.exp_gained = total_exp_gained
+        workout.completed = True  # Ensure workout is marked as completed
+        
         # Update user's exp
         current_user.exp += total_exp_gained
         current_user.update_level()
+
+        # Debug print to check EXP is being saved correctly
+        print(f"Saved workout with {total_exp_gained} EXP (base: {base_exp}, bonus: {consistency_bonus})")
 
         db.session.commit()
         return jsonify({
@@ -3225,3 +3309,246 @@ def prepare_exercise_trend_data(exercise_id):
             'additional_weight': [],
             'assistance_weight': [],
         })
+
+# API routes for workout social features
+@workout.route('/api/workouts/<int:workout_id>/like', methods=['POST'])
+@login_required
+def like_workout(workout_id):
+    """Like a workout"""
+    try:
+        workout = Workout.query.get_or_404(workout_id)
+        
+        # Check if already liked
+        existing_like = WorkoutLike.query.filter_by(
+            workout_id=workout_id,
+            user_id=current_user.id
+        ).first()
+        
+        if existing_like:
+            # Unlike if already liked
+            db.session.delete(existing_like)
+            liked = False
+            
+            # Remove notification if it exists
+            if workout.user_id != current_user.id:
+                # Find and delete any existing notification for this like
+                notification = Notification.query.filter(
+                    Notification.user_id == workout.user_id,
+                    Notification.message.like(f"%{current_user.first_name} liked your workout%")
+                ).first()
+                
+                if notification:
+                    db.session.delete(notification)
+        else:
+            # Add new like
+            like = WorkoutLike(
+                workout_id=workout_id,
+                user_id=current_user.id
+            )
+            db.session.add(like)
+            liked = True
+            
+            # Create notification for workout owner (if not self)
+            if workout.user_id != current_user.id:
+                notification = Notification(
+                    user_id=workout.user_id,
+                    message=f"{current_user.first_name} liked your workout '{workout.title}'"
+                )
+                db.session.add(notification)
+        
+        db.session.commit()
+        
+        # Count total likes
+        like_count = WorkoutLike.query.filter_by(workout_id=workout_id).count()
+        
+        return jsonify({
+            'success': True,
+            'liked': liked,
+            'like_count': like_count
+        })
+    
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error liking workout: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Could not process like'
+        }), 500
+
+@workout.route('/api/workouts/<int:workout_id>/comments', methods=['GET'])
+@login_required
+def get_workout_comments(workout_id):
+    """Get comments for a workout"""
+    try:
+        comments = WorkoutComment.query.filter_by(workout_id=workout_id)\
+            .order_by(WorkoutComment.created_at.asc())\
+            .all()
+        
+        comment_list = []
+        for comment in comments:
+            user = User.query.get(comment.user_id)
+            comment_list.append({
+                'id': comment.id,
+                'text': comment.text,
+                'user_id': comment.user_id,
+                'user_name': f"{user.first_name} {user.last_name}" if user else "Unknown User",
+                'created_at': comment.created_at.strftime('%Y-%m-%d %H:%M:%S')
+            })
+        
+        return jsonify({
+            'success': True,
+            'comments': comment_list
+        })
+    
+    except Exception as e:
+        print(f"Error getting comments: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Could not retrieve comments'
+        }), 500
+
+@workout.route('/api/workouts/<int:workout_id>/comments', methods=['POST'])
+@login_required
+def add_workout_comment(workout_id):
+    """Add a comment to a workout"""
+    try:
+        workout = Workout.query.get_or_404(workout_id)
+        data = request.get_json()
+        
+        if not data or 'text' not in data or not data['text'].strip():
+            return jsonify({
+                'success': False,
+                'error': 'Comment text is required'
+            }), 400
+        
+        # Create new comment
+        comment = WorkoutComment(
+            workout_id=workout_id,
+            user_id=current_user.id,
+            text=data['text'].strip()
+        )
+        db.session.add(comment)
+        
+        # Create notification for workout owner (if not self)
+        if workout.user_id != current_user.id:
+            notification = Notification(
+                user_id=workout.user_id,
+                message=f"{current_user.first_name} commented on your workout '{workout.title}'"
+            )
+            db.session.add(notification)
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'comment_id': comment.id
+        })
+    
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error adding comment: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Could not add comment'
+        }), 500
+
+@workout.route('/api/workouts/<int:workout_id>/delete', methods=['DELETE'])
+@login_required
+def delete_workout(workout_id):
+    """Delete a workout and all associated data"""
+    try:
+        workout = Workout.query.get_or_404(workout_id)
+        
+        # Verify ownership
+        if workout.user_id != current_user.id:
+            return jsonify({
+                'success': False,
+                'error': 'You do not have permission to delete this workout'
+            }), 403
+        
+        # Get exp gained from this workout to subtract from user
+        exp_gained = workout.exp_gained or 0
+        
+        # Subtract EXP from user
+        if exp_gained > 0:
+            current_user.exp = max(0, current_user.exp - exp_gained)
+            current_user.update_level()  # Update level after EXP change
+        
+        # Delete workout (this will cascade to all related records)
+        db.session.delete(workout)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Workout deleted successfully'
+        })
+    
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error deleting workout: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Could not delete workout'
+        }), 500
+
+@workout.route('/api/notifications', methods=['GET'])
+@login_required
+def get_notifications():
+    """Get user notifications"""
+    try:
+        # Query for user's notifications
+        notifications = Notification.query.filter_by(user_id=current_user.id)\
+            .order_by(Notification.date_sent.desc())\
+            .limit(20)\
+            .all()
+        
+        # Create a list of notification dictionaries
+        notification_list = [n.to_dict() for n in notifications] if notifications else []
+        
+        # Count unread notifications
+        unread_count = sum(1 for n in notifications if not n.is_read) if notifications else 0
+        
+        # Return success response with notifications list and unread count
+        return jsonify({
+            'success': True,
+            'notifications': notification_list,
+            'unread_count': unread_count
+        })
+    
+    except Exception as e:
+        print(f"Error getting notifications: {str(e)}")
+        # Return error response with empty list
+        return jsonify({
+            'success': False,
+            'error': 'Could not retrieve notifications',
+            'notifications': [],
+            'unread_count': 0
+        }), 500
+
+@workout.route('/api/notifications/mark-read', methods=['POST'])
+@login_required
+def mark_notifications_read():
+    """Mark all notifications as read"""
+    try:
+        notifications = Notification.query.filter_by(
+            user_id=current_user.id,
+            is_read=False
+        ).all()
+        
+        for notification in notifications:
+            notification.is_read = True
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Notifications marked as read'
+        })
+    
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error marking notifications as read: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Could not mark notifications as read'
+        }), 500

@@ -81,6 +81,172 @@ def calculate_streak(user_id):
     
     return streak
 
+def calculate_weekly_stats(user_id):
+    """Calculate stats for the current week"""
+    from app.models import Workout, User, Session
+    from sqlalchemy import func
+    
+    # Calculate current week boundaries
+    today = datetime.utcnow()
+    start_of_week = today - timedelta(days=today.weekday())
+    start_of_week = start_of_week.replace(hour=0, minute=0, second=0, microsecond=0)
+    end_of_week = start_of_week + timedelta(days=7)
+    
+    # Calculate previous week boundaries
+    start_of_prev_week = start_of_week - timedelta(days=7)
+    end_of_prev_week = start_of_week
+    
+    # Statistics for current week
+    current_week_workouts = Workout.query.filter(
+        Workout.user_id == user_id,
+        Workout.date >= start_of_week,
+        Workout.date < end_of_week,
+        Workout.completed == True
+    ).all()
+    
+    # Debug output
+    print(f"Found {len(current_week_workouts)} workouts for this week")
+    for w in current_week_workouts:
+        print(f"Workout {w.id}: exp_gained={w.exp_gained}, volume={w.volume}, duration={w.duration}")
+    
+    # Use both Workout and Session data for EXP (in case one has missing data)
+    current_week_sessions = Session.query.filter(
+        Session.user_id == user_id,
+        Session.session_date >= start_of_week,
+        Session.session_date < end_of_week
+    ).all()
+    
+    # Calculate total EXP from both workouts and sessions
+    total_exp = 0
+    # First try workouts
+    workout_exp = sum(w.exp_gained or 0 for w in current_week_workouts)
+    # If no exp from workouts, try sessions
+    if workout_exp == 0:
+        total_exp = sum(s.exp_gained or 0 for s in current_week_sessions)
+    else:
+        total_exp = workout_exp
+    
+    current_week_stats = {
+        'workout_count': len(current_week_workouts),
+        'total_volume': sum(w.volume or 0 for w in current_week_workouts),
+        'total_duration': sum(w.duration or 0 for w in current_week_workouts),
+        'total_exp': total_exp
+    }
+    
+    # Statistics for previous week
+    prev_week_workouts = Workout.query.filter(
+        Workout.user_id == user_id,
+        Workout.date >= start_of_prev_week,
+        Workout.date < end_of_prev_week,
+        Workout.completed == True
+    ).all()
+    
+    # Use both Workout and Session data for EXP (in case one has missing data)
+    prev_week_sessions = Session.query.filter(
+        Session.user_id == user_id,
+        Session.session_date >= start_of_prev_week,
+        Session.session_date < end_of_prev_week
+    ).all()
+    
+    # Calculate total EXP from both workouts and sessions for previous week
+    prev_total_exp = 0
+    prev_workout_exp = sum(w.exp_gained or 0 for w in prev_week_workouts)
+    if prev_workout_exp == 0:
+        prev_total_exp = sum(s.exp_gained or 0 for s in prev_week_sessions)
+    else:
+        prev_total_exp = prev_workout_exp
+    
+    prev_week_stats = {
+        'workout_count': len(prev_week_workouts),
+        'total_volume': sum(w.volume or 0 for w in prev_week_workouts),
+        'total_duration': sum(w.duration or 0 for w in prev_week_workouts),
+        'total_exp': prev_total_exp
+    }
+    
+    # Print debug info
+    print(f"Current week stats: {current_week_stats}")
+    print(f"Previous week stats: {prev_week_stats}")
+    
+    # Calculate change indicators (1 = better, 0 = same, -1 = worse)
+    comparisons = {
+        'workout_count': compare_values(current_week_stats['workout_count'], prev_week_stats['workout_count']),
+        'total_volume': compare_values(current_week_stats['total_volume'], prev_week_stats['total_volume']),
+        'total_duration': compare_values(current_week_stats['total_duration'], prev_week_stats['total_duration']),
+        'total_exp': compare_values(current_week_stats['total_exp'], prev_week_stats['total_exp'])
+    }
+    
+    # Get user's current streak
+    user = User.query.get(user_id)
+    streak = user.streak if user else 0
+    
+    # Get user's current level
+    level = user.level if user else 1
+    
+    return {
+        'current_week': current_week_stats,
+        'prev_week': prev_week_stats,
+        'comparisons': comparisons,
+        'streak': streak,
+        'level': level
+    }
+
+def compare_values(current, previous):
+    """Compare two values and return 1 (better), 0 (same), or -1 (worse)"""
+    if current > previous:
+        return 1
+    elif current < previous:
+        return -1
+    else:
+        return 0
+
+def compare_exercise_progress(workout_id, user_id):
+    """
+    Compare exercise performance in a workout with previous performances
+    Returns dictionary with exercise_id keys and comparison values (1, 0, -1)
+    """
+    from app.models import Workout, WorkoutExercise, WorkoutSet
+    
+    exercise_comparisons = {}
+    
+    # Get the workout
+    workout = Workout.query.get(workout_id)
+    if not workout or workout.user_id != user_id:
+        return {}
+    
+    # Process each exercise in the workout
+    for workout_exercise in workout.exercises:
+        exercise_id = workout_exercise.exercise_id
+        
+        # Get previous workout with this exercise
+        prev_workout_exercise = WorkoutExercise.query.join(Workout).filter(
+            WorkoutExercise.exercise_id == exercise_id,
+            Workout.user_id == user_id,
+            Workout.id != workout_id,
+            Workout.completed == True
+        ).order_by(Workout.date.desc()).first()
+        
+        if not prev_workout_exercise:
+            # No previous workout with this exercise, so it's an improvement
+            exercise_comparisons[exercise_id] = 1
+            continue
+        
+        # Calculate volume for current exercise
+        current_volume = sum(
+            s.weight * s.reps if s.weight and s.reps else 0 
+            for s in workout_exercise.sets if s.completed
+        )
+        
+        # Calculate volume for previous exercise
+        prev_volume = sum(
+            s.weight * s.reps if s.weight and s.reps else 0 
+            for s in prev_workout_exercise.sets if s.completed
+        )
+        
+        # Compare volumes
+        exercise_comparisons[exercise_id] = compare_values(current_volume, prev_volume)
+    
+    return exercise_comparisons
+
 """Utility functions for the application"""
 
 # Unit conversion constants and functions

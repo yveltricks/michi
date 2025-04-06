@@ -3,6 +3,18 @@
  */
 const workoutHandlers = {
     /**
+     * Helper function to handle notifications API errors gracefully
+     * @returns {Array} Empty notifications array
+     */
+    handleEmptyNotifications: function() {
+        return {
+            success: true,
+            notifications: [],
+            unread_count: 0
+        };
+    },
+    
+    /**
      * Calculate recommended values based on previous performance
      * @param {Object} exercise The exercise data
      * @param {Array} previousSets Previous sets data

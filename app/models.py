@@ -378,6 +378,7 @@ class Workout(db.Model):
     completed = db.Column(db.Boolean, default=False)  # Whether workout is completed
     start_time = db.Column(db.DateTime, nullable=True)  # When workout was started
     end_time = db.Column(db.DateTime, nullable=True)  # When workout was completed
+    photo = db.Column(db.String(200), nullable=True)  # Photo URL for the workout
     
     # Relationships
     exercises = db.relationship('WorkoutExercise', backref='workout', cascade='all, delete-orphan', lazy=True)
@@ -406,7 +407,8 @@ class Workout(db.Model):
             'sets_completed': self.sets_completed,
             'completed': self.completed,
             'start_time': self.start_time.isoformat() if self.start_time else None,
-            'end_time': self.end_time.isoformat() if self.end_time else None
+            'end_time': self.end_time.isoformat() if self.end_time else None,
+            'photo': self.photo
         }
         
     @property
@@ -535,6 +537,41 @@ class Notification(db.Model):
     message = db.Column(db.Text, nullable=False)
     is_read = db.Column(db.Boolean, default=False)
     date_sent = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'message': self.message,
+            'is_read': self.is_read,
+            'date_sent': self.date_sent.strftime('%Y-%m-%d %H:%M:%S')
+        }
+
+class WorkoutLike(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    workout_id = db.Column(db.Integer, db.ForeignKey('workout.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    workout = db.relationship('Workout', backref=db.backref('likes', cascade='all, delete-orphan', lazy=True))
+    user = db.relationship('User', backref=db.backref('workout_likes', lazy=True))
+    
+    def __repr__(self):
+        return f'<WorkoutLike {self.id} by user {self.user_id}>'
+
+class WorkoutComment(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    workout_id = db.Column(db.Integer, db.ForeignKey('workout.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    text = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    workout = db.relationship('Workout', backref=db.backref('comments', cascade='all, delete-orphan', lazy=True))
+    user = db.relationship('User', backref=db.backref('workout_comments', lazy=True))
+    
+    def __repr__(self):
+        return f'<WorkoutComment {self.id} by user {self.user_id}>'
 
 class BodyweightLog(db.Model):
     id = db.Column(db.Integer, primary_key=True)

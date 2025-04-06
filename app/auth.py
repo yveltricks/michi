@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, redirect, url_for, request, flash
 from flask_login import login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
-from .models import User, Session, Measurement, Workout, Exercise
+from .models import User, Session, Measurement, Workout, Exercise, WorkoutLike, WorkoutComment, Notification
 from sqlalchemy import desc
 from . import db
 from datetime import datetime, timedelta
@@ -9,7 +9,7 @@ from dataclasses import dataclass
 import re
 import json
 from .workout import calculate_workout_metrics  # Import the function from workout.py
-from .utils import convert_volume_to_preferred_unit  # Import the volume conversion function
+from .utils import convert_volume_to_preferred_unit, calculate_weekly_stats, compare_exercise_progress
 
 @dataclass
 class YearRange:
@@ -55,6 +55,7 @@ def home():
     """Display the home feed with recent workouts and achievements"""
     # Get user's recent workouts
     recent_workouts = Workout.query.filter_by(user_id=current_user.id)\
+        .filter(Workout.completed == True)\
         .order_by(Workout.date.desc())\
         .limit(5)\
         .all()
@@ -62,16 +63,41 @@ def home():
     # Get workouts from followed users
     followed_workouts = Workout.query.join(User)\
         .filter(User.id.in_([u.id for u in current_user.following]))\
+        .filter(Workout.completed == True)\
         .order_by(Workout.date.desc())\
         .limit(5)\
         .all()
     
-    # Combine and sort all workouts
+    # Calculate weekly stats for the current user
+    weekly_stats = calculate_weekly_stats(current_user.id)
+    
+    # Make sure the weekly stats have default values if they're empty
+    if not weekly_stats.get('current_week'):
+        weekly_stats['current_week'] = {
+            'workout_count': 0,
+            'total_volume': 0,
+            'total_duration': 0,
+            'total_exp': 0
+        }
+    
+    if not weekly_stats.get('comparisons'):
+        weekly_stats['comparisons'] = {
+            'workout_count': 0,
+            'total_volume': 0,
+            'total_duration': 0,
+            'total_exp': 0
+        }
+    
+    # Process each workout to get additional data
     combined_sessions = []
     
     # Process recent workouts
     for workout in recent_workouts:
         try:
+            # Compare exercise performance with previous workouts
+            exercise_comparisons = compare_exercise_progress(workout.id, current_user.id)
+            
+            # Load workout data
             data = json.loads(workout.data) if workout.data else {}
             exercises = data.get('exercises', [])
             
@@ -100,6 +126,10 @@ def home():
                     # If still no ID, generate a temporary one
                     if 'id' not in exercise:
                         exercise['id'] = f"temp_{hash(exercise.get('name', ''))}"
+                    
+                    # Add comparison indicator if available
+                    if 'id' in exercise and exercise['id'] in exercise_comparisons:
+                        exercise['comparison'] = exercise_comparisons[exercise['id']]
             
             # Check for exercise sets format and calculate sets count if needed
             for exercise in exercises:
@@ -121,6 +151,21 @@ def home():
                     if 'volume' in exercise:
                         exercise['volume'] = convert_volume_to_preferred_unit(exercise['volume'], current_user.preferred_weight_unit)
             
+            # Get like count
+            like_count = WorkoutLike.query.filter_by(workout_id=workout.id).count()
+            
+            # Check if current user has liked this workout
+            user_liked = WorkoutLike.query.filter_by(
+                workout_id=workout.id, 
+                user_id=current_user.id
+            ).first() is not None
+            
+            # Get comment count
+            comment_count = WorkoutComment.query.filter_by(workout_id=workout.id).count()
+            
+            # Get user's level at the time of the workout
+            user_level = calculate_user_level_at_time(current_user.id, workout.date)
+            
             combined_sessions.append({
                 'id': workout.id,
                 'date': workout.date,
@@ -134,7 +179,12 @@ def home():
                 ),
                 'duration': duration,
                 'volume': volume,
-                'session_rating': rating
+                'session_rating': rating,
+                'like_count': like_count,
+                'user_liked': user_liked,
+                'comment_count': comment_count,
+                'user_level': user_level,
+                'photo': workout.photo
             })
         except Exception as e:
             print(f"Error processing recent workout: {e}")
@@ -192,6 +242,21 @@ def home():
                     if 'volume' in exercise:
                         exercise['volume'] = convert_volume_to_preferred_unit(exercise['volume'], current_user.preferred_weight_unit)
             
+            # Get like count
+            like_count = WorkoutLike.query.filter_by(workout_id=workout.id).count()
+            
+            # Check if current user has liked this workout
+            user_liked = WorkoutLike.query.filter_by(
+                workout_id=workout.id, 
+                user_id=current_user.id
+            ).first() is not None
+            
+            # Get comment count
+            comment_count = WorkoutComment.query.filter_by(workout_id=workout.id).count()
+            
+            # Get user's level at the time of the workout
+            user_level = calculate_user_level_at_time(workout.user_id, workout.date)
+            
             combined_sessions.append({
                 'id': workout.id,
                 'date': workout.date,
@@ -205,7 +270,12 @@ def home():
                 ),
                 'duration': duration,
                 'volume': volume,
-                'session_rating': rating
+                'session_rating': rating,
+                'like_count': like_count,
+                'user_liked': user_liked,
+                'comment_count': comment_count,
+                'user_level': user_level,
+                'photo': workout.photo
             })
         except Exception as e:
             print(f"Error processing followed workout: {e}")
@@ -214,7 +284,47 @@ def home():
     # Sort combined sessions by date
     combined_sessions.sort(key=lambda x: x['date'], reverse=True)
     
-    return render_template('home.html', sessions=combined_sessions)
+    # Get unread notification count
+    unread_notification_count = Notification.query.filter_by(
+        user_id=current_user.id,
+        is_read=False
+    ).count()
+    
+    return render_template('home.html', 
+                          sessions=combined_sessions, 
+                          weekly_stats=weekly_stats,
+                          unread_notification_count=unread_notification_count)
+
+def calculate_user_level_at_time(user_id, date):
+    """Calculate what level a user was at a given time"""
+    from app.models import User, Workout
+    
+    # Get the user
+    user = User.query.get(user_id)
+    if not user:
+        return 1  # Default level
+    
+    # Get current level
+    current_level = user.level
+    current_exp = user.exp
+    
+    # Get workouts completed after the given date
+    later_workouts = Workout.query.filter(
+        Workout.user_id == user_id,
+        Workout.date > date,
+        Workout.completed == True
+    ).all()
+    
+    # Calculate EXP gained after the given date
+    exp_after_date = sum(w.exp_gained or 0 for w in later_workouts)
+    
+    # Estimate EXP at the given date
+    est_exp_at_date = max(0, current_exp - exp_after_date)
+    
+    # Calculate level at that EXP
+    level_at_date = max(1, est_exp_at_date // 100)
+    
+    return level_at_date
 
 @auth.route('/login')
 def login():
@@ -531,60 +641,83 @@ def delete_account():
         flash('An error occurred while deleting your account', 'error')
         return redirect(url_for('auth.settings'))
 
-# New route for updating personal information
 @auth.route('/update-personal-info', methods=['POST'])
 @login_required
 def update_personal_info():
+    """Update user's personal information and preferences"""
+    # Extract form data
     first_name = request.form.get('first_name')
     last_name = request.form.get('last_name')
+    email = request.form.get('email')
     gender = request.form.get('gender')
-
-    # Get birthday components
-    try:
-        birth_day = int(request.form.get('birth_day'))
-        birth_month = int(request.form.get('birth_month'))
-        birth_year = int(request.form.get('birth_year'))
-    except (ValueError, TypeError):
-        flash('Please enter valid date values', 'error')
-        return redirect(url_for('auth.settings'))
-
-    # Validate gender
-    if gender not in ['male', 'female']:
-        flash('Please select a valid gender', 'error')
-        return redirect(url_for('auth.settings'))
-
-    # Validate birthday
-    try:
-        birthday = datetime(birth_year, birth_month, birth_day)
-
-        # Validate age range
-        today = datetime.utcnow()
-        age = today.year - birthday.year - ((today.month, today.day) < (birthday.month, birthday.day))
-
-        if age < 5:
-            flash('You must be at least 5 years old', 'error')
+    birthday = request.form.get('birthday')
+    
+    # Get current user
+    user = User.query.get(current_user.id)
+    
+    # Update user information
+    if first_name:
+        user.first_name = first_name
+    if last_name:
+        user.last_name = last_name
+    
+    # Validate email - check if it's already in use by another user
+    if email and email != user.email:
+        existing_user = User.query.filter_by(email=email).first()
+        if existing_user and existing_user.id != current_user.id:
+            flash('Email already in use by another account', 'error')
             return redirect(url_for('auth.settings'))
-        if age > 150:
-            flash('Please enter a valid birth date', 'error')
+        user.email = email
+    
+    # Update gender if specified
+    if gender and gender in ['male', 'female', 'other', 'prefer_not_to_say']:
+        user.gender = gender
+    
+    # Update birthday if specified
+    if birthday:
+        try:
+            user.birthday = datetime.strptime(birthday, '%Y-%m-%d')
+        except ValueError:
+            flash('Invalid birthday format', 'error')
             return redirect(url_for('auth.settings'))
-        if birthday > today:
-            flash('Birth date cannot be in the future', 'error')
-            return redirect(url_for('auth.settings'))
-
-    except ValueError:
-        flash('Invalid date. Please check the day matches the selected month.', 'error')
-        return redirect(url_for('auth.settings'))
-
-    try:
-        current_user.first_name = first_name
-        current_user.last_name = last_name
-        current_user.gender = gender
-        current_user.birthday = birthday
-        db.session.commit()
-        flash('Personal information updated successfully!', 'success')
-    except Exception as e:
-        db.session.rollback()
-        flash('Error updating personal information', 'error')
-        print(f"Error updating personal info: {str(e)}")  # For debugging
-
+    
+    # Save changes
+    db.session.commit()
+    
+    flash('Personal information updated successfully', 'success')
     return redirect(url_for('auth.settings'))
+
+@auth.route('/start-workout')
+@login_required
+def start_workout():
+    """Start a new workout session"""
+    # Get all exercises for the user to select from
+    exercises = Exercise.query.filter_by(user_created=False).order_by(Exercise.name).all()
+    
+    # Add user-created exercises
+    user_exercises = Exercise.query.filter_by(user_created=True, created_by=current_user.id).order_by(Exercise.name).all()
+    exercises.extend(user_exercises)
+    
+    # Define sort_key function
+    def sort_key(exercise):
+        return exercise.name if exercise and hasattr(exercise, 'name') else ""
+    
+    # Sort exercises alphabetically
+    exercises.sort(key=sort_key)
+    
+    # Get user's current bodyweight for bodyweight exercises
+    bodyweight = None
+    bodyweight_log = Measurement.query.filter_by(user_id=current_user.id, type='weight').order_by(Measurement.date.desc()).first()
+    if bodyweight_log:
+        bodyweight = bodyweight_log.value
+    
+    # Get the unread notification count for the notification badge
+    unread_notification_count = Notification.query.filter_by(
+        user_id=current_user.id,
+        is_read=False
+    ).count()
+    
+    return render_template('workout/start.html', 
+                          exercises=exercises, 
+                          user_weight=bodyweight,
+                          unread_notification_count=unread_notification_count)
