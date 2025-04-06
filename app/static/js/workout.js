@@ -18,42 +18,75 @@ let workoutData = {
   
   let currentSetTypeSelection = { exerciseIndex: null, setIndex: null };
   
-  const INPUT_CONFIGS = {
-    weight_reps: [
-        { type: 'number', step: '0.1', min: '0', label: 'Weight (kg)', field: 'weight', class: 'weight-input' },
-        { type: 'number', min: '1', step: '1', label: 'Reps', field: 'reps', class: 'reps-input' }
-    ],
-    bodyweight_reps: [
-        { type: 'number', min: '1', step: '1', label: 'Reps', field: 'reps', class: 'reps-input' }
-    ],
-    weighted_bodyweight: [
-        { type: 'number', step: '0.1', min: '0', label: 'Added Weight (kg)', field: 'additional_weight', class: 'weight-input' },
-        { type: 'number', min: '1', step: '1', label: 'Reps', field: 'reps', class: 'reps-input' }
-    ],
-    assisted_bodyweight: [
-        { type: 'number', step: '0.1', min: '0', label: 'Assist Weight (kg)', field: 'assistance_weight', class: 'weight-input' },
-        { type: 'number', min: '1', step: '1', label: 'Reps', field: 'reps', class: 'reps-input' }
-    ],
-    duration: [
-        { 
-            type: 'time',
-            field: 'time',
-            class: 'time-input-container'
-        }
-    ],
-    duration_weight: [
-        { type: 'number', step: '0.1', min: '0', label: 'Weight (kg)', field: 'weight', class: 'weight-input' },
-        { type: 'time', field: 'time', class: 'time-input-container' }
-    ],
-    distance_duration: [
-        { type: 'number', step: '0.01', min: '0', label: 'Distance (km)', field: 'distance', class: 'distance-input' },
-        { type: 'time', field: 'time', class: 'time-input-container' }
-    ],
-    weight_distance: [
-        { type: 'number', step: '0.1', min: '0', label: 'Weight (kg)', field: 'weight', class: 'weight-input' },
-        { type: 'number', step: '0.01', min: '0', label: 'Distance (km)', field: 'distance', class: 'distance-input' }
-    ]
-};
+  // Get user preferences for units
+  let userPrefs = {};
+  
+  // Initialize INPUT_CONFIGS as an empty object that will be populated in DOMContentLoaded
+  let INPUT_CONFIGS = {};
+  
+  // Function to get the correct unit labels based on user preferences
+  function getUnitLabels() {
+    return {
+      weight: userPrefs.weightUnit === 'lbs' ? 'lbs' : 'kg',
+      distance: userPrefs.distanceUnit === 'mi' ? 'mi' : 'km'
+    };
+  }
+  
+  // Dynamic input configurations based on user preferences
+  function getInputConfigs() {
+    const units = getUnitLabels();
+    
+    return {
+      weight_reps: [
+          { type: 'number', step: '0.1', min: '0', label: `Weight (${units.weight})`, field: 'weight', class: 'weight-input' },
+          { type: 'number', min: '1', step: '1', label: 'Reps', field: 'reps', class: 'reps-input' }
+      ],
+      bodyweight_reps: [
+          { type: 'number', min: '1', step: '1', label: 'Reps', field: 'reps', class: 'reps-input' }
+      ],
+      weighted_bodyweight: [
+          { type: 'number', step: '0.1', min: '0', label: `Added Weight (${units.weight})`, field: 'additional_weight', class: 'weight-input' },
+          { type: 'number', min: '1', step: '1', label: 'Reps', field: 'reps', class: 'reps-input' }
+      ],
+      assisted_bodyweight: [
+          { type: 'number', step: '0.1', min: '0', label: `Assist Weight (${units.weight})`, field: 'assistance_weight', class: 'weight-input' },
+          { type: 'number', min: '1', step: '1', label: 'Reps', field: 'reps', class: 'reps-input' }
+      ],
+      duration: [
+          { 
+              type: 'time',
+              field: 'time',
+              class: 'time-input-container'
+          }
+      ],
+      duration_weight: [
+          { type: 'number', step: '0.1', min: '0', label: `Weight (${units.weight})`, field: 'weight', class: 'weight-input' },
+          { type: 'time', field: 'time', class: 'time-input-container' }
+      ],
+      distance_duration: [
+          { type: 'number', step: '0.01', min: '0', label: `Distance (${units.distance})`, field: 'distance', class: 'distance-input' },
+          { type: 'time', field: 'time', class: 'time-input-container' }
+      ],
+      weight_distance: [
+          { type: 'number', step: '0.1', min: '0', label: `Weight (${units.weight})`, field: 'weight', class: 'weight-input' },
+          { type: 'number', step: '0.01', min: '0', label: `Distance (${units.distance})`, field: 'distance', class: 'distance-input' }
+      ]
+    };
+  }
+
+  // Add initialization of user preferences and INPUT_CONFIGS at the top of DOMContentLoaded
+  document.addEventListener('DOMContentLoaded', function() {
+    // Initialize user preferences
+    userPrefs = {
+      weightUnit: document.querySelector('body').getAttribute('data-weight-unit') || 'kg',
+      distanceUnit: document.querySelector('body').getAttribute('data-distance-unit') || 'km'
+    };
+    
+    // Initialize input configurations
+    INPUT_CONFIGS = getInputConfigs();
+    
+    // Rest of your existing DOMContentLoaded code...
+  }, { once: true });
   
   function addExerciseAndStayOpen(exerciseId, exerciseName) {
     // Fetch exercise details including input type and previous values
@@ -890,8 +923,18 @@ let workoutData = {
     updateExpDisplay();
   }
   
-  // Handle muscle group filtering
+  // Handle muscle group filtering - Move inside the main DOMContentLoaded event
   document.addEventListener('DOMContentLoaded', function() {
+    // Initialize user preferences
+    userPrefs = {
+      weightUnit: document.querySelector('body').getAttribute('data-weight-unit') || 'kg',
+      distanceUnit: document.querySelector('body').getAttribute('data-distance-unit') || 'km'
+    };
+    
+    // Initialize input configurations
+    INPUT_CONFIGS = getInputConfigs();
+    
+    // Set up muscle filter
     const muscleFilter = document.getElementById('muscle-filter');
     if (muscleFilter) {
         muscleFilter.addEventListener('change', function() {
@@ -911,7 +954,21 @@ let workoutData = {
     
     // Highlight recently used exercises
     highlightRecentExercises();
-  });
+    
+    // Initialize progress bar width
+    const progressBar = document.getElementById('level-progress');
+    if (progressBar) {
+      const currentExp = progressBar.getAttribute('data-current-exp');
+      if (currentExp) {
+        const progressPercentage = currentExp % 100;
+        progressBar.style.width = progressPercentage + '%';
+      }
+    }
+    
+    // Reset performance metrics to start fresh
+    resetPerformanceMetrics();
+    
+  }, { once: true });
   
   // Function to highlight recently used exercises
   function highlightRecentExercises() {
@@ -1383,6 +1440,9 @@ let workoutData = {
         setVolume = (set.weight || 0) * (set.distance || 0);
     }
     
+    // Update display with the appropriate unit
+    const units = getUnitLabels();
+    
     if (isCompleted) {
         // Calculate EXP only if we haven't already for this set
         if (!set.expGained) {
@@ -1402,8 +1462,8 @@ let workoutData = {
         }
         
         if (setVolume > 0) {
-            const currentVolume = parseInt(totalVolumeElement.textContent) || 0;
-            totalVolumeElement.textContent = currentVolume + setVolume;
+            const currentVolume = parseFloat(totalVolumeElement.textContent.split(' ')[0]) || 0;
+            totalVolumeElement.textContent = `${(currentVolume + setVolume).toFixed(1)} ${units.weight}`;
         }
         
         // Add EXP
@@ -1420,8 +1480,8 @@ let workoutData = {
         }
         
         if (setVolume > 0) {
-            const currentVolume = parseInt(totalVolumeElement.textContent) || 0;
-            totalVolumeElement.textContent = Math.max(0, currentVolume - setVolume);
+            const currentVolume = parseFloat(totalVolumeElement.textContent.split(' ')[0]) || 0;
+            totalVolumeElement.textContent = `${Math.max(0, currentVolume - setVolume).toFixed(1)} ${units.weight}`;
         }
         
         // Remove the exact same amount of EXP that was added
@@ -1434,6 +1494,9 @@ let workoutData = {
     
     // Update EXP display
     updateExpDisplay();
+    
+    // Update overall performance indicator
+    updatePerformanceIndicator();
   }
 
   function startRestTimer(seconds, exerciseName) {
@@ -1749,25 +1812,6 @@ let workoutData = {
       performancePercent.classList.remove('performance-improved', 'performance-declined', 'performance-neutral');
     }
   }
-
-  // Add DOM content loaded event listener to initialize the workout page
-  document.addEventListener('DOMContentLoaded', function() {
-    // Initialize progress bar width
-    const progressBar = document.getElementById('level-progress');
-    if (progressBar) {
-      const currentExp = progressBar.getAttribute('data-current-exp');
-      if (currentExp) {
-        const progressPercentage = currentExp % 100;
-        progressBar.style.width = progressPercentage + '%';
-      }
-    }
-    
-    // Reset performance metrics to start fresh
-    resetPerformanceMetrics();
-    
-    // Initialize other workout page elements
-    // ...
-  });
 
   // Add function to update performance metrics
   function updatePerformanceMetrics(exercise, currentSet, previousSet, isCompleted) {

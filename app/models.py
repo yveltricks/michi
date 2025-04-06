@@ -144,7 +144,7 @@ class Exercise(db.Model):
         'weight_reps': {
             'fields': ['weight', 'reps'],
             'volume_formula': 'weight * reps',
-            'units': {'weight': 'kg', 'reps': 'reps'},
+            'units': {'weight': 'weight_unit', 'reps': 'reps'},
             'range_fields': ['min_reps', 'max_reps']
         },
         'bodyweight_reps': {
@@ -156,13 +156,13 @@ class Exercise(db.Model):
         'weighted_bodyweight': {
             'fields': ['additional_weight', 'reps'],
             'volume_formula': '(bodyweight + additional_weight) * reps',
-            'units': {'additional_weight': 'kg', 'reps': 'reps'},
+            'units': {'additional_weight': 'weight_unit', 'reps': 'reps'},
             'range_fields': ['min_reps', 'max_reps']
         },
         'assisted_bodyweight': {
             'fields': ['assistance_weight', 'reps'],
             'volume_formula': '(bodyweight - assistance_weight) * reps',
-            'units': {'assistance_weight': 'kg', 'reps': 'reps'},
+            'units': {'assistance_weight': 'weight_unit', 'reps': 'reps'},
             'range_fields': ['min_reps', 'max_reps']
         },
         'duration': {
@@ -174,19 +174,19 @@ class Exercise(db.Model):
         'duration_weight': {
             'fields': ['weight', 'time'],
             'volume_formula': 'weight * (time / 60) or bodyweight+weight * (time / 60) for planks',
-            'units': {'weight': 'kg', 'time': 'seconds'},
+            'units': {'weight': 'weight_unit', 'time': 'seconds'},
             'range_fields': ['min_duration', 'max_duration']
         },
         'distance_duration': {
             'fields': ['distance', 'time'],
             'volume_formula': None,
-            'units': {'distance': 'km', 'time': 'seconds'},
+            'units': {'distance': 'distance_unit', 'time': 'seconds'},
             'range_fields': ['min_distance', 'max_distance', 'min_duration', 'max_duration']
         },
         'weight_distance': {
             'fields': ['weight', 'distance'],
             'volume_formula': 'weight * distance',
-            'units': {'weight': 'kg', 'distance': 'km'},
+            'units': {'weight': 'weight_unit', 'distance': 'distance_unit'},
             'range_fields': ['min_distance', 'max_distance']
         }
     }
@@ -195,40 +195,77 @@ class Exercise(db.Model):
         """Return the required input fields for this exercise type"""
         return self.INPUT_TYPES.get(self.input_type, {}).get('fields', [])
 
-    def get_units(self):
-        """Return the units for each field"""
-        return self.INPUT_TYPES.get(self.input_type, {}).get('units', {})
+    def get_units(self, user=None):
+        """Return the units for each field, based on user preferences if available"""
+        units = self.INPUT_TYPES.get(self.input_type, {}).get('units', {}).copy()
+        
+        # Replace dynamic unit placeholders with actual user preferences
+        if user:
+            for field, unit in units.items():
+                if unit == 'weight_unit':
+                    units[field] = user.preferred_weight_unit
+                elif unit == 'distance_unit':
+                    units[field] = user.preferred_distance_unit
+        
+        return units
 
     def get_range_fields(self):
         """Return the range fields for this exercise type"""
         return self.INPUT_TYPES.get(self.input_type, {}).get('range_fields', [])
 
-    def calculate_volume(self, set_data, bodyweight=None):
-        """Calculate volume based on exercise type and set data"""
+    def calculate_volume(self, set_data, bodyweight=None, user=None):
+        """Calculate volume based on exercise type and set data, respecting user's unit preferences"""
         input_type = self.INPUT_TYPES.get(self.input_type)
         if not input_type or not input_type['volume_formula']:
             return 0
 
+        # Make a copy of set_data to avoid modifying the original
+        data = set_data.copy() if set_data else {}
+        
+        # Convert weights and distances to kg/km for consistent volume calculation
+        if user:
+            # Import locally to avoid circular imports
+            from .utils import normalize_weight_to_kg, normalize_distance_to_km
+            
+            weight_unit = user.preferred_weight_unit
+            distance_unit = user.preferred_distance_unit
+            
+            # Normalize weight fields to kg
+            if 'weight' in data and weight_unit:
+                data['weight'] = normalize_weight_to_kg(data['weight'], weight_unit)
+            if 'additional_weight' in data and weight_unit:
+                data['additional_weight'] = normalize_weight_to_kg(data['additional_weight'], weight_unit)
+            if 'assistance_weight' in data and weight_unit:
+                data['assistance_weight'] = normalize_weight_to_kg(data['assistance_weight'], weight_unit)
+                
+            # Normalize distance to km
+            if 'distance' in data and distance_unit:
+                data['distance'] = normalize_distance_to_km(data['distance'], distance_unit)
+                
+            # If bodyweight is in lbs, convert it to kg
+            if bodyweight and weight_unit == 'lbs':
+                bodyweight = normalize_weight_to_kg(bodyweight, 'lbs')
+
         if self.input_type == 'bodyweight_reps':
             if not bodyweight:
                 return 0
-            return bodyweight * set_data.get('reps', 0)
+            return bodyweight * data.get('reps', 0)
 
         elif self.input_type == 'weighted_bodyweight':
             if not bodyweight:
                 return 0
-            return (bodyweight + set_data.get('additional_weight', 0)) * set_data.get('reps', 0)
+            return (bodyweight + data.get('additional_weight', 0)) * data.get('reps', 0)
 
         elif self.input_type == 'assisted_bodyweight':
             if not bodyweight:
                 return 0
-            return (bodyweight - set_data.get('assistance_weight', 0)) * set_data.get('reps', 0)
+            return (bodyweight - data.get('assistance_weight', 0)) * data.get('reps', 0)
 
         elif self.input_type == 'weight_reps':
-            return set_data.get('weight', 0) * set_data.get('reps', 0)
+            return data.get('weight', 0) * data.get('reps', 0)
 
         elif self.input_type == 'weight_distance':
-            return set_data.get('weight', 0) * set_data.get('distance', 0)
+            return data.get('weight', 0) * data.get('distance', 0)
 
         return 0
 
@@ -529,7 +566,7 @@ class Set(db.Model):
     exercise = db.relationship('Exercise', backref='sets')
     session = db.relationship('Session', backref='sets')
 
-    def to_dict(self):
+    def to_dict(self, user=None):
         """Convert set data to dictionary based on exercise type"""
         exercise = self.exercise
         data = {
@@ -540,7 +577,19 @@ class Set(db.Model):
 
         # Add relevant fields based on exercise type
         for field in exercise.get_input_fields():
-            data[field] = getattr(self, field)
+            value = getattr(self, field)
+            
+            # Convert units based on user preferences
+            if user and value is not None:
+                # Import locally to avoid circular imports
+                from .utils import convert_weight, convert_distance
+                
+                if field in ['weight', 'additional_weight', 'assistance_weight'] and user.preferred_weight_unit == 'lbs':
+                    value = convert_weight(value, 'kg', 'lbs')
+                elif field == 'distance' and user.preferred_distance_unit == 'mi':
+                    value = convert_distance(value, 'km', 'mi')
+            
+            data[field] = value
 
         return data
 

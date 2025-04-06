@@ -61,7 +61,7 @@
         <div class="stats-container volume-container">
             <div class="stats-info">
                 <span class="stats-label">VOLUME</span>
-                <span class="stats-value" id="workout-volume" data-user-weight="{{ user_weight }}">0</span>
+                <span class="stats-value" id="workout-volume" data-user-weight="{{ user_weight }}">0 {{ current_user.preferred_weight_unit }}</span>
             </div>
         </div>
         
@@ -131,7 +131,7 @@
                         <div class="exercise-info">
                             <h4>{{ exercise.name }}</h4>
                             <small>{{ exercise.muscles_worked }}</small>
-                            <a href="{{ url_for('workout.view_exercise_simple', exercise_id=exercise.id) }}" class="text-blue-600 hover:text-blue-800 text-sm ml-2">
+                            <a href="{{ url_for('workout.view_exercise', exercise_id=exercise.id) }}" class="text-blue-600 hover:text-blue-800 text-sm ml-2">
                                 View Details
                             </a>
                         </div>

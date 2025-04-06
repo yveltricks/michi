@@ -34,15 +34,15 @@
                             <div>
                                 <span class="exercise-name">{{ exercise.name }}</span>
                                 {% if exercise.get('weight') %}
-                                    <span class="exercise-details">{{ exercise.sets }}x{{ exercise.reps }} @ {{ exercise.weight }}kg</span>
+                                    <span class="exercise-details">{{ exercise.sets }}x{{ exercise.reps }} @ {{ exercise.weight }}{{ current_user.preferred_weight_unit }}</span>
                                 {% elif exercise.get('duration') %}
                                     <span class="exercise-details">{{ exercise.sets }} sets, {{ exercise.duration }} mins</span>
                                 {% else %}
                                     <span class="exercise-details">{{ exercise.sets }} sets</span>
                                 {% endif %}
                             </div>
-                            <a href="{{ url_for('workout.view_exercise_simple', exercise_id=exercise.id) }}" class="text-blue-600 hover:text-blue-800 text-sm">
-                                View Details
+                            <a href="{{ url_for('workout.view_exercise', exercise_id=exercise.id) }}" class="text-blue-600 hover:text-blue-800 text-sm">
+                                View Exercise History
                             </a>
                         </div>
                     </div>
@@ -70,7 +70,7 @@
             </div>
             <div class="stat">
                 <i class="fas fa-dumbbell"></i>
-                {{ session.volume }}kg
+                {{ session.volume }}{{ current_user.preferred_weight_unit }}
             </div>
             <div class="stat">
                 <i class="fas fa-star"></i>

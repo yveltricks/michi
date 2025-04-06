@@ -246,7 +246,7 @@
         <!-- Show weight for weight-based exercises -->
         {% if exercise.input_type in ['weight_reps', 'weighted_bodyweight', 'duration_weight', 'weight_distance'] %}
         <div class="stat-card">
-            <div class="stat-card-value">{{ stats.max_weight }} kg</div>
+            <div class="stat-card-value">{{ stats.max_weight }} {{ current_user.preferred_weight_unit }}</div>
             <div class="stat-card-label">Max Weight</div>
         </div>
         {% endif %}
@@ -254,7 +254,7 @@
         <!-- Show 1RM estimate for weight-reps exercises -->
         {% if exercise.input_type == 'weight_reps' and stats.one_rm %}
         <div class="stat-card">
-            <div class="stat-card-value">{{ stats.one_rm }} kg</div>
+            <div class="stat-card-value">{{ stats.one_rm }} {{ current_user.preferred_weight_unit }}</div>
             <div class="stat-card-label">Estimated 1RM</div>
         </div>
         {% endif %}
@@ -272,7 +272,7 @@
         <!-- Show distance for distance-based exercises -->
         {% if exercise.input_type in ['distance_duration', 'weight_distance'] and stats.max_distance > 0 %}
         <div class="stat-card">
-            <div class="stat-card-value">{{ stats.max_distance }} km</div>
+            <div class="stat-card-value">{{ stats.max_distance }} {{ current_user.preferred_distance_unit }}</div>
             <div class="stat-card-label">Max Distance</div>
         </div>
         {% endif %}
@@ -326,7 +326,7 @@
                 {% elif exercise.min_duration is not none and exercise.max_duration is not none and exercise.input_type in ['duration', 'duration_weight', 'distance_duration'] %}
                     {{ exercise.min_duration }}-{{ exercise.max_duration }} seconds
                 {% elif exercise.min_distance is not none and exercise.max_distance is not none and exercise.input_type in ['distance_duration', 'weight_distance'] %}
-                    {{ exercise.min_distance }}-{{ exercise.max_distance }} km
+                    {{ exercise.min_distance }}-{{ exercise.max_distance }} {{ current_user.preferred_distance_unit }}
                 {% else %}
                     Not set
                 {% endif %}
@@ -407,7 +407,7 @@
                     <tr>
                         <th>Date</th>
                         {% if exercise.input_type in ['weight_reps', 'weighted_bodyweight', 'duration_weight', 'weight_distance'] %}
-                        <th>Weight (kg)</th>
+                        <th>Weight ({{ current_user.preferred_weight_unit }})</th>
                         {% endif %}
                         
                         {% if exercise.input_type in ['weight_reps', 'bodyweight_reps', 'weighted_bodyweight', 'assisted_bodyweight'] %}
@@ -419,15 +419,15 @@
                         {% endif %}
                         
                         {% if exercise.input_type in ['distance_duration', 'weight_distance'] %}
-                        <th>Distance (km)</th>
+                        <th>Distance ({{ current_user.preferred_distance_unit }})</th>
                         {% endif %}
                         
                         {% if exercise.input_type in ['weighted_bodyweight'] %}
-                        <th>Additional Weight (kg)</th>
+                        <th>Additional Weight ({{ current_user.preferred_weight_unit }})</th>
                         {% endif %}
                         
                         {% if exercise.input_type in ['assisted_bodyweight'] %}
-                        <th>Assistance Weight (kg)</th>
+                        <th>Assistance Weight ({{ current_user.preferred_weight_unit }})</th>
                         {% endif %}
                         
                         <th>Volume</th>
@@ -505,7 +505,7 @@
                         <td>{{ data.date.strftime('%b %d, %Y') }}</td>
                         <td>{{ data.title }}</td>
                         <td>{{ data.sets }}</td>
-                        <td>{{ data.volume|int }} kg</td>
+                        <td>{{ data.volume|int }} {{ current_user.preferred_weight_unit }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -565,7 +565,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initialize charts using trend data passed from backend
     let trendData;
     try {
-        trendData = {{ trend_data|safe }};
+        trendData = JSON.parse('{{ trend_data|safe }}');
     } catch (e) {
         console.error("Error parsing trend data:", e);
         trendData = { dates: [], volume: [], weight: [], reps: [], duration: [], distance: [], additional_weight: [], assistance_weight: [] };
@@ -582,7 +582,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 data: {
                     labels: trendData.dates,
                     datasets: [{
-                        label: 'Weight (kg)',
+                        label: 'Weight ({{ current_user.preferred_weight_unit }})',
                         data: trendData.weight,
                         borderColor: '#4f46e5',
                         backgroundColor: 'rgba(79, 70, 229, 0.1)',
@@ -598,7 +598,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             beginAtZero: false,
                             title: {
                                 display: true,
-                                text: 'Weight (kg)'
+                                text: 'Weight ({{ current_user.preferred_weight_unit }})'
                             }
                         },
                         x: {
@@ -717,7 +717,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 data: {
                     labels: trendData.dates,
                     datasets: [{
-                        label: 'Distance (km)',
+                        label: 'Distance ({{ current_user.preferred_distance_unit }})',
                         data: trendData.distance,
                         borderColor: '#65a30d',
                         backgroundColor: 'rgba(101, 163, 13, 0.1)',
@@ -733,7 +733,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             beginAtZero: true,
                             title: {
                                 display: true,
-                                text: 'Distance (km)'
+                                text: 'Distance ({{ current_user.preferred_distance_unit }})'
                             }
                         },
                         x: {
@@ -767,35 +767,22 @@ document.addEventListener('DOMContentLoaded', function() {
                         label: 'Volume (' + volumeUnit + ')',
                         data: trendData.volume,
                         borderColor: '#10b981',
-                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                        tension: 0.1,
-                        fill: false
+                        backgroundColor: 'rgba(16, 185, 129, 0.2)',
+                        fill: true,
+                        tension: 0.1
                     }]
                 },
                 options: {
                     responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            title: {
-                                display: true,
-                                text: 'Volume (' + volumeUnit + ')'
-                            }
-                        },
-                        x: {
-                            title: {
-                                display: true,
-                                text: 'Date'
-                            }
-                        }
-                    },
                     plugins: {
+                        legend: {
+                            position: 'top',
+                        },
                         title: {
                             display: true,
-                            text: 'Volume Progress Over Time'
+                            text: 'Volume (' + volumeUnit + ')'
                         }
-                    }
+                    },
                 }
             });
         }

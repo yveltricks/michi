@@ -9,6 +9,7 @@ from dataclasses import dataclass
 import re
 import json
 from .workout import calculate_workout_metrics  # Import the function from workout.py
+from .utils import convert_volume_to_preferred_unit  # Import the volume conversion function
 
 @dataclass
 class YearRange:
@@ -79,6 +80,10 @@ def home():
             
             # Use stored values if they exist, otherwise use calculated values
             volume = workout.volume if hasattr(workout, 'volume') and workout.volume else metrics['volume']
+            
+            # Convert volume from kg to user's preferred unit
+            volume = convert_volume_to_preferred_unit(volume, current_user.preferred_weight_unit)
+            
             duration = workout.duration if hasattr(workout, 'duration') and workout.duration else metrics['duration']
             rating = workout.rating if hasattr(workout, 'rating') and workout.rating else metrics['rating']
             
@@ -111,6 +116,10 @@ def home():
                             elif isinstance(set_data, dict) and 'weight' in set_data and 'reps' in set_data:
                                 exercise_volume += float(set_data['weight']) * float(set_data['reps'])
                         exercise['volume'] = exercise_volume
+                    
+                    # Convert exercise volume to preferred unit if it exists
+                    if 'volume' in exercise:
+                        exercise['volume'] = convert_volume_to_preferred_unit(exercise['volume'], current_user.preferred_weight_unit)
             
             combined_sessions.append({
                 'id': workout.id,
@@ -142,6 +151,10 @@ def home():
             
             # Use stored values if they exist, otherwise use calculated values
             volume = workout.volume if hasattr(workout, 'volume') and workout.volume else metrics['volume']
+            
+            # Convert volume from kg to user's preferred unit
+            volume = convert_volume_to_preferred_unit(volume, current_user.preferred_weight_unit)
+            
             duration = workout.duration if hasattr(workout, 'duration') and workout.duration else metrics['duration']
             rating = workout.rating if hasattr(workout, 'rating') and workout.rating else metrics['rating']
             
@@ -174,6 +187,10 @@ def home():
                             elif isinstance(set_data, dict) and 'weight' in set_data and 'reps' in set_data:
                                 exercise_volume += float(set_data['weight']) * float(set_data['reps'])
                         exercise['volume'] = exercise_volume
+                    
+                    # Convert exercise volume to preferred unit if it exists
+                    if 'volume' in exercise:
+                        exercise['volume'] = convert_volume_to_preferred_unit(exercise['volume'], current_user.preferred_weight_unit)
             
             combined_sessions.append({
                 'id': workout.id,

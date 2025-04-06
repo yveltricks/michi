@@ -14,7 +14,7 @@
     
     {% block extra_head %}{% endblock %}
 </head>
-<body class="bg-gray-100 text-gray-900">
+<body data-weight-unit="{{ current_user.preferred_weight_unit }}" data-distance-unit="{{ current_user.preferred_distance_unit }}" class="bg-gray-100 text-gray-900">
     <!-- Navigation -->
     {% if current_user.is_authenticated %}
     <!-- Hide top navigation on mobile, show on larger screens -->

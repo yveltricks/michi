@@ -42,8 +42,8 @@
                             <div class="font-medium">{{ exercise.name }}</div>
                             <div class="text-xs text-gray-500 mt-1">{{ exercise.muscles }}</div>
                         </div>
-                        <a href="{{ url_for('workout.view_exercise_simple', exercise_id=exercise.id) }}" class="text-blue-600 hover:text-blue-800 text-sm">
-                            View Details
+                        <a href="{{ url_for('workout.view_exercise', exercise_id=exercise.id) }}" class="text-blue-600 hover:text-blue-800 text-sm">
+                            View Exercise History
                         </a>
                     </div>
                     <div class="mt-2 pl-3 border-l-2 border-gray-200">
