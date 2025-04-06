@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+
+{% block title %}{{ exercise.name }} - Exercise Details{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <!-- Exercise Header -->
+    <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+        <div class="flex items-start justify-between">
+            <div>
+                <h1 class="text-3xl font-bold text-gray-900">{{ exercise.name }}</h1>
+                <div class="mt-2 text-gray-600">
+                    <p><span class="font-semibold">Primary Muscles:</span> {{ exercise.muscles_worked }}</p>
+                    <p><span class="font-semibold">Equipment:</span> {{ exercise.equipment }}</p>
+                </div>
+            </div>
+            {% if exercise.photo %}
+            <img src="{{ url_for('static', filename='exercise_photos/' + exercise.photo) }}" 
+                 alt="{{ exercise.name }}" 
+                 class="w-32 h-32 object-cover rounded-lg">
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Statistics Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div class="bg-white rounded-lg shadow-md p-4">
+            <h3 class="text-lg font-semibold text-gray-900">Total Sets</h3>
+            <p class="text-3xl font-bold text-blue-600">{{ total_sets }}</p>
+        </div>
+        <div class="bg-white rounded-lg shadow-md p-4">
+            <h3 class="text-lg font-semibold text-gray-900">Total Volume</h3>
+            <p class="text-3xl font-bold text-green-600">{{ "%.1f"|format(total_volume) }} kg</p>
+        </div>
+        {% if exercise.input_type in ['weight_reps', 'bodyweight_reps'] %}
+        <div class="bg-white rounded-lg shadow-md p-4">
+            <h3 class="text-lg font-semibold text-gray-900">Total Reps</h3>
+            <p class="text-3xl font-bold text-purple-600">{{ total_reps }}</p>
+        </div>
+        <div class="bg-white rounded-lg shadow-md p-4">
+            <h3 class="text-lg font-semibold text-gray-900">Max Weight</h3>
+            <p class="text-3xl font-bold text-red-600">{{ "%.1f"|format(max_weight) }} kg</p>
+        </div>
+        {% elif exercise.input_type == 'duration' %}
+        <div class="bg-white rounded-lg shadow-md p-4">
+            <h3 class="text-lg font-semibold text-gray-900">Total Duration</h3>
+            <p class="text-3xl font-bold text-purple-600">{{ "%.1f"|format(total_duration/60) }} min</p>
+        </div>
+        <div class="bg-white rounded-lg shadow-md p-4">
+            <h3 class="text-lg font-semibold text-gray-900">Max Duration</h3>
+            <p class="text-3xl font-bold text-red-600">{{ "%.1f"|format(max_duration/60) }} min</p>
+        </div>
+        {% elif exercise.input_type == 'distance_duration' %}
+        <div class="bg-white rounded-lg shadow-md p-4">
+            <h3 class="text-lg font-semibold text-gray-900">Total Distance</h3>
+            <p class="text-3xl font-bold text-purple-600">{{ "%.1f"|format(total_distance) }} km</p>
+        </div>
+        <div class="bg-white rounded-lg shadow-md p-4">
+            <h3 class="text-lg font-semibold text-gray-900">Max Distance</h3>
+            <p class="text-3xl font-bold text-red-600">{{ "%.1f"|format(max_distance) }} km</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Progress Chart -->
+    <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+        <h2 class="text-xl font-bold text-gray-900 mb-4">Progress History</h2>
+        <div style="height: 300px;">
+            <canvas id="exerciseChart"></canvas>
+        </div>
+    </div>
+
+    <!-- History Table -->
+    <div class="bg-white rounded-lg shadow-md p-6">
+        <h2 class="text-xl font-bold text-gray-900 mb-4">Exercise History</h2>
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Session</th>
+                        {% if exercise.input_type in ['weight_reps', 'bodyweight_reps'] %}
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Weight (kg)</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Reps</th>
+                        {% elif exercise.input_type == 'duration' %}
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Duration (s)</th>
+                        {% elif exercise.input_type == 'distance_duration' %}
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Distance (km)</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Duration (s)</th>
+                        {% endif %}
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    {% for entry in history %}
+                    <tr>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ entry.date.strftime('%Y-%m-%d') }}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ entry.session_name }}</td>
+                        {% if exercise.input_type in ['weight_reps', 'bodyweight_reps'] %}
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ "%.1f"|format(entry.weight) if entry.weight is not none else '-' }}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ entry.reps if entry.reps is not none else '-' }}</td>
+                        {% elif exercise.input_type == 'duration' %}
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ entry.duration if entry.duration is not none else '-' }}</td>
+                        {% elif exercise.input_type == 'distance_duration' %}
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ "%.1f"|format(entry.distance) if entry.distance is not none else '-' }}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ entry.duration if entry.duration is not none else '-' }}</td>
+                        {% endif %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const ctx = document.getElementById('exerciseChart').getContext('2d');
+    const chartData = {{ chart_data|tojson|safe }};
+    
+    // Create the chart
+    new Chart(ctx, {
+        type: 'line',
+        data: chartData,
+        options: chartData.options
+    });
+});
+</script>
+{% endblock %} 

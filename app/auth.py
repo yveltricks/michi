@@ -1,13 +1,14 @@
 from flask import Blueprint, render_template, redirect, url_for, request, flash
 from flask_login import login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
-from .models import User, Session, Measurement, Workout
+from .models import User, Session, Measurement, Workout, Exercise
 from sqlalchemy import desc
 from . import db
 from datetime import datetime, timedelta
 from dataclasses import dataclass
 import re
 import json
+from .workout import calculate_workout_metrics  # Import the function from workout.py
 
 @dataclass
 class YearRange:
@@ -50,90 +51,152 @@ def validate_weight(weight_value, unit='kg'):
 @auth.route('/home')
 @login_required
 def home():
-    # Get the current user's sessions and sessions from people they follow
-    following_ids = [user.id for user in current_user.following]
-    following_ids.append(current_user.id)  # Include current user's sessions
-
-    # Get sessions from the Session model (older workouts)
-    sessions = Session.query\
-        .filter(Session.user_id.in_(following_ids))\
-        .order_by(desc(Session.session_date))\
-        .limit(10)\
+    """Display the home feed with recent workouts and achievements"""
+    # Get user's recent workouts
+    recent_workouts = Workout.query.filter_by(user_id=current_user.id)\
+        .order_by(Workout.date.desc())\
+        .limit(5)\
         .all()
     
-    # Get sessions from the Workout model (newer workouts)
-    workouts = Workout.query\
-        .filter(Workout.user_id.in_(following_ids))\
-        .order_by(desc(Workout.date))\
-        .limit(10)\
+    # Get workouts from followed users
+    followed_workouts = Workout.query.join(User)\
+        .filter(User.id.in_([u.id for u in current_user.following]))\
+        .order_by(Workout.date.desc())\
+        .limit(5)\
         .all()
     
-    # Convert workouts to have the same interface as sessions
-    for workout in workouts:
-        # Add session_date attribute to be compatible with the template
-        workout.session_date = workout.date
-        # Add any other attributes needed for compatibility
-        if not hasattr(workout, 'session_rating'):
-            workout.session_rating = workout.rating if hasattr(workout, 'rating') else 3
-        
-        # Ensure user object is loaded
-        if workout.user is None:
-            workout.user = User.query.get(workout.user_id)
-            
-        # Handle exercises data carefully
-        try:
-            # Start with a safe default list
-            exercise_list = []
-            
-            # Case 1: If workout has WorkoutExercise relation objects
-            if hasattr(workout, 'exercises') and workout.exercises:
-                # If it's a SQLAlchemy relationship, convert to safe dict format
-                if hasattr(workout.exercises, '__iter__'):
-                    for ex in workout.exercises:
-                        # Extract exercise info safely
-                        if hasattr(ex, 'name') or hasattr(ex, 'exercise_name'):
-                            exercise_dict = {
-                                'name': getattr(ex, 'name', getattr(ex, 'exercise_name', "Unknown Exercise")),
-                                'sets': getattr(ex, 'sets', 1),
-                            }
-                            exercise_list.append(exercise_dict)
-                
-                    # Override the exercises attribute with our safe list
-                    workout.exercises = exercise_list
-                
-            # Case 2: If workout has data field with JSON
-            elif hasattr(workout, 'data') and workout.data:
-                try:
-                    # Try to parse the JSON data
-                    json_data = json.loads(workout.data)
-                    # Ensure it's a list
-                    if isinstance(json_data, list):
-                        workout.exercises = json_data
-                    else:
-                        workout.exercises = []
-                except:
-                    # If parsing fails, set to empty string that will parse to empty list
-                    workout.exercises = "[]"
-            
-            # Case 3: Fallback to empty string that will parse to empty list
-            else:
-                workout.exercises = "[]"
-            
-        except Exception as e:
-            print(f"Error processing workout exercises: {e}")
-            workout.exercises = "[]"
-    
-    # Combine and sort all sessions
+    # Combine and sort all workouts
     combined_sessions = []
-    combined_sessions.extend(sessions)
-    combined_sessions.extend(workouts)
     
-    # Sort by date (newest first)
-    combined_sessions.sort(key=lambda x: x.session_date if hasattr(x, 'session_date') else x.date, reverse=True)
+    # Process recent workouts
+    for workout in recent_workouts:
+        try:
+            data = json.loads(workout.data) if workout.data else {}
+            exercises = data.get('exercises', [])
+            
+            # Use our metrics calculation function to get accurate metrics
+            metrics = calculate_workout_metrics(data)
+            
+            # Use stored values if they exist, otherwise use calculated values
+            volume = workout.volume if hasattr(workout, 'volume') and workout.volume else metrics['volume']
+            duration = workout.duration if hasattr(workout, 'duration') and workout.duration else metrics['duration']
+            rating = workout.rating if hasattr(workout, 'rating') and workout.rating else metrics['rating']
+            
+            # Process each exercise to ensure it has an ID
+            for exercise in exercises:
+                if isinstance(exercise, dict):
+                    # If the exercise is a dictionary without an ID, try to find the exercise
+                    if 'id' not in exercise:
+                        exercise_name = exercise.get('name')
+                        if exercise_name:
+                            db_exercise = Exercise.query.filter_by(name=exercise_name).first()
+                            if db_exercise:
+                                exercise['id'] = db_exercise.id
+                    # If still no ID, generate a temporary one
+                    if 'id' not in exercise:
+                        exercise['id'] = f"temp_{hash(exercise.get('name', ''))}"
+            
+            # Check for exercise sets format and calculate sets count if needed
+            for exercise in exercises:
+                if isinstance(exercise, dict) and 'sets' in exercise and isinstance(exercise['sets'], list):
+                    # Count sets
+                    exercise['sets_count'] = len(exercise['sets'])
+                    
+                    # If there's no volume in the exercise but there is in the sets, calculate total
+                    if 'volume' not in exercise:
+                        exercise_volume = 0
+                        for set_data in exercise['sets']:
+                            if isinstance(set_data, dict) and 'volume' in set_data:
+                                exercise_volume += float(set_data['volume'])
+                            elif isinstance(set_data, dict) and 'weight' in set_data and 'reps' in set_data:
+                                exercise_volume += float(set_data['weight']) * float(set_data['reps'])
+                        exercise['volume'] = exercise_volume
+            
+            combined_sessions.append({
+                'id': workout.id,
+                'date': workout.date,
+                'session_date': workout.date,  # Add session_date for template compatibility
+                'title': workout.title,
+                'exercises': exercises,
+                'user': current_user,
+                'is_own': True,
+                'description': workout.notes if hasattr(workout, 'notes') and workout.notes else (
+                    data.get('description', '') if isinstance(data, dict) else ''
+                ),
+                'duration': duration,
+                'volume': volume,
+                'session_rating': rating
+            })
+        except Exception as e:
+            print(f"Error processing recent workout: {e}")
+            continue
     
-    # Limit to the most recent 10
-    combined_sessions = combined_sessions[:10]
-
+    # Process followed users' workouts
+    for workout in followed_workouts:
+        try:
+            data = json.loads(workout.data) if workout.data else {}
+            exercises = data.get('exercises', [])
+            
+            # Use our metrics calculation function to get accurate metrics
+            metrics = calculate_workout_metrics(data)
+            
+            # Use stored values if they exist, otherwise use calculated values
+            volume = workout.volume if hasattr(workout, 'volume') and workout.volume else metrics['volume']
+            duration = workout.duration if hasattr(workout, 'duration') and workout.duration else metrics['duration']
+            rating = workout.rating if hasattr(workout, 'rating') and workout.rating else metrics['rating']
+            
+            # Process each exercise to ensure it has an ID
+            for exercise in exercises:
+                if isinstance(exercise, dict):
+                    # If the exercise is a dictionary without an ID, try to find the exercise
+                    if 'id' not in exercise:
+                        exercise_name = exercise.get('name')
+                        if exercise_name:
+                            db_exercise = Exercise.query.filter_by(name=exercise_name).first()
+                            if db_exercise:
+                                exercise['id'] = db_exercise.id
+                    # If still no ID, generate a temporary one
+                    if 'id' not in exercise:
+                        exercise['id'] = f"temp_{hash(exercise.get('name', ''))}"
+            
+            # Check for exercise sets format and calculate sets count if needed
+            for exercise in exercises:
+                if isinstance(exercise, dict) and 'sets' in exercise and isinstance(exercise['sets'], list):
+                    # Count sets
+                    exercise['sets_count'] = len(exercise['sets'])
+                    
+                    # If there's no volume in the exercise but there is in the sets, calculate total
+                    if 'volume' not in exercise:
+                        exercise_volume = 0
+                        for set_data in exercise['sets']:
+                            if isinstance(set_data, dict) and 'volume' in set_data:
+                                exercise_volume += float(set_data['volume'])
+                            elif isinstance(set_data, dict) and 'weight' in set_data and 'reps' in set_data:
+                                exercise_volume += float(set_data['weight']) * float(set_data['reps'])
+                        exercise['volume'] = exercise_volume
+            
+            combined_sessions.append({
+                'id': workout.id,
+                'date': workout.date,
+                'session_date': workout.date,  # Add session_date for template compatibility
+                'title': workout.title,
+                'exercises': exercises,
+                'user': workout.user,
+                'is_own': False,
+                'description': workout.notes if hasattr(workout, 'notes') and workout.notes else (
+                    data.get('description', '') if isinstance(data, dict) else ''
+                ),
+                'duration': duration,
+                'volume': volume,
+                'session_rating': rating
+            })
+        except Exception as e:
+            print(f"Error processing followed workout: {e}")
+            continue
+    
+    # Sort combined sessions by date
+    combined_sessions.sort(key=lambda x: x['date'], reverse=True)
+    
     return render_template('home.html', sessions=combined_sessions)
 
 @auth.route('/login')

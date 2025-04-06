@@ -40,41 +40,26 @@
                     {% endif %}
                     
                     <div class="mt-3 text-sm text-gray-700">
-                        {% set exercises = [] %}
-                        
-                        {# Try multiple ways to safely extract exercises data #}
-                        {% if session is defined %}
-                            {% if session.exercises is defined %}
-                                {% if session.exercises is string %}
-                                    {% set exercises = session.exercises|default('[]')|from_json %}
-                                {% elif session.exercises is iterable and session.exercises is not string %}
-                                    {% set exercises = session.exercises %}
-                                {% endif %}
-                            {% elif session.data is defined and session.data is string %}
-                                {% set exercises = session.data|default('[]')|from_json %}
+                        {% for exercise in session.exercises %}
+                            {% if exercise.name is defined %}
+                                <div class="mb-1">
+                                    {% if exercise.sets_count is defined %}
+                                        {% set sets_count = exercise.sets_count %}
+                                    {% elif exercise.sets is defined and exercise.sets is number %}
+                                        {% set sets_count = exercise.sets %}
+                                    {% elif exercise is mapping and exercise.sets is defined and exercise.sets is iterable and exercise.sets is not string %}
+                                        {% set sets_count = exercise.sets|length %}
+                                    {% else %}
+                                        {% set sets_count = 1 %}
+                                    {% endif %}
+                                    
+                                    {{ sets_count }} {% if sets_count == 1 %}set{% else %}sets{% endif %} 
+                                    <a href="{{ url_for('workout.view_exercise_simple', exercise_id=exercise.id) }}" class="text-blue-600 hover:text-blue-800">
+                                        {{ exercise.name }}
+                                    </a>
+                                </div>
                             {% endif %}
-                        {% endif %}
-                        
-                        {# Display the exercises safely #}
-                        {% if exercises and exercises is iterable and exercises is not string %}
-                            {% for exercise in exercises %}
-                                {% if exercise is mapping and exercise.name is defined %}
-                                    <div class="mb-1">
-                                        {% if exercise.sets is defined %}
-                                            {{ exercise.sets }} {% if exercise.sets == 1 %}set{% else %}sets{% endif %} {{ exercise.name }}
-                                        {% else %}
-                                            1 set {{ exercise.name }}
-                                        {% endif %}
-                                    </div>
-                                {% endif %}
-                            {% endfor %}
-                            
-                            {% if exercises|length > 3 %}
-                                <a href="#" class="text-blue-600 hover:underline">See more exercises...</a>
-                            {% endif %}
-                        {% else %}
-                            <div class="mb-1">Workout details not available</div>
-                        {% endif %}
+                        {% endfor %}
                     </div>
                 </div>
             </div>
@@ -107,6 +92,40 @@
             </div>
         </div>
         {% endfor %}
+    </div>
+
+    <!-- Top Exercises Card -->
+    <div class="stats-card">
+        <h3 class="card-title">Top Exercises</h3>
+        <div class="top-exercises">
+            {% for exercise in top_exercises %}
+            <div class="exercise-item">
+                <div class="exercise-name">{{ exercise.name }}</div>
+                <div class="exercise-meta">
+                    <span class="sets">{{ exercise.sets }} sets</span>
+                    <span class="volume">{{ exercise.volume|default(0)|int }} kg</span>
+                </div>
+                <a href="{{ url_for('workout.view_exercise_simple', exercise_id=exercise.id) }}" class="text-blue-600 hover:text-blue-800">
+                    View Details
+                </a>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    
+    <!-- Recently Used Exercises -->
+    <div class="stats-card">
+        <h3 class="card-title">Recent Exercises</h3>
+        <div class="recent-exercises">
+            {% for exercise in recent_exercises %}
+            <div class="exercise-item">
+                <div class="exercise-name">{{ exercise.name }}</div>
+                <a href="{{ url_for('workout.view_exercise_simple', exercise_id=exercise.id) }}" class="text-blue-600 hover:text-blue-800">
+                    View Details
+                </a>
+            </div>
+            {% endfor %}
+        </div>
     </div>
 </div>
 {% endblock %}

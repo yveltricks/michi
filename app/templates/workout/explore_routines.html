@@ -7,6 +7,18 @@
     <h1>Explore Routines</h1>
     <p class="lead">Discover and copy workout routines shared by the community</p>
     
+    <!-- Search Bar -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="input-group mb-3">
+                <input type="text" class="form-control" id="search-input" placeholder="Search routines by name or description...">
+                <div class="input-group-append">
+                    <button class="btn btn-primary" id="search-button" type="button">Search</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
     <!-- Filter Section -->
     <div class="card mb-4">
         <div class="card-body">
@@ -36,18 +48,30 @@
                 </div>
                 <div class="col-md-4">
                     <div class="form-group">
-                        <label for="muscle-filter">Muscle Group</label>
-                        <select class="form-control" id="muscle-filter">
-                            <option value="">All Muscle Groups</option>
-                            {% for muscle in muscle_groups %}
-                            <option value="{{ muscle }}">{{ muscle }}</option>
-                            {% endfor %}
+                        <label for="sort-by">Sort By</label>
+                        <select class="form-control" id="sort-by">
+                            <option value="popular">Most Popular</option>
+                            <option value="newest">Newest</option>
+                            <option value="name">Name (A-Z)</option>
                         </select>
                     </div>
                 </div>
             </div>
-            <button id="apply-filters" class="btn btn-primary mt-2">Apply Filters</button>
-            <button id="reset-filters" class="btn btn-secondary mt-2 ml-2">Reset</button>
+            <div class="row mt-3">
+                <div class="col-12">
+                    <label>Muscles Worked</label>
+                    <div class="muscle-filter-container">
+                        {% for muscle in muscle_groups %}
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input muscle-filter-checkbox" type="checkbox" id="muscle-{{ muscle|lower|replace(' ', '-') }}" value="{{ muscle }}">
+                            <label class="form-check-label" for="muscle-{{ muscle|lower|replace(' ', '-') }}">{{ muscle }}</label>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            <button id="apply-filters" class="btn btn-primary mt-3">Apply Filters</button>
+            <button id="reset-filters" class="btn btn-secondary mt-3 ml-2">Reset</button>
         </div>
     </div>
 
@@ -82,6 +106,9 @@
                     <span class="badge badge-primary">{level}</span>
                     <span class="badge badge-info">{goal}</span>
                 </div>
+                <div class="mb-2 muscle-tags">
+                    <!-- Muscle tags will be inserted here -->
+                </div>
                 <div class="mb-2 creator-info">
                     <small class="text-muted">Created by {creator}</small>
                 </div>
@@ -96,6 +123,27 @@
         </div>
     </div>
 </template>
+
+<style>
+.muscle-filter-container {
+    max-height: 150px;
+    overflow-y: auto;
+    border: 1px solid #dee2e6;
+    padding: 10px;
+    border-radius: 5px;
+}
+
+.muscle-tag {
+    display: inline-block;
+    margin-right: 5px;
+    margin-bottom: 5px;
+    padding: 2px 8px;
+    background-color: #e9ecef;
+    color: #495057;
+    border-radius: 15px;
+    font-size: 0.8rem;
+}
+</style>
 {% endblock %}
 
 {% block scripts %}
@@ -104,7 +152,9 @@ let currentPage = 1;
 let currentFilters = {
     level: '',
     goal: '',
-    muscle_group: ''
+    muscle_groups: [],
+    search: '',
+    sort_by: 'popular'
 };
 
 function loadRoutines(page = 1) {
@@ -117,8 +167,18 @@ function loadRoutines(page = 1) {
     const queryParams = new URLSearchParams({
         page: page,
         per_page: 9,
-        ...currentFilters
+        level: currentFilters.level,
+        goal: currentFilters.goal,
+        search: currentFilters.search,
+        sort_by: currentFilters.sort_by
     });
+    
+    // Add multiple muscle_groups
+    if (currentFilters.muscle_groups && currentFilters.muscle_groups.length > 0) {
+        currentFilters.muscle_groups.forEach(muscle => {
+            queryParams.append('muscle_groups', muscle);
+        });
+    }
 
     // Log the request URL for debugging
     const requestUrl = `/workout/api/routines/explore?${queryParams}`;
@@ -138,7 +198,7 @@ function loadRoutines(page = 1) {
             if (data.success) {
                 // Display routines
                 if (!data.routines || data.routines.length === 0) {
-                    routinesGrid.innerHTML = '<div class="col-12 text-center"><p class="text-info">No routines found matching your filters. Make sure you have shared some routines as public.</p></div>';
+                    routinesGrid.innerHTML = '<div class="col-12 text-center"><p class="text-info">No routines found matching your filters. Try different criteria or reset filters.</p></div>';
                     return;
                 }
                 
@@ -164,6 +224,31 @@ function loadRoutines(page = 1) {
                                 element.textContent = text;
                             }
                         });
+                        
+                        // Add muscle tags if available
+                        const muscleTags = card.querySelector('.muscle-tags');
+                        if (muscleTags && routine.muscles_worked) {
+                            let muscles = [];
+                            if (typeof routine.muscles_worked === 'string') {
+                                // Handle comma-separated string or JSON array string
+                                try {
+                                    muscles = JSON.parse(routine.muscles_worked);
+                                } catch (e) {
+                                    muscles = routine.muscles_worked.split(',').map(m => m.trim());
+                                }
+                            } else if (Array.isArray(routine.muscles_worked)) {
+                                muscles = routine.muscles_worked;
+                            }
+                            
+                            muscles.forEach(muscle => {
+                                if (muscle) {
+                                    const tag = document.createElement('span');
+                                    tag.className = 'muscle-tag';
+                                    tag.textContent = muscle;
+                                    muscleTags.appendChild(tag);
+                                }
+                            });
+                        }
                         
                         // Set up view link
                         const viewLink = card.querySelector('.btn-outline-primary');
@@ -251,87 +336,75 @@ function copyRoutine(routineId) {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            // Show success message
-            const toast = document.createElement('div');
-            toast.className = 'toast position-fixed bottom-0 end-0 m-3';
-            toast.setAttribute('role', 'alert');
-            toast.setAttribute('aria-live', 'assertive');
-            toast.setAttribute('aria-atomic', 'true');
-            toast.innerHTML = `
-                <div class="toast-header">
-                    <strong class="me-auto">Success</strong>
-                    <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
-                </div>
-                <div class="toast-body">
-                    Routine copied successfully!
-                </div>
-            `;
-            document.body.appendChild(toast);
-            const bsToast = new bootstrap.Toast(toast);
-            bsToast.show();
-            
-            // Remove toast after it's hidden
-            toast.addEventListener('hidden.bs.toast', () => {
-                toast.remove();
-            });
-            
-            // Reload routines to update copy count
-            loadRoutines(currentPage);
+            alert('Routine copied successfully! You can find it in your routines.');
+            // Optionally redirect to the routine:
+            // window.location.href = `/workout/routine/${data.routine_id}`;
         } else {
-            throw new Error(data.error || 'Failed to copy routine');
+            alert(`Error copying routine: ${data.error || 'Unknown error'}`);
         }
     })
     .catch(error => {
         console.error('Error copying routine:', error);
-        // Show error message
-        const toast = document.createElement('div');
-        toast.className = 'toast position-fixed bottom-0 end-0 m-3';
-        toast.setAttribute('role', 'alert');
-        toast.setAttribute('aria-live', 'assertive');
-        toast.setAttribute('aria-atomic', 'true');
-        toast.innerHTML = `
-            <div class="toast-header">
-                <strong class="me-auto">Error</strong>
-                <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
-            </div>
-            <div class="toast-body">
-                ${error.message}
-            </div>
-        `;
-        document.body.appendChild(toast);
-        const bsToast = new bootstrap.Toast(toast);
-        bsToast.show();
-        
-        // Remove toast after it's hidden
-        toast.addEventListener('hidden.bs.toast', () => {
-            toast.remove();
-        });
+        alert(`Error copying routine: ${error.message}`);
     });
 }
 
 // Event Listeners
-document.getElementById('apply-filters').addEventListener('click', () => {
-    currentFilters = {
-        level: document.getElementById('level-filter').value,
-        goal: document.getElementById('goal-filter').value,
-        muscle_group: document.getElementById('muscle-filter').value
-    };
-    loadRoutines(1);
+document.addEventListener('DOMContentLoaded', function() {
+    // Initial load
+    loadRoutines();
+    
+    // Apply filters button
+    document.getElementById('apply-filters').addEventListener('click', function() {
+        currentFilters.level = document.getElementById('level-filter').value;
+        currentFilters.goal = document.getElementById('goal-filter').value;
+        currentFilters.sort_by = document.getElementById('sort-by').value;
+        
+        // Get selected muscles
+        currentFilters.muscle_groups = [];
+        document.querySelectorAll('.muscle-filter-checkbox:checked').forEach(checkbox => {
+            currentFilters.muscle_groups.push(checkbox.value);
+        });
+        
+        loadRoutines(1); // Reset to first page
+    });
+    
+    // Reset filters button
+    document.getElementById('reset-filters').addEventListener('click', function() {
+        document.getElementById('level-filter').value = '';
+        document.getElementById('goal-filter').value = '';
+        document.getElementById('sort-by').value = 'popular';
+        document.getElementById('search-input').value = '';
+        
+        // Uncheck all muscle checkboxes
+        document.querySelectorAll('.muscle-filter-checkbox').forEach(checkbox => {
+            checkbox.checked = false;
+        });
+        
+        currentFilters = {
+            level: '',
+            goal: '',
+            muscle_groups: [],
+            search: '',
+            sort_by: 'popular'
+        };
+        
+        loadRoutines(1);
+    });
+    
+    // Search button
+    document.getElementById('search-button').addEventListener('click', function() {
+        currentFilters.search = document.getElementById('search-input').value.trim();
+        loadRoutines(1); // Reset to first page
+    });
+    
+    // Enter key in search input
+    document.getElementById('search-input').addEventListener('keyup', function(event) {
+        if (event.key === 'Enter') {
+            currentFilters.search = this.value.trim();
+            loadRoutines(1);
+        }
+    });
 });
-
-document.getElementById('reset-filters').addEventListener('click', () => {
-    document.getElementById('level-filter').value = '';
-    document.getElementById('goal-filter').value = '';
-    document.getElementById('muscle-filter').value = '';
-    currentFilters = {
-        level: '',
-        goal: '',
-        muscle_group: ''
-    };
-    loadRoutines(1);
-});
-
-// Initial load
-loadRoutines();
 </script>
 {% endblock %} 

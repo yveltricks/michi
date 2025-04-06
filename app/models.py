@@ -173,7 +173,7 @@ class Exercise(db.Model):
         },
         'duration_weight': {
             'fields': ['weight', 'time'],
-            'volume_formula': None,
+            'volume_formula': 'weight * (time / 60) or bodyweight+weight * (time / 60) for planks',
             'units': {'weight': 'kg', 'time': 'seconds'},
             'range_fields': ['min_duration', 'max_duration']
         },
@@ -338,6 +338,9 @@ class Workout(db.Model):
     volume = db.Column(db.Float, default=0)  # Store total volume
     total_reps = db.Column(db.Integer, default=0)  # Total reps performed
     sets_completed = db.Column(db.Integer, default=0)  # Total sets completed
+    completed = db.Column(db.Boolean, default=False)  # Whether workout is completed
+    start_time = db.Column(db.DateTime, nullable=True)  # When workout was started
+    end_time = db.Column(db.DateTime, nullable=True)  # When workout was completed
     
     # Relationships
     exercises = db.relationship('WorkoutExercise', backref='workout', cascade='all, delete-orphan', lazy=True)
@@ -363,7 +366,10 @@ class Workout(db.Model):
             'exp_gained': self.exp_gained,
             'volume': self.volume,
             'total_reps': self.total_reps,
-            'sets_completed': self.sets_completed
+            'sets_completed': self.sets_completed,
+            'completed': self.completed,
+            'start_time': self.start_time.isoformat() if self.start_time else None,
+            'end_time': self.end_time.isoformat() if self.end_time else None
         }
         
     @property
@@ -506,27 +512,18 @@ class Set(db.Model):
     exercise_id = db.Column(db.Integer, db.ForeignKey('exercise.id'), nullable=False)
     session_id = db.Column(db.Integer, db.ForeignKey('session.id'), nullable=False)
     completed = db.Column(db.Boolean, default=False)
-    order = db.Column(db.Integer)
-    set_type = db.Column(db.String(20), default='normal')
-
-    # Fields for weight_reps
-    weight = db.Column(db.Float)
-    reps = db.Column(db.Integer)
-
-    # Fields for weighted_bodyweight
-    additional_weight = db.Column(db.Float)
-
-    # Fields for assisted_bodyweight
-    assistance_weight = db.Column(db.Float)
-
-    # Fields for duration-based exercises
-    time = db.Column(db.Integer)  # Duration in seconds
-
-    # Fields for distance-based exercises
-    distance = db.Column(db.Float)  # Distance in kilometers
-
-    # New field to track if the set was within range
-    within_range = db.Column(db.Boolean)
+    order = db.Column(db.Integer, default=0)
+    set_type = db.Column(db.String(20), default='normal')  # normal, warmup, dropset, etc.
+    volume = db.Column(db.Float, nullable=True)  # Store calculated volume for the set
+    within_range = db.Column(db.Boolean, default=True)  # Whether the set was within the target range
+    
+    # Fields for different exercise types
+    weight = db.Column(db.Float, nullable=True)
+    reps = db.Column(db.Integer, nullable=True)
+    time = db.Column(db.Integer, nullable=True)  # Duration in seconds
+    distance = db.Column(db.Float, nullable=True)  # Distance in kilometers
+    additional_weight = db.Column(db.Float, nullable=True)  # For weighted bodyweight exercises
+    assistance_weight = db.Column(db.Float, nullable=True)  # For assisted bodyweight exercises
 
     # Relationships
     exercise = db.relationship('Exercise', backref='sets')
@@ -549,7 +546,7 @@ class Set(db.Model):
 
     def check_within_range(self):
         """Check if the set was within the exercise's range"""
-        if not self.exercise.range_enabled:
+        if not self.exercise or not self.exercise.range_enabled:
             return None
 
         if self.exercise.input_type in ['weight_reps', 'bodyweight_reps', 'weighted_bodyweight', 'assisted_bodyweight']:

@@ -131,10 +131,18 @@
                         <div class="exercise-info">
                             <h4>{{ exercise.name }}</h4>
                             <small>{{ exercise.muscles_worked }}</small>
+                            <a href="{{ url_for('workout.view_exercise_simple', exercise_id=exercise.id) }}" class="text-blue-600 hover:text-blue-800 text-sm ml-2">
+                                View Details
+                            </a>
                         </div>
                         <button class="add-btn">Add</button>
                     </div>
                     {% endfor %}
+                </div>
+                <div class="create-exercise-container" style="text-align: center; margin-top: 20px; padding-top: 20px; border-top: 1px solid #eee;">
+                    <a href="{{ url_for('workout.create_exercise_page') }}" class="create-exercise-btn" style="display: inline-block; padding: 8px 16px; background-color: #4f46e5; color: white; border-radius: 4px; text-decoration: none;">
+                        <i class="fas fa-plus"></i> Create New Exercise
+                    </a>
                 </div>
             </div>
         </div>

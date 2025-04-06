@@ -37,8 +37,15 @@
             <div id="routine-exercises" class="space-y-4">
                 {% for exercise in routine.exercises %}
                 <div class="exercise-item p-3 bg-gray-50 rounded-md border border-gray-200">
-                    <div class="font-medium">{{ exercise.name }}</div>
-                    <div class="text-xs text-gray-500 mt-1">{{ exercise.muscles }}</div>
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <div class="font-medium">{{ exercise.name }}</div>
+                            <div class="text-xs text-gray-500 mt-1">{{ exercise.muscles }}</div>
+                        </div>
+                        <a href="{{ url_for('workout.view_exercise_simple', exercise_id=exercise.id) }}" class="text-blue-600 hover:text-blue-800 text-sm">
+                            View Details
+                        </a>
+                    </div>
                     <div class="mt-2 pl-3 border-l-2 border-gray-200">
                         {% for set in exercise.sets %}
                         <div class="text-sm mb-1">

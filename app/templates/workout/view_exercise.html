@@ -1,0 +1,805 @@
+{# File: app/templates/workout/view_exercise.html #}
+{% extends "base.html" %}
+
+{% block title %}{{ exercise.name }}{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/workout.css') }}">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+    .exercise-container {
+        max-width: 800px;
+        margin: 0 auto;
+        background-color: white;
+        padding: 2rem;
+        border-radius: 8px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    }
+    
+    .exercise-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 2rem;
+        border-bottom: 1px solid #e5e7eb;
+        padding-bottom: 1rem;
+    }
+    
+    .exercise-title {
+        font-size: 1.875rem;
+        font-weight: 700;
+        margin-bottom: 0.5rem;
+    }
+    
+    .exercise-stats {
+        margin-bottom: 2rem;
+    }
+    
+    .stat-item {
+        display: flex;
+        margin-bottom: 0.75rem;
+    }
+    
+    .stat-label {
+        font-weight: 600;
+        width: 150px;
+        color: #4b5563;
+    }
+    
+    .stat-value {
+        flex: 1;
+    }
+    
+    .badge {
+        display: inline-block;
+        padding: 0.25rem 0.75rem;
+        border-radius: 9999px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        background-color: #e5e7eb;
+        color: #374151;
+    }
+    
+    .badge-primary {
+        background-color: #dbeafe;
+        color: #1e40af;
+    }
+    
+    .badge-secondary {
+        background-color: #e0e7ff;
+        color: #3730a3;
+    }
+    
+    .user-badge {
+        background-color: #fef3c7;
+        color: #92400e;
+    }
+    
+    .history-container {
+        margin-top: 2rem;
+    }
+    
+    .history-title {
+        font-size: 1.25rem;
+        font-weight: 600;
+        margin-bottom: 1rem;
+    }
+    
+    .set-history-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    
+    .set-history-table th,
+    .set-history-table td {
+        padding: 0.75rem;
+        text-align: left;
+        border-bottom: 1px solid #e5e7eb;
+    }
+    
+    .set-history-table th {
+        background-color: #f9fafb;
+        font-weight: 600;
+    }
+    
+    .action-button {
+        display: inline-block;
+        padding: 0.5rem 1rem;
+        background-color: #4f46e5;
+        color: white;
+        border-radius: 0.375rem;
+        text-decoration: none;
+        font-weight: 500;
+        margin-right: 0.5rem;
+    }
+    
+    .action-button:hover {
+        background-color: #4338ca;
+    }
+    
+    .stat-cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
+    
+    .stat-card {
+        background-color: #f9fafb;
+        border-radius: 8px;
+        padding: 1rem;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        text-align: center;
+    }
+    
+    .stat-card-value {
+        font-size: 1.5rem;
+        font-weight: 700;
+        margin-bottom: 0.25rem;
+        color: #4f46e5;
+    }
+    
+    .stat-card-label {
+        font-size: 0.875rem;
+        color: #6b7280;
+    }
+    
+    .chart-container {
+        margin-top: 2rem;
+        margin-bottom: 2rem;
+        height: 300px;
+    }
+    
+    .tabs {
+        display: flex;
+        border-bottom: 1px solid #e5e7eb;
+        margin-bottom: 1rem;
+    }
+    
+    .tab {
+        padding: 0.75rem 1rem;
+        margin-right: 0.5rem;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    
+    .tab.active {
+        border-bottom: 2px solid #4f46e5;
+        color: #4f46e5;
+        font-weight: 600;
+    }
+    
+    .tab:hover:not(.active) {
+        background-color: #f9fafb;
+        border-radius: 4px 4px 0 0;
+    }
+    
+    .tab-content {
+        display: none;
+    }
+    
+    .tab-content.active {
+        display: block;
+    }
+
+    .chart-tabs {
+        display: flex;
+        justify-content: center;
+        gap: 10px;
+        margin-bottom: 15px;
+    }
+
+    .chart-tab {
+        padding: 8px 16px;
+        border-radius: 20px;
+        background-color: #f0f2f5;
+        cursor: pointer;
+        font-size: 14px;
+        transition: all 0.2s;
+    }
+
+    .chart-tab.active {
+        background-color: #4f46e5;
+        color: white;
+        font-weight: 500;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="exercise-container">
+    <div class="exercise-header">
+        <div>
+            <h1 class="exercise-title">{{ exercise.name }}</h1>
+            <div>
+                {% if exercise.equipment %}
+                <span class="badge badge-primary">{{ exercise.equipment }}</span>
+                {% endif %}
+                
+                {% if exercise.user_created %}
+                <span class="badge user-badge">User Created</span>
+                {% endif %}
+            </div>
+        </div>
+        <div>
+            <a href="{{ url_for('workout.start_workout') }}" class="action-button">Use In Workout</a>
+        </div>
+    </div>
+    
+    <!-- Summary Stats Cards - Dynamic based on exercise type -->
+    <div class="stat-cards">
+        <!-- Total Sets card - relevant for all exercise types -->
+        <div class="stat-card">
+            <div class="stat-card-value">{{ stats.total_sets }}</div>
+            <div class="stat-card-label">Total Sets</div>
+        </div>
+        
+        <!-- Show reps for rep-based exercises -->
+        {% if exercise.input_type in ['weight_reps', 'bodyweight_reps', 'weighted_bodyweight', 'assisted_bodyweight'] %}
+        <div class="stat-card">
+            <div class="stat-card-value">{{ stats.total_reps }}</div>
+            <div class="stat-card-label">Total Reps</div>
+        </div>
+        {% endif %}
+        
+        <!-- Show weight for weight-based exercises -->
+        {% if exercise.input_type in ['weight_reps', 'weighted_bodyweight', 'duration_weight', 'weight_distance'] %}
+        <div class="stat-card">
+            <div class="stat-card-value">{{ stats.max_weight }} kg</div>
+            <div class="stat-card-label">Max Weight</div>
+        </div>
+        {% endif %}
+        
+        <!-- Show 1RM estimate for weight-reps exercises -->
+        {% if exercise.input_type == 'weight_reps' and stats.one_rm %}
+        <div class="stat-card">
+            <div class="stat-card-value">{{ stats.one_rm }} kg</div>
+            <div class="stat-card-label">Estimated 1RM</div>
+        </div>
+        {% endif %}
+        
+        <!-- Show duration for time-based exercises -->
+        {% if exercise.input_type in ['duration', 'duration_weight', 'distance_duration'] and stats.max_duration > 0 %}
+        <div class="stat-card">
+            {% set minutes = (stats.max_duration / 60)|int %}
+            {% set seconds = stats.max_duration % 60 %}
+            <div class="stat-card-value">{{ minutes }}:{% if seconds < 10 %}0{% endif %}{{ seconds }}</div>
+            <div class="stat-card-label">Max Duration</div>
+        </div>
+        {% endif %}
+        
+        <!-- Show distance for distance-based exercises -->
+        {% if exercise.input_type in ['distance_duration', 'weight_distance'] and stats.max_distance > 0 %}
+        <div class="stat-card">
+            <div class="stat-card-value">{{ stats.max_distance }} km</div>
+            <div class="stat-card-label">Max Distance</div>
+        </div>
+        {% endif %}
+        
+        <!-- Volume is relevant for all exercise types but with different units -->
+        <div class="stat-card">
+            <div class="stat-card-value">{{ stats.total_volume }} {{ stats.volume_unit }}</div>
+            <div class="stat-card-label">Total Volume</div>
+        </div>
+        
+        <!-- EXP is relevant for all exercise types -->
+        <div class="stat-card">
+            <div class="stat-card-value">{{ stats.total_exp }}</div>
+            <div class="stat-card-label">Total EXP Gained</div>
+        </div>
+    </div>
+    
+    <div class="exercise-stats">
+        <div class="stat-item">
+            <div class="stat-label">Muscles Worked:</div>
+            <div class="stat-value">{{ exercise.muscles_worked or 'Not specified' }}</div>
+        </div>
+        
+        <div class="stat-item">
+            <div class="stat-label">Equipment:</div>
+            <div class="stat-value">{{ exercise.equipment or 'None' }}</div>
+        </div>
+        
+        <div class="stat-item">
+            <div class="stat-label">Exercise Type:</div>
+            <div class="stat-value">
+                {% for type in input_types %}
+                    {% if type.value == exercise.input_type %}
+                        {{ type.label }}
+                    {% endif %}
+                {% endfor %}
+                
+                <!-- If not found in the list above, show the raw value -->
+                {% if exercise.input_type not in input_types|map(attribute='value') %}
+                    {{ exercise.input_type }}
+                {% endif %}
+            </div>
+        </div>
+        
+        {% if exercise.range_enabled %}
+        <div class="stat-item">
+            <div class="stat-label">Target Range:</div>
+            <div class="stat-value">
+                {% if exercise.min_reps is not none and exercise.max_reps is not none and exercise.input_type in ['weight_reps', 'bodyweight_reps', 'weighted_bodyweight', 'assisted_bodyweight'] %}
+                    {{ exercise.min_reps }}-{{ exercise.max_reps }} reps
+                {% elif exercise.min_duration is not none and exercise.max_duration is not none and exercise.input_type in ['duration', 'duration_weight', 'distance_duration'] %}
+                    {{ exercise.min_duration }}-{{ exercise.max_duration }} seconds
+                {% elif exercise.min_distance is not none and exercise.max_distance is not none and exercise.input_type in ['distance_duration', 'weight_distance'] %}
+                    {{ exercise.min_distance }}-{{ exercise.max_distance }} km
+                {% else %}
+                    Not set
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+        
+        {% if exercise.rest_duration %}
+        <div class="stat-item">
+            <div class="stat-label">Default Rest Time:</div>
+            <div class="stat-value">
+                {% set minutes = (exercise.rest_duration / 60)|int %}
+                {% set seconds = exercise.rest_duration % 60 %}
+                {{ minutes }}:{% if seconds < 10 %}0{% endif %}{{ seconds }}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    
+    <!-- Progress Charts - with tabs for different metrics based on exercise type -->
+    {% if grouped_days and grouped_days|length > 0 %}
+    <div class="chart-container">
+        <h2 class="history-title">Progress Charts</h2>
+        
+        <!-- Chart type tabs - show only relevant ones for the exercise type -->
+        <div class="chart-tabs">
+            {% if exercise.input_type in ['weight_reps', 'weighted_bodyweight', 'duration_weight', 'weight_distance'] %}
+            <div class="chart-tab active" data-chart="weight-chart">Weight</div>
+            {% endif %}
+            
+            {% if exercise.input_type in ['weight_reps', 'bodyweight_reps', 'weighted_bodyweight', 'assisted_bodyweight'] %}
+            <div class="chart-tab {% if exercise.input_type not in ['weight_reps', 'weighted_bodyweight', 'duration_weight', 'weight_distance'] %}active{% endif %}" data-chart="reps-chart">Reps</div>
+            {% endif %}
+            
+            {% if exercise.input_type in ['duration', 'duration_weight', 'distance_duration'] %}
+            <div class="chart-tab {% if exercise.input_type not in ['weight_reps', 'bodyweight_reps', 'weighted_bodyweight', 'assisted_bodyweight', 'weight_reps', 'weighted_bodyweight', 'duration_weight', 'weight_distance'] %}active{% endif %}" data-chart="duration-chart">Duration</div>
+            {% endif %}
+            
+            {% if exercise.input_type in ['distance_duration', 'weight_distance'] %}
+            <div class="chart-tab" data-chart="distance-chart">Distance</div>
+            {% endif %}
+            
+            <!-- Volume chart for all exercise types -->
+            <div class="chart-tab" data-chart="volume-chart">Volume</div>
+        </div>
+        
+        <!-- Chart canvases -->
+        {% if exercise.input_type in ['weight_reps', 'weighted_bodyweight', 'duration_weight', 'weight_distance'] %}
+        <canvas id="weight-chart" class="progress-chart"></canvas>
+        {% endif %}
+        
+        {% if exercise.input_type in ['weight_reps', 'bodyweight_reps', 'weighted_bodyweight', 'assisted_bodyweight'] %}
+        <canvas id="reps-chart" class="progress-chart" {% if exercise.input_type in ['weight_reps', 'weighted_bodyweight', 'duration_weight', 'weight_distance'] %}style="display:none;"{% endif %}></canvas>
+        {% endif %}
+        
+        {% if exercise.input_type in ['duration', 'duration_weight', 'distance_duration'] %}
+        <canvas id="duration-chart" class="progress-chart" {% if exercise.input_type in ['weight_reps', 'bodyweight_reps', 'weighted_bodyweight', 'assisted_bodyweight', 'weight_reps', 'weighted_bodyweight', 'duration_weight', 'weight_distance'] %}style="display:none;"{% endif %}></canvas>
+        {% endif %}
+        
+        {% if exercise.input_type in ['distance_duration', 'weight_distance'] %}
+        <canvas id="distance-chart" class="progress-chart" style="display:none;"></canvas>
+        {% endif %}
+        
+        <canvas id="volume-chart" class="progress-chart" style="display:none;"></canvas>
+    </div>
+    
+    <div class="history-container">
+        <h2 class="history-title">Your Exercise History</h2>
+        
+        <div class="tabs">
+            <div class="tab active" data-tab="performance">Performance</div>
+            <div class="tab" data-tab="history">Workout History</div>
+        </div>
+        
+        <div class="tab-content active" id="performance-tab">
+            <table class="set-history-table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        {% if exercise.input_type in ['weight_reps', 'weighted_bodyweight', 'duration_weight', 'weight_distance'] %}
+                        <th>Weight (kg)</th>
+                        {% endif %}
+                        
+                        {% if exercise.input_type in ['weight_reps', 'bodyweight_reps', 'weighted_bodyweight', 'assisted_bodyweight'] %}
+                        <th>Reps</th>
+                        {% endif %}
+                        
+                        {% if exercise.input_type in ['duration', 'duration_weight', 'distance_duration'] %}
+                        <th>Duration</th>
+                        {% endif %}
+                        
+                        {% if exercise.input_type in ['distance_duration', 'weight_distance'] %}
+                        <th>Distance (km)</th>
+                        {% endif %}
+                        
+                        {% if exercise.input_type in ['weighted_bodyweight'] %}
+                        <th>Additional Weight (kg)</th>
+                        {% endif %}
+                        
+                        {% if exercise.input_type in ['assisted_bodyweight'] %}
+                        <th>Assistance Weight (kg)</th>
+                        {% endif %}
+                        
+                        <th>Volume</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for set in previous_sets %}
+                    <tr>
+                        <td>{{ set.session.session_date.strftime('%b %d, %Y') }}</td>
+                        
+                        {% if exercise.input_type in ['weight_reps', 'weighted_bodyweight', 'duration_weight', 'weight_distance'] %}
+                        <td>{{ set.weight if set.weight else '-' }}</td>
+                        {% endif %}
+                        
+                        {% if exercise.input_type in ['weight_reps', 'bodyweight_reps', 'weighted_bodyweight', 'assisted_bodyweight'] %}
+                        <td>{{ set.reps if set.reps else '-' }}</td>
+                        {% endif %}
+                        
+                        {% if exercise.input_type in ['duration', 'duration_weight', 'distance_duration'] %}
+                        <td>
+                            {% if set.time is not none %}
+                                {% set minutes = (set.time / 60)|int %}
+                                {% set seconds = set.time % 60 %}
+                                {{ minutes }}:{% if seconds < 10 %}0{% endif %}{{ seconds }}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        {% endif %}
+                        
+                        {% if exercise.input_type in ['distance_duration', 'weight_distance'] %}
+                        <td>{{ set.distance if set.distance else '-' }}</td>
+                        {% endif %}
+                        
+                        {% if exercise.input_type in ['weighted_bodyweight'] %}
+                        <td>{{ set.additional_weight if set.additional_weight else '-' }}</td>
+                        {% endif %}
+                        
+                        {% if exercise.input_type in ['assisted_bodyweight'] %}
+                        <td>{{ set.assistance_weight if set.assistance_weight else '-' }}</td>
+                        {% endif %}
+                        
+                        <td>{{ set.volume|int if set.volume else '-' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="tab-content" id="history-tab">
+            <table class="set-history-table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Workout</th>
+                        <th>Sets</th>
+                        <th>Total Volume</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% set grouped_sets = {} %}
+                    {% for set in previous_sets %}
+                        {% set session_id = set.session.id %}
+                        {% if session_id not in grouped_sets %}
+                            {% set grouped_sets = grouped_sets|dict_set(session_id, {'date': set.session.session_date, 'title': set.session.title, 'sets': 0, 'volume': 0}) %}
+                        {% endif %}
+                        {% set session_data = grouped_sets[session_id] %}
+                        {% set session_data = session_data|dict_set('sets', session_data.sets + 1) %}
+                        {% set session_data = session_data|dict_set('volume', session_data.volume + (set.volume or 0)) %}
+                        {% set grouped_sets = grouped_sets|dict_set(session_id, session_data) %}
+                    {% endfor %}
+                    
+                    {% for session_id, data in grouped_sets.items()|sort(attribute='1.date', reverse=true) %}
+                    <tr>
+                        <td>{{ data.date.strftime('%b %d, %Y') }}</td>
+                        <td>{{ data.title }}</td>
+                        <td>{{ data.sets }}</td>
+                        <td>{{ data.volume|int }} kg</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% else %}
+    <div class="history-container">
+        <h2 class="history-title">No Exercise History</h2>
+        <p>You haven't performed this exercise yet. Start a workout to track your progress!</p>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Tab functionality
+    const tabs = document.querySelectorAll('.tab');
+    tabs.forEach(tab => {
+        tab.addEventListener('click', function() {
+            // Remove active class from all tabs
+            tabs.forEach(t => t.classList.remove('active'));
+            // Add active class to clicked tab
+            this.classList.add('active');
+            
+            // Hide all tab content
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            
+            // Show content of clicked tab
+            const tabId = this.getAttribute('data-tab');
+            document.getElementById(tabId + '-tab').classList.add('active');
+        });
+    });
+    
+    // Chart tab functionality
+    const chartTabs = document.querySelectorAll('.chart-tab');
+    chartTabs.forEach(tab => {
+        tab.addEventListener('click', function() {
+            // Remove active class from all chart tabs
+            chartTabs.forEach(t => t.classList.remove('active'));
+            // Add active class to clicked tab
+            this.classList.add('active');
+            
+            // Hide all charts
+            document.querySelectorAll('.progress-chart').forEach(chart => {
+                chart.style.display = 'none';
+            });
+            
+            // Show clicked chart
+            const chartId = this.getAttribute('data-chart');
+            document.getElementById(chartId).style.display = 'block';
+        });
+    });
+    
+    // Initialize charts using trend data passed from backend
+    let trendData;
+    try {
+        trendData = {{ trend_data|safe }};
+    } catch (e) {
+        console.error("Error parsing trend data:", e);
+        trendData = { dates: [], volume: [], weight: [], reps: [], duration: [], distance: [], additional_weight: [], assistance_weight: [] };
+    }
+    
+    // Create charts only if elements exist and we have data
+    if (trendData && trendData.dates && trendData.dates.length > 0) {
+        // Weight chart
+        const weightChartEl = document.getElementById('weight-chart');
+        if (weightChartEl) {
+            const weightCtx = weightChartEl.getContext('2d');
+            new Chart(weightCtx, {
+                type: 'line',
+                data: {
+                    labels: trendData.dates,
+                    datasets: [{
+                        label: 'Weight (kg)',
+                        data: trendData.weight,
+                        borderColor: '#4f46e5',
+                        backgroundColor: 'rgba(79, 70, 229, 0.1)',
+                        tension: 0.1,
+                        fill: false
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: false,
+                            title: {
+                                display: true,
+                                text: 'Weight (kg)'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Date'
+                            }
+                        }
+                    },
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Weight Progress Over Time'
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Reps chart
+        const repsChartEl = document.getElementById('reps-chart');
+        if (repsChartEl) {
+            const repsCtx = repsChartEl.getContext('2d');
+            new Chart(repsCtx, {
+                type: 'line',
+                data: {
+                    labels: trendData.dates,
+                    datasets: [{
+                        label: 'Reps',
+                        data: trendData.reps,
+                        borderColor: '#f59e0b',
+                        backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                        tension: 0.1,
+                        fill: false
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Repetitions'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Date'
+                            }
+                        }
+                    },
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Repetitions Progress Over Time'
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Duration chart
+        const durationChartEl = document.getElementById('duration-chart');
+        if (durationChartEl) {
+            const durationCtx = durationChartEl.getContext('2d');
+            new Chart(durationCtx, {
+                type: 'line',
+                data: {
+                    labels: trendData.dates,
+                    datasets: [{
+                        label: 'Duration (seconds)',
+                        data: trendData.duration,
+                        borderColor: '#0ea5e9',
+                        backgroundColor: 'rgba(14, 165, 233, 0.1)',
+                        tension: 0.1,
+                        fill: false
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Duration (seconds)'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Date'
+                            }
+                        }
+                    },
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Duration Progress Over Time'
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Distance chart
+        const distanceChartEl = document.getElementById('distance-chart');
+        if (distanceChartEl) {
+            const distanceCtx = distanceChartEl.getContext('2d');
+            new Chart(distanceCtx, {
+                type: 'line',
+                data: {
+                    labels: trendData.dates,
+                    datasets: [{
+                        label: 'Distance (km)',
+                        data: trendData.distance,
+                        borderColor: '#65a30d',
+                        backgroundColor: 'rgba(101, 163, 13, 0.1)',
+                        tension: 0.1,
+                        fill: false
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Distance (km)'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Date'
+                            }
+                        }
+                    },
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Distance Progress Over Time'
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Volume chart for all exercise types
+        const volumeChartEl = document.getElementById('volume-chart');
+        if (volumeChartEl) {
+            const volumeCtx = volumeChartEl.getContext('2d');
+            const volumeUnit = '{{ stats.volume_unit }}';
+            
+            new Chart(volumeCtx, {
+                type: 'line',
+                data: {
+                    labels: trendData.dates,
+                    datasets: [{
+                        label: 'Volume (' + volumeUnit + ')',
+                        data: trendData.volume,
+                        borderColor: '#10b981',
+                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                        tension: 0.1,
+                        fill: false
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Volume (' + volumeUnit + ')'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Date'
+                            }
+                        }
+                    },
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Volume Progress Over Time'
+                        }
+                    }
+                }
+            });
+        }
+    }
+});
+</script>
+{% endblock %} 

@@ -1,0 +1,325 @@
+{# File: app/templates/workout/create_exercise.html #}
+{% extends "base.html" %}
+
+{% block title %}Create Exercise{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/workout.css') }}">
+<style>
+    .form-container {
+        max-width: 800px;
+        margin: 0 auto;
+        background-color: white;
+        padding: 2rem;
+        border-radius: 8px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    }
+    
+    .form-group {
+        margin-bottom: 1.5rem;
+    }
+    
+    .form-label {
+        display: block;
+        margin-bottom: 0.5rem;
+        font-weight: 600;
+    }
+    
+    .form-control {
+        width: 100%;
+        padding: 0.75rem;
+        border: 1px solid #e2e8f0;
+        border-radius: 0.375rem;
+    }
+    
+    .form-select {
+        width: 100%;
+        padding: 0.75rem;
+        border: 1px solid #e2e8f0;
+        border-radius: 0.375rem;
+        background-color: white;
+    }
+    
+    .btn-primary {
+        background-color: #4f46e5;
+        color: white;
+        padding: 0.75rem 1.5rem;
+        border-radius: 0.375rem;
+        font-weight: 600;
+        transition: background-color 0.3s;
+        border: none;
+        cursor: pointer;
+        width: 100%;
+    }
+    
+    .btn-primary:hover {
+        background-color: #4338ca;
+    }
+
+    .chip-container {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-top: 0.5rem;
+    }
+    
+    .chip {
+        background-color: #e5e7eb;
+        padding: 0.25rem 0.75rem;
+        border-radius: 1rem;
+        display: flex;
+        align-items: center;
+        font-size: 0.875rem;
+    }
+    
+    .chip .remove-icon {
+        margin-left: 0.375rem;
+        cursor: pointer;
+        color: #6b7280;
+    }
+    
+    .chip .remove-icon:hover {
+        color: #ef4444;
+    }
+    
+    .form-hint {
+        font-size: 0.875rem;
+        color: #64748b;
+        margin-top: 0.25rem;
+    }
+
+    .input-type-description {
+        font-size: 0.875rem;
+        color: #64748b;
+        margin-top: 0.5rem;
+        padding: 0.5rem;
+        background-color: #f8fafc;
+        border-radius: 0.375rem;
+        display: none;
+    }
+    
+    .input-type-description.active {
+        display: block;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="form-container">
+    <h1 class="text-2xl font-bold mb-6">Create New Exercise</h1>
+    
+    <form id="create-exercise-form">
+        <div class="form-group">
+            <label for="exercise-name" class="form-label">Exercise Name*</label>
+            <input type="text" id="exercise-name" name="name" class="form-control" required>
+        </div>
+        
+        <div class="form-group">
+            <label for="equipment" class="form-label">Equipment</label>
+            <select id="equipment" name="equipment" class="form-select">
+                <option value="">Select Equipment</option>
+                {% for equipment in equipment_options %}
+                <option value="{{ equipment }}">{{ equipment }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        
+        <div class="form-group">
+            <label for="primary-muscle" class="form-label">Primary Body Part</label>
+            <select id="primary-muscle" name="primary-muscle" class="form-select">
+                <option value="">Select Primary Body Part</option>
+                {% for part in body_parts %}
+                <option value="{{ part }}">{{ part }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        
+        <div class="form-group">
+            <label class="form-label">Additional Muscles Worked</label>
+            <select id="additional-muscle" class="form-select" onchange="addMuscle()">
+                <option value="">Select to add muscle</option>
+                {% for muscle in muscles %}
+                <option value="{{ muscle }}">{{ muscle }}</option>
+                {% endfor %}
+            </select>
+            
+            <div id="muscles-container" class="chip-container"></div>
+            <input type="hidden" id="muscles-worked" name="muscles_worked">
+            <p class="form-hint">Select multiple muscles to add them to the list</p>
+        </div>
+        
+        <div class="form-group">
+            <label for="input-type" class="form-label">Exercise Type*</label>
+            <select id="input-type" name="input_type" class="form-select" required onchange="showInputTypeDescription()">
+                <option value="">Select Exercise Type</option>
+                {% for type in input_types %}
+                <option value="{{ type.value }}">{{ type.label }}</option>
+                {% endfor %}
+            </select>
+            
+            <div id="weight-reps-description" class="input-type-description">
+                Standard strength exercises where you track both weight lifted and repetitions.
+                <br>Example: Bench Press, Squats, Deadlifts
+            </div>
+            
+            <div id="bodyweight-reps-description" class="input-type-description">
+                Exercises where you use your body weight and track repetitions only.
+                <br>Example: Push-ups, Pull-ups, Sit-ups  
+            </div>
+            
+            <div id="weighted-bodyweight-description" class="input-type-description">
+                Bodyweight exercises where you add extra weight and track both added weight and repetitions.
+                <br>Example: Weighted Pull-ups, Weighted Dips
+            </div>
+            
+            <div id="assisted-bodyweight-description" class="input-type-description">
+                Bodyweight exercises where assistance is provided to reduce difficulty.
+                <br>Example: Assisted Pull-ups, Assisted Dips
+            </div>
+            
+            <div id="duration-description" class="input-type-description">
+                Exercises where you track duration only.
+                <br>Example: Planks, Wall Sits
+            </div>
+            
+            <div id="duration-weight-description" class="input-type-description">
+                Exercises where you track both weight and duration.
+                <br>Example: Weighted Planks, Farmer's Walks
+            </div>
+            
+            <div id="distance-duration-description" class="input-type-description">
+                Cardio exercises where you track both distance and duration.
+                <br>Example: Running, Cycling, Swimming
+            </div>
+            
+            <div id="weight-distance-description" class="input-type-description">
+                Exercises where you track both weight and distance.
+                <br>Example: Sled Pushes, Farmer's Carries
+            </div>
+        </div>
+        
+        <div class="form-group mt-6">
+            <button type="submit" class="btn-primary">Create Exercise</button>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Store selected muscles
+    let selectedMuscles = [];
+    
+    function addMuscle() {
+        const select = document.getElementById('additional-muscle');
+        const selectedMuscle = select.value;
+        
+        if (selectedMuscle && !selectedMuscles.includes(selectedMuscle)) {
+            selectedMuscles.push(selectedMuscle);
+            renderMuscles();
+            select.value = ''; // Reset select
+        }
+    }
+    
+    function removeMuscle(muscle) {
+        selectedMuscles = selectedMuscles.filter(m => m !== muscle);
+        renderMuscles();
+    }
+    
+    function renderMuscles() {
+        const container = document.getElementById('muscles-container');
+        const hiddenInput = document.getElementById('muscles-worked');
+        
+        // Clear container
+        container.innerHTML = '';
+        
+        // Add chips for each muscle
+        selectedMuscles.forEach(muscle => {
+            const chip = document.createElement('div');
+            chip.className = 'chip';
+            chip.innerHTML = `
+                ${muscle}
+                <span class="remove-icon" onclick="removeMuscle('${muscle}')">×</span>
+            `;
+            container.appendChild(chip);
+        });
+        
+        // Update hidden field
+        hiddenInput.value = selectedMuscles.join(', ');
+    }
+    
+    function showInputTypeDescription() {
+        // Hide all descriptions
+        document.querySelectorAll('.input-type-description').forEach(el => {
+            el.classList.remove('active');
+        });
+        
+        // Show selected description
+        const selectedType = document.getElementById('input-type').value;
+        if (selectedType) {
+            const descriptionEl = document.getElementById(`${selectedType}-description`);
+            if (descriptionEl) {
+                descriptionEl.classList.add('active');
+            }
+        }
+    }
+    
+    // Handle form submission
+    document.getElementById('create-exercise-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const name = document.getElementById('exercise-name').value;
+        const equipment = document.getElementById('equipment').value;
+        const primaryMuscle = document.getElementById('primary-muscle').value;
+        const inputType = document.getElementById('input-type').value;
+        
+        // If nothing selected, use primary muscle as muscles worked
+        let musclesWorked = document.getElementById('muscles-worked').value;
+        if (!musclesWorked && primaryMuscle) {
+            musclesWorked = primaryMuscle;
+        }
+        
+        // Prepare data
+        const data = {
+            name: name,
+            equipment: equipment,
+            muscles_worked: musclesWorked,
+            exercise_type: primaryMuscle, // Store primary muscle as exercise_type
+            input_type: inputType
+        };
+        
+        // Send request
+        fetch('/workout/api/workout/create-exercise', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        })
+        .then(response => {
+            if (!response.ok) {
+                console.error('Response not OK:', response);
+                return response.text().then(text => {
+                    console.error('Response text:', text);
+                    throw new Error(`Server responded with status: ${response.status}`);
+                });
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('Response data:', data);
+            if (data.success) {
+                alert('Exercise created successfully!');
+                // Redirect to workouts page or stay on page and reset form
+                window.location.href = '/workout/start-workout';
+            } else {
+                alert(`Error: ${data.error}`);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Failed to create exercise. Please try again.');
+        });
+    });
+</script>
+{% endblock %} 

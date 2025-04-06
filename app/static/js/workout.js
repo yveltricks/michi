@@ -908,7 +908,51 @@ let workoutData = {
             });
         });
     }
+    
+    // Highlight recently used exercises
+    highlightRecentExercises();
   });
+  
+  // Function to highlight recently used exercises
+  function highlightRecentExercises() {
+    const exerciseOptions = document.querySelectorAll('.exercise-option');
+    
+    // Add special styling to recently used exercises
+    exerciseOptions.forEach((option, index) => {
+        // First 10 exercises are recent if they were sorted on the server
+        if (index < 10) {
+            option.classList.add('recent-exercise');
+            
+            // Add a "Recently used" badge
+            const infoDiv = option.querySelector('.exercise-info');
+            if (infoDiv) {
+                const badge = document.createElement('span');
+                badge.className = 'recent-badge';
+                badge.textContent = 'Recently used';
+                infoDiv.appendChild(badge);
+            }
+        }
+    });
+    
+    // Add CSS for the highlighting
+    const style = document.createElement('style');
+    style.textContent = `
+        .recent-exercise {
+            background-color: #f0f8ff; /* Light blue background */
+            border-left: 3px solid #4285f4; /* Blue left border */
+        }
+        .recent-badge {
+            font-size: 0.75rem;
+            color: white;
+            background-color: #4285f4;
+            padding: 2px 6px;
+            border-radius: 10px;
+            margin-left: 8px;
+            display: inline-block;
+        }
+    `;
+    document.head.appendChild(style);
+  }
   
   // Handle form submission
   function completeWorkout() {
@@ -946,7 +990,19 @@ let workoutData = {
         },
         function(data) {
             // Success callback
-            window.location.href = '/workout/session/' + data.session_id;
+            if (data.redirect_url) {
+                // Use the redirect URL provided by the server
+                console.log(`Redirecting to: ${data.redirect_url}`);
+                window.location.href = data.redirect_url;
+            } else if (data.session_id && data.session_id !== 'null') {
+                // Fallback to using session_id if redirect_url is not available
+                console.log(`Redirecting to session: ${data.session_id}`);
+                window.location.href = '/workout/session/' + data.session_id;
+            } else {
+                // If neither redirect_url nor session_id is available, go to workout page
+                console.log('No redirect information available, going to workout page');
+                window.location.href = '/workout/workout';
+            }
         },
         function(error) {
             // Error callback
@@ -1294,7 +1350,7 @@ let workoutData = {
     const totalVolumeElement = document.getElementById('workout-volume');
     
     // Get user weight from data attribute if available
-    const userWeight = totalVolumeElement.dataset.userWeight ? 
+    const userWeight = totalVolumeElement && totalVolumeElement.dataset.userWeight ? 
         parseFloat(totalVolumeElement.dataset.userWeight) : 0;
     
     // Calculate volume based on exercise type and set data
@@ -1311,7 +1367,18 @@ let workoutData = {
         const effectiveWeight = Math.max(0, userWeight - (set.assistance_weight || 0));
         setVolume = effectiveWeight * (set.reps || 0);
     } else if (exercise.input_type === 'duration_weight') {
-        setVolume = (set.weight || 0) * (set.time || 0);
+        // For weighted planks: weight * (duration in seconds / 60)
+        // Include both user weight and additional weight if weighted plank
+        if (exercise.name && exercise.name.toLowerCase().includes('plank')) {
+          const totalWeight = (set.weight || 0) + userWeight;
+          setVolume = totalWeight * ((set.time || 0) / 60);
+          
+          // Store both values in the set data
+          set.userWeight = userWeight; 
+          console.log(`DEBUG: Weighted plank with user weight ${userWeight}kg, plate ${set.weight}kg, time ${set.time}s, volume ${setVolume}`);
+        } else {
+          setVolume = (set.weight || 0) * ((set.time || 0) / 60);
+        }
     } else if (exercise.input_type === 'weight_distance') {
         setVolume = (set.weight || 0) * (set.distance || 0);
     }
@@ -1868,4 +1935,65 @@ let workoutData = {
       performancePercent.textContent = percentText;
       performancePercent.classList.add('performance-neutral');
     }
+  }
+
+  // Add handling for adding an exercise to the workout
+  function addExerciseToWorkout(exercise) {
+    if (!exercise) return;
+    
+    // Create a default set based on the exercise type
+    let defaultSet = {
+      completed: false,
+      set_type: 'normal'
+    };
+    
+    // Set appropriate default values based on exercise type
+    if (exercise.input_type === 'weight_reps') {
+      defaultSet.weight = '';
+      defaultSet.reps = '';
+    } else if (exercise.input_type === 'bodyweight_reps') {
+      defaultSet.reps = '';
+    } else if (exercise.input_type === 'duration') {
+      defaultSet.time = '';
+    } else if (exercise.input_type === 'distance_duration') {
+      defaultSet.distance = '';
+      defaultSet.time = '';
+    } else if (exercise.input_type === 'weighted_bodyweight') {
+      defaultSet.additional_weight = '';
+      defaultSet.reps = '';
+    } else if (exercise.input_type === 'assisted_bodyweight') {
+      defaultSet.assistance_weight = '';
+      defaultSet.reps = '';
+    } else if (exercise.input_type === 'duration_weight') {
+      defaultSet.weight = '';
+      defaultSet.time = '';
+      
+      // Special handling for weighted planks - pre-set duration values
+      if (exercise.name && exercise.name.toLowerCase().includes('plank')) {
+        console.log('Setting up default duration for weighted plank');
+        defaultSet.time = 60; // Default to 60 seconds
+        // Store defaults at the exercise level too
+        if (!exercise.defaults) exercise.defaults = {};
+        exercise.defaults.time = 60;
+      }
+    } else if (exercise.input_type === 'weight_distance') {
+      defaultSet.weight = '';
+      defaultSet.distance = '';
+    }
+    
+    // If the exercise doesn't have sets array, create it
+    if (!exercise.sets) {
+      exercise.sets = [];
+    }
+    
+    // Add the set to the exercise
+    exercise.sets.push(defaultSet);
+    
+    // Add the exercise to workout data if it's not already there
+    if (!workoutData.exercises.find(e => e.id === exercise.id)) {
+      workoutData.exercises.push(exercise);
+    }
+    
+    // Update the UI
+    renderExercises();
   }

@@ -4,6 +4,7 @@ from .models import Exercise, Session, User, Measurement, Set, Routine, Workout,
 from . import db
 import json
 from datetime import datetime, timedelta, time
+from sqlalchemy import or_, func
 
 # Constants for workout options
 WORKOUT_LEVELS = ['Beginner', 'Intermediate', 'Advanced']
@@ -20,14 +21,47 @@ def start_workout():
     select exercises and start logging their workout.
     """
     # Get all available exercises
-    exercises = Exercise.query.all()
+    all_exercises = Exercise.query.all()
+    
+    # Find recently used exercise IDs from completed workouts
+    recent_exercise_ids = []
+    
+    # Get the user's recent workouts
+    recent_workouts = Workout.query.filter_by(user_id=current_user.id).order_by(Workout.date.desc()).limit(10).all()
+    
+    for workout in recent_workouts:
+        if workout.data:
+            try:
+                data = json.loads(workout.data)
+                if 'exercises' in data:
+                    for ex in data['exercises']:
+                        # Add the exercise ID to our list if not already present
+                        ex_id = ex.get('id')
+                        if ex_id and ex_id not in recent_exercise_ids:
+                            recent_exercise_ids.append(int(ex_id))
+            except Exception as e:
+                print(f"Error parsing workout data: {e}")
+    
+    print(f"Recent exercise IDs: {recent_exercise_ids}")
+    
+    # Sort exercises - recently used first, then alphabetically
+    def sort_key(exercise):
+        try:
+            # Get the index in recent exercises (lower is more recent)
+            recent_index = recent_exercise_ids.index(exercise.id) if exercise.id in recent_exercise_ids else float('inf')
+            return (recent_index, exercise.name)
+        except Exception as e:
+            print(f"Error sorting exercise {exercise.id}: {e}")
+            return (float('inf'), exercise.name)
+    
+    sorted_exercises = sorted(all_exercises, key=sort_key)
     
     # Get user's latest bodyweight for volume calculations
     latest_bodyweight = Measurement.query.filter_by(user_id=current_user.id, type='weight')\
         .order_by(Measurement.date.desc()).first()
     user_weight = latest_bodyweight.value if latest_bodyweight else None
     
-    return render_template('workout/start.html', exercises=exercises, user_weight=user_weight)
+    return render_template('workout/start.html', exercises=sorted_exercises, user_weight=user_weight)
 
 @workout.route('/log-workout', methods=['POST'])
 @login_required
@@ -93,7 +127,8 @@ def log_workout():
                     session_id=new_session.id,
                     completed=True,
                     order=set_idx,
-                    set_type=set_data.get('set_type', 'normal')
+                    set_type=set_data.get('set_type', 'normal'),
+                    volume=set_volume  # Store the calculated volume
                 )
 
                 # Add all relevant fields based on exercise type
@@ -101,7 +136,7 @@ def log_workout():
                     setattr(new_set, field, set_data.get(field, 0))
                 
                 # Check if set is within range and set the flag
-                if exercise.range_enabled:
+                if exercise and exercise.range_enabled:
                     within_range = False
                     
                     if exercise.input_type.endswith('reps'):
@@ -271,137 +306,182 @@ def get_specific_previous_value(exercise_id, set_number):
         'reps': previous_set.reps
     })
 
-@workout.route('/session/<int:session_id>')
+@workout.route('/workout/session/<int:session_id>')
 @login_required
 def view_session(session_id):
-    """
-    This route shows the detailed view of a completed workout session.
-    It includes all exercise data, stats, and progress comparisons.
-    """
-    print(f"Viewing session {session_id}")
+    """View a specific workout session"""
+    if session_id is None or session_id == 'null':
+        flash('Invalid session ID.', 'danger')
+        return redirect(url_for('workout.workout_page'))
     
-    # Try to find the workout in the Workout database
+    # Try to find the workout
     workout = Workout.query.get(session_id)
     
-    if workout:
-        print(f"Found workout with ID {session_id}")
-        # Check if user has permission to view this workout
-        if workout.user_id != current_user.id:
-            # Check if the workout is from a user that the current user follows
-            creator = User.query.get(workout.user_id)
-            if creator and creator.privacy_setting == 'private' and creator.id not in [u.id for u in current_user.following]:
-                flash('You do not have permission to view this workout.')
-                return redirect(url_for('workout.workout_page'))
+    # If workout not found, check if it's a routine workout
+    if not workout:
+        print(f"Workout with ID {session_id} not found, checking for recent workouts")
+        # Look for most recent workouts
+        recent_workouts = Workout.query.filter_by(user_id=current_user.id)\
+            .order_by(Workout.date.desc())\
+            .limit(1)\
+            .all()
         
-        # Ensure necessary attributes for template compatibility
-        if not hasattr(workout, 'session_date'):
-            workout.session_date = workout.date
-            
-        if not hasattr(workout, 'session_rating'):
-            workout.session_rating = workout.rating
-            
-        # Parse exercises data
-        exercises = []
-        
-        # First try to get exercises from the relationship
-        if workout.exercises:
-            try:
-                for we in workout.exercises:
-                    exercise = Exercise.query.get(we.exercise_id)
-                    if exercise:
-                        # Count completed sets
-                        completed_sets = [s for s in we.sets if s.completed]
+        if recent_workouts:
+            workout = recent_workouts[0]
+            print(f"Using most recent workout with ID {workout.id} instead")
+        else:
+            flash('Workout session not found.', 'danger')
+            return redirect(url_for('workout.workout_page'))
+    
+    # Check if user can view this session
+    if workout.user_id != current_user.id:
+        flash('You do not have permission to view this session.', 'danger')
+        return redirect(url_for('workout.workout_page'))
+    
+    # Get exercises for the session
+    exercises = []
+    workout_data = {}
+    
+    # Parse workout data if available
+    if workout.data:
+        try:
+            workout_data = json.loads(workout.data)
+        except Exception as e:
+            print(f"Error parsing workout data: {e}")
+            workout_data = {}
+    
+    # First try to get exercises from the relationship
+    if workout.exercises:
+        try:
+            for we in workout.exercises:
+                exercise = Exercise.query.get(we.exercise_id)
+                if exercise:
+                    # Count completed sets
+                    completed_sets = [s for s in we.sets if s.completed]
+                    
+                    # Only add the exercise if it has completed sets
+                    if completed_sets:
+                        exercise_data = {
+                            'id': exercise.id,  # Add the exercise ID
+                            'name': exercise.name,
+                            'sets': len(completed_sets)
+                        }
                         
-                        # Only add the exercise if it has completed sets
-                        if completed_sets:
-                            exercise_data = {
-                                'name': exercise.name,
-                                'sets': len(completed_sets)
-                            }
-                            
-                            # Add type-specific details
-                            if exercise.input_type == 'weight_reps':
-                                # Calculate average weight and reps
-                                total_weight = sum(s.weight for s in completed_sets if s.weight)
-                                total_reps = sum(s.reps for s in completed_sets if s.reps)
-                                if total_reps > 0:
-                                    exercise_data['weight'] = round(total_weight / len(completed_sets), 1)
-                                    exercise_data['reps'] = round(total_reps / len(completed_sets))
-                            
-                            elif exercise.input_type == 'duration':
-                                # Calculate total duration
-                                total_duration = sum(s.duration for s in completed_sets if s.duration)
-                                if total_duration > 0:
-                                    exercise_data['duration'] = round(total_duration / 60, 1)  # Convert to minutes
-                            
-                            exercises.append(exercise_data)
-            except Exception as e:
-                print(f"Error parsing workout exercises from relationship: {e}")
-        
-        # If no exercises found from relationship, try data field
-        if not exercises and workout.data:
-            try:
-                data = json.loads(workout.data)
-                exercises_data = data.get('exercises', [])
-                
-                for exercise_data in exercises_data:
-                    if exercise_data.get('sets'):
-                        completed_sets = [s for s in exercise_data.get('sets', []) if s.get('completed')]
+                        # Add type-specific details
+                        if exercise.input_type == 'weight_reps':
+                            # Calculate average weight and reps
+                            total_weight = sum(s.weight for s in completed_sets if s.weight)
+                            total_reps = sum(s.reps for s in completed_sets if s.reps)
+                            if total_reps > 0:
+                                exercise_data['weight'] = round(total_weight / len(completed_sets), 1)
+                                exercise_data['reps'] = round(total_reps / len(completed_sets))
                         
-                        if completed_sets:
-                            exercise = {
-                                'name': exercise_data.get('name', 'Unknown Exercise'),
-                                'sets': len(completed_sets)
-                            }
+                        elif exercise.input_type == 'duration':
+                            # Calculate total duration
+                            total_duration = sum(s.duration for s in completed_sets if s.duration)
+                            if total_duration > 0:
+                                exercise_data['duration'] = round(total_duration / 60, 1)  # Convert to minutes
+                        
+                        exercises.append(exercise_data)
+        except Exception as e:
+            print(f"Error parsing workout exercises from relationship: {e}")
+    
+    # If no exercises found from relationship, try data field
+    if not exercises and workout_data:
+        try:
+            exercises_data = workout_data.get('exercises', [])
+            
+            for exercise_data in exercises_data:
+                if exercise_data.get('sets'):
+                    completed_sets = [s for s in exercise_data.get('sets', []) if s.get('completed')]
+                    
+                    if completed_sets:
+                        exercise = {
+                            'id': exercise_data.get('id'),  # Add the exercise ID
+                            'name': exercise_data.get('name', 'Unknown Exercise'),
+                            'sets': len(completed_sets)
+                        }
+                        
+                        # Add type-specific fields
+                        if exercise_data.get('input_type') == 'weight_reps':
+                            weights = [s.get('weight', 0) for s in completed_sets if s.get('weight')]
+                            reps = [s.get('reps', 0) for s in completed_sets if s.get('reps')]
                             
-                            # Add type-specific fields
-                            if exercise_data.get('input_type') == 'weight_reps':
-                                weights = [s.get('weight', 0) for s in completed_sets if s.get('weight')]
-                                reps = [s.get('reps', 0) for s in completed_sets if s.get('reps')]
-                                
-                                if weights and reps:
-                                    exercise['weight'] = round(sum(weights) / len(weights), 1)
-                                    exercise['reps'] = round(sum(reps) / len(reps))
-                            
-                            exercises.append(exercise)
-            except Exception as e:
-                print(f"Error parsing workout exercises from data: {e}")
+                            if weights and reps:
+                                exercise['weight'] = round(sum(weights) / len(weights), 1)
+                                exercise['reps'] = round(sum(reps) / len(reps))
+                        
+                        exercises.append(exercise)
+        except Exception as e:
+            print(f"Error parsing workout exercises from data: {e}")
+    
+    # Calculate accurate metrics using our helper function
+    metrics = calculate_workout_metrics(workout_data)
+    
+    # Update the workout object with calculated metrics
+    if not workout.volume or workout.volume < metrics['volume']:
+        workout.volume = metrics['volume']
         
-        print(f"Returning workout with {len(exercises)} exercises")
-        return render_template('workout/view_session.html', 
-                              session=workout, 
-                              exercises=exercises)
+    if not workout.duration or workout.duration < metrics['duration']:
+        workout.duration = metrics['duration']
+        
+    if not workout.rating:
+        workout.rating = metrics['rating']
     
-    # Fall back to Session model for backwards compatibility
-    session = Session.query.get_or_404(session_id)
-    print(f"Found legacy session with ID {session_id}")
-    
-    # Check if user has permission to view this session
-    if session.user.privacy_setting == 'private' and session.user_id != current_user.id:
-        flash('You do not have permission to view this session.')
-        return redirect(url_for('auth.home'))
-    
-    # Parse exercises from JSON
+    # Save the updated metrics back to the database
     try:
-        exercises = json.loads(session.exercises) if session.exercises else []
+        db.session.commit()
     except Exception as e:
-        print(f"Error parsing session exercises: {e}")
-        exercises = []
+        db.session.rollback()
+        print(f"Error updating workout metrics: {e}")
     
-    print(f"Returning legacy session with {len(exercises)} exercises")
+    print(f"Returning workout with {len(exercises)} exercises")
     return render_template('workout/view_session.html', 
-                          session=session, 
+                          session=workout, 
                           exercises=exercises)
 
 @workout.route('/api/exercises')
 @login_required
 def get_exercises():
+    # Get all exercises 
     exercises = Exercise.query.all()
-    return jsonify([{
+    
+    # Find recently used exercise IDs from completed workouts
+    recent_exercise_ids = []
+    
+    # Get the user's recent workouts
+    recent_workouts = Workout.query.filter_by(user_id=current_user.id).order_by(Workout.date.desc()).limit(10).all()
+    
+    for workout in recent_workouts:
+        if workout.data:
+            try:
+                data = json.loads(workout.data)
+                if 'exercises' in data:
+                    for ex in data['exercises']:
+                        # Add the exercise ID to our list if not already present
+                        ex_id = ex.get('id')
+                        if ex_id and ex_id not in recent_exercise_ids:
+                            recent_exercise_ids.append(ex_id)
+            except Exception as e:
+                print(f"Error parsing workout data: {e}")
+    
+    # Convert exercises to dict for easier sorting
+    exercise_data = [{
         'id': e.id,
         'name': e.name,
-        'muscles_worked': e.muscles_worked
-    } for e in exercises])
+        'muscles_worked': e.muscles_worked,
+        # Set a sort order based on recent usage
+        'recent_index': recent_exercise_ids.index(e.id) if e.id in recent_exercise_ids else float('inf')
+    } for e in exercises]
+    
+    # Sort by recent usage (recently used first), then by name
+    exercise_data.sort(key=lambda x: (x['recent_index'], x['name']))
+    
+    # Remove the sorting field before returning
+    for ex in exercise_data:
+        ex.pop('recent_index', None)
+    
+    return jsonify(exercise_data)
 
 @workout.route('/api/exercise-details/<int:exercise_id>')
 @login_required
@@ -777,7 +857,7 @@ def update_exercise_ranges(exercise_id):
             exercise.range_enabled = bool(data.get('range_enabled'))
         
         # Validate ranges
-        if exercise.range_enabled:
+        if exercise is not None and exercise.range_enabled:
             if exercise.min_reps is not None and exercise.max_reps is not None:
                 if exercise.min_reps > exercise.max_reps:
                     return jsonify({'success': False, 'error': 'Minimum reps cannot be greater than maximum reps'})
@@ -1505,31 +1585,59 @@ def complete_workout(workout_id):
     data = request.json
     
     try:
-        # Mark workout as completed
-        workout.completed = True
-        workout.end_time = datetime.utcnow()
-        
-        # Calculate duration in seconds
-        if workout.start_time:
-            duration = (workout.end_time - workout.start_time).total_seconds()
-            workout.duration = int(duration)
+        # Mark workout as completed - check if the column exists
+        try:
+            workout.completed = True
+        except Exception as e:
+            print(f"Warning: Could not set completed field: {str(e)}")
+            # Continue without setting this field
+            
+        # Set end time - check if the column exists
+        try:
+            workout.end_time = datetime.utcnow()
+        except Exception as e:
+            print(f"Warning: Could not set end_time field: {str(e)}")
+            # Continue without setting this field
+            
+        # Calculate duration in seconds if start_time exists
+        try:
+            if hasattr(workout, 'start_time') and workout.start_time:
+                duration = (workout.end_time - workout.start_time).total_seconds()
+                # Store the timer duration in data for later comparison with exercise durations
+                if data and isinstance(data, dict):
+                    data['duration'] = int(duration)
+        except Exception as e:
+            print(f"Warning: Could not calculate duration: {str(e)}")
         
         # Save any notes
         if 'notes' in data:
             workout.notes = data['notes']
         
-        # Calculate total volume if applicable
-        total_volume = 0
-        for we in workout.exercises:
-            for s in we.sets:
-                if s.completed:
-                    # Calculate volume based on exercise type
-                    if s.weight and s.reps:
-                        total_volume += s.weight * s.reps
-                    elif s.weight and s.distance:
-                        total_volume += s.weight * s.distance
+        # Parse workout data and update it
+        workout_data = {}
+        if workout.data:
+            try:
+                workout_data = json.loads(workout.data)
+                # Merge updated data
+                if data and isinstance(data, dict):
+                    for key, value in data.items():
+                        workout_data[key] = value
+            except Exception as e:
+                print(f"Error parsing workout data: {e}")
+                workout_data = data if data else {}
+        else:
+            workout_data = data if data else {}
         
-        workout.total_volume = total_volume
+        # Save updated workout data
+        workout.data = json.dumps(workout_data)
+        
+        # Calculate metrics with our helper function
+        metrics = calculate_workout_metrics(workout_data)
+        
+        # Update workout metrics
+        workout.volume = metrics['volume']
+        workout.duration = metrics['duration']
+        workout.rating = data.get('rating', metrics['rating'])
         
         # Award XP to the user
         # Base XP for workout
@@ -1540,27 +1648,131 @@ def complete_workout(workout_id):
         for we in workout.exercises:
             completed_sets += sum(1 for s in we.sets if s.completed)
         
+        # If no sets from relationships, check the workout data
+        if completed_sets == 0 and workout_data and 'exercises' in workout_data:
+            for exercise in workout_data['exercises']:
+                if 'sets' in exercise:
+                    completed_sets += sum(1 for s in exercise['sets'] if s.get('completed', False))
+        
         exp_gained += completed_sets * 3
         
-        # Additional XP for workout duration
+        # Additional XP for workout duration and volume
         if workout.duration:
             # Extra XP for every 10 minutes
             exp_gained += (workout.duration // 600) * 5
+            
+        # Additional XP for volume
+        if workout.volume:
+            # Extra XP for every 1000kg of volume
+            exp_gained += (workout.volume // 1000) * 10
+        
+        # Create a Session object to store this workout's history
+        new_session = Session(
+            user_id=current_user.id,
+            session_date=workout.end_time or datetime.utcnow(),
+            duration=str(workout.duration) if workout.duration else "0",
+            volume=workout.volume,
+            exp_gained=exp_gained,
+            session_rating=workout.rating,
+            title=workout.title or "Workout",
+            description=workout.notes,
+            sets_completed=completed_sets
+        )
+        db.session.add(new_session)
+        db.session.flush()  # Get the ID without committing
+        
+        print(f"Created session with ID {new_session.id}")
+        
+        # Convert WorkoutSet objects to Set objects to store in the exercise history
+        for workout_exercise in workout.exercises:
+            exercise_id = workout_exercise.exercise_id
+            exercise = Exercise.query.get(exercise_id)
+            
+            if not exercise:
+                continue
+                
+            completed_workout_sets = [s for s in workout_exercise.sets if s.completed]
+            
+            for i, workout_set in enumerate(completed_workout_sets):
+                # Create a new Set for the history
+                new_set = Set(
+                    exercise_id=exercise_id,
+                    session_id=new_session.id,
+                    completed=True,
+                    order=i,
+                    set_type='normal'
+                )
+                
+                # Copy all the exercise-specific fields
+                if workout_set.weight is not None:
+                    new_set.weight = workout_set.weight
+                
+                if workout_set.reps is not None:
+                    new_set.reps = workout_set.reps
+                
+                if workout_set.duration is not None:
+                    new_set.time = workout_set.duration  # Note: different field name
+                
+                if workout_set.distance is not None:
+                    new_set.distance = workout_set.distance
+                
+                if workout_set.additional_weight is not None:
+                    new_set.additional_weight = workout_set.additional_weight
+                
+                if workout_set.assistance_weight is not None:
+                    new_set.assistance_weight = workout_set.assistance_weight
+                
+                # Calculate volume based on exercise type
+                if exercise.input_type == 'weight_reps' and workout_set.weight and workout_set.reps:
+                    new_set.volume = workout_set.weight * workout_set.reps
+                elif exercise.input_type == 'duration' and workout_set.duration:
+                    new_set.volume = workout_set.duration  # Volume is time for duration exercises
+                elif exercise.input_type == 'duration_weight' and workout_set.weight and workout_set.duration:
+                    new_set.volume = workout_set.weight * workout_set.duration / 60  # Weight * minutes
+                elif exercise.input_type == 'distance_duration' and workout_set.distance and workout_set.duration:
+                    new_set.volume = workout_set.distance * workout_set.duration / 60  # Distance * minutes
+                elif exercise.input_type == 'weighted_bodyweight' and workout_set.additional_weight and workout_set.reps:
+                    # For weighted bodyweight, use current user's bodyweight + added weight
+                    latest_bodyweight = Measurement.query.filter_by(user_id=current_user.id, type='weight')\
+                        .order_by(Measurement.date.desc()).first()
+                    bodyweight = latest_bodyweight.value if latest_bodyweight else 70  # Default to 70kg
+                    new_set.volume = (bodyweight + workout_set.additional_weight) * workout_set.reps
+                
+                # Check if the set was within the exercise's target range (if set)
+                if exercise is not None and exercise.range_enabled:
+                    new_set.within_range = new_set.check_within_range()
+                
+                db.session.add(new_set)
+                
+            print(f"Added {len(completed_workout_sets)} sets for exercise {exercise.name}")
         
         # Update user stats
         current_user.exp += exp_gained
         current_user.update_level()
         
         # Update streak if it's a new day
-        # (This is a simplified implementation, you might want to expand it)
         today = datetime.now().date()
         last_workout_date = None
         
-        # Find the date of the last workout
-        last_workout = Workout.query.filter_by(
-            user_id=current_user.id, 
-            completed=True
-        ).order_by(Workout.end_time.desc()).first()
+        # Find the date of the last workout - handle case where completed field might not exist
+        try:
+            last_workout = Workout.query.filter_by(
+                user_id=current_user.id, 
+                completed=True
+            ).order_by(Workout.end_time.desc()).first()
+        except Exception as e:
+            print(f"Warning: Could not query with completed field: {str(e)}")
+            # Fall back to just getting the most recent workout by end_time
+            try:
+                last_workout = Workout.query.filter_by(
+                    user_id=current_user.id
+                ).filter(Workout.end_time.isnot(None)).order_by(Workout.end_time.desc()).first()
+            except Exception as e2:
+                print(f"Warning: Could not query with end_time either: {str(e2)}")
+                # Final fallback to just getting by date
+                last_workout = Workout.query.filter_by(
+                    user_id=current_user.id
+                ).order_by(Workout.date.desc()).first()
         
         if last_workout and last_workout.end_time:
             last_workout_date = last_workout.end_time.date()
@@ -1577,344 +1789,276 @@ def complete_workout(workout_id):
             else:
                 current_user.streak = 1
         
+        # Commit all changes
         db.session.commit()
+        
+        print(f"Workout completed successfully: {workout.id}")
         
         return jsonify({
             'success': True,
             'message': 'Workout completed successfully',
             'exp_gained': exp_gained,
-            'new_streak': current_user.streak
+            'new_streak': current_user.streak,
+            'session_id': workout.id
         })
         
     except Exception as e:
         db.session.rollback()
         app.logger.error(f"Error completing workout: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({
             'success': False,
-            'error': 'Failed to complete workout'
+            'error': f'Failed to complete workout: {str(e)}'
         }), 500
 
 @workout.route('/api/log-workout', methods=['POST'])
 @login_required
 def log_workout_api():
-    """Log a completed workout"""
-    # Start with debug information
-    print("=== log_workout_api called ===")
-    db_session = db.session
-    
+    """API endpoint for logging a workout"""
     try:
-        # Get and log request data
         data = request.get_json()
-        print(f"Request data type: {type(data)}")
-        
         if not data:
-            print("Error: No data received in request")
-            return jsonify({
-                'success': False,
-                'error': "No data received"
-            }), 400
-        
-        # Log data keys for debugging
-        print(f"Data keys: {list(data.keys())}")
-        print(f"Exercises count: {len(data.get('exercises', []))}")
-        
-        # Get required data with fallbacks
-        title = data.get('title', f"Workout - {datetime.now().strftime('%Y-%m-%d')}")
-        
-        # Handle both 'notes' and 'description' field variations
-        description = data.get('description', '')
-        if not description:
-            description = data.get('notes', '')  # Backward compatibility
-        
-        # Parse numeric values safely
-        try:
-            rating = int(data.get('rating', 3))
-        except (ValueError, TypeError):
-            rating = 3
-            print("Warning: Invalid rating value, using default")
-            
-        try:
-            duration = int(data.get('duration', 0))
-        except (ValueError, TypeError):
-            duration = 0
-            print("Warning: Invalid duration value, using default")
-        
-        # Format duration for display (convert seconds to minutes)
-        formatted_duration = f"{duration // 60} minutes" if duration > 0 else "0 minutes"
-        
-        # Parse volume, reps, sets
-        try:
-            volume = float(data.get('volume', 0))
-        except (ValueError, TypeError):
-            volume = 0
-            print("Warning: Invalid volume value, using default")
-            
-        try:
-            total_reps = int(data.get('total_reps', 0))
-        except (ValueError, TypeError):
-            total_reps = 0
-            print("Warning: Invalid total_reps value, using default")
-            
-        try:
-            sets_completed = int(data.get('sets_completed', 0))
-        except (ValueError, TypeError):
-            sets_completed = 0
-            print("Warning: Invalid sets_completed value, using default")
-            
-        try:
-            exp_gained = int(data.get('exp_gained', 0))
-        except (ValueError, TypeError):
-            exp_gained = 0
-            print("Warning: Invalid exp_gained value, using default")
-            
-        try:
-            routine_id = int(data.get('routine_id', 0)) or None
-        except (ValueError, TypeError):
-            routine_id = None
-            print("Warning: Invalid routine_id value, using None")
-            
-        print(f"Creating workout with title: '{title}', duration: {duration}s")
-        
-        # Create the workout record
+            return jsonify({'error': 'No data provided'}), 400
+
+        # Process exercises to ensure IDs are integers and add necessary data
+        if 'exercises' in data:
+            for exercise in data['exercises']:
+                if 'id' in exercise:
+                    # Make sure ID is stored as integer
+                    exercise['id'] = int(str(exercise['id']))
+                    print(f"Processed exercise ID: {exercise['id']} ({type(exercise['id'])})")
+                    
+                    # Get actual exercise info to check type
+                    ex = Exercise.query.get(exercise['id'])
+                    if ex and ex.input_type == 'duration_weight':
+                        print(f"Processing duration_weight exercise: {ex.name}")
+                        
+                        # Special handling for planks
+                        is_plank = 'plank' in ex.name.lower()
+                        
+                        # Store default values at the exercise level
+                        if 'defaults' not in exercise:
+                            exercise['defaults'] = {}
+                            
+                        # Ensure defaults exist for planks
+                        if is_plank:
+                            # Get defaults from the exercise or set reasonable defaults
+                            weight = exercise.get('weight', 0)
+                            duration = exercise.get('time', 0) or exercise.get('duration', 0) 
+                            
+                            # Use a minimum default duration for planks if none provided
+                            if not duration:
+                                duration = 60  # Default to 60 seconds
+                                print(f"Setting default duration for plank to {duration} seconds")
+                            
+                            # Set defaults
+                            exercise['defaults']['weight'] = weight
+                            exercise['defaults']['time'] = duration
+                            print(f"Added defaults for {ex.name}: weight={weight}, time={duration}")
+
+                # Process each set to store data properly
+                if 'sets' in exercise:
+                    for set_data in exercise['sets']:
+                        if set_data.get('completed', False):
+                            # Make sure each set has a data dictionary
+                            if 'data' not in set_data:
+                                set_data['data'] = {}
+                            
+                            # Store weight, reps, time, etc. in the data dictionary
+                            for field in ['weight', 'reps', 'time', 'duration', 'distance', 'userWeight']:
+                                if field in set_data:
+                                    set_data['data'][field] = set_data[field]
+                            
+                            # Special handling for plank exercises
+                            if ex and 'plank' in ex.name.lower():
+                                # If time is missing, use default
+                                if not set_data.get('time') and not set_data.get('duration'):
+                                    if 'defaults' in exercise and 'time' in exercise['defaults']:
+                                        default_time = exercise['defaults']['time']
+                                        set_data['time'] = default_time
+                                        set_data['data']['time'] = default_time
+                                        print(f"Using default time {default_time}s for plank set")
+                                
+                                # Store user weight in the set
+                                if 'userWeight' in set_data:
+                                    print(f"User weight for plank: {set_data['userWeight']}kg")
+                                
+                            # Calculate volume for weight/reps exercises if not provided
+                            if 'volume' not in set_data and 'weight' in set_data and 'reps' in set_data:
+                                weight = float(set_data['weight'])
+                                reps = int(set_data['reps'])
+                                set_data['volume'] = weight * reps
+                                print(f"Calculated volume for set: {set_data['volume']}")
+
+        # Calculate metrics with our helper function
+        metrics = calculate_workout_metrics(data)
+
+        # Create new workout
         workout = Workout(
             user_id=current_user.id,
-            title=title,
-            notes=description,  # Make sure we're using the resolved value
-            rating=rating,
-            date=datetime.now(),
-            duration=duration,
+            title=data.get('title', 'Workout'),
+            date=datetime.utcnow(),
             data=json.dumps(data),
-            routine_id=routine_id,
-            volume=volume,
-            total_reps=total_reps,
-            sets_completed=sets_completed,
-            exp_gained=exp_gained
+            volume=metrics['volume'],
+            duration=metrics['duration'],
+            rating=data.get('rating', metrics['rating'])
         )
+        db.session.add(workout)
+        db.session.flush()  # Get the ID without committing
+
+        print(f"Workout saved with ID: {workout.id}, containing {len(data.get('exercises', []))} exercises")
         
-        db_session.add(workout)
-        db_session.flush()  # Get workout.id
-        print(f"Workout created with ID: {workout.id}")
+        # Create a Session object to store this workout's history (separate from Workout)
+        new_session = Session(
+            user_id=current_user.id,
+            session_date=datetime.utcnow(),
+            duration=str(metrics['duration']) if metrics['duration'] else "0",
+            volume=metrics['volume'],
+            title=data.get('title', 'Workout'),
+            description=data.get('notes', ''),
+            session_rating=data.get('rating', 5),
+            exp_gained=data.get('exp_gained', 10)  # Default 10 XP if not provided
+        )
+        db.session.add(new_session)
+        db.session.flush()  # Get the ID without committing
         
-        # Calculate total volume and prepare exercise summary for display
-        formatted_exercises = []
+        print(f"Created session record with ID {new_session.id}")
         
-        # Process each exercise
-        for exercise_data in data.get('exercises', []):
-            try:
-                if not exercise_data.get('id'):
-                    print(f"Warning: Exercise missing ID: {exercise_data}")
-                    continue
-                    
-                # Get basic exercise info
+        # Get user's latest bodyweight for volume calculations
+        latest_bodyweight = Measurement.query.filter_by(user_id=current_user.id, type='weight')\
+            .order_by(Measurement.date.desc()).first()
+        bodyweight = latest_bodyweight.value if latest_bodyweight else 70  # Default to 70kg
+        
+        # Count completed sets for tracking
+        completed_sets_count = 0
+        
+        # Process each exercise and save Sets to history
+        if 'exercises' in data:
+            for exercise_data in data['exercises']:
                 exercise_id = exercise_data.get('id')
-                if isinstance(exercise_id, str) and exercise_id.isdigit():
-                    exercise_id = int(exercise_id)
+                if not exercise_id:
+                    continue
                     
                 exercise = Exercise.query.get(exercise_id)
                 if not exercise:
-                    print(f"Warning: Exercise with ID {exercise_id} not found")
                     continue
                 
-                # Count completed sets
-                completed_sets = [s for s in exercise_data.get('sets', []) if s.get('completed')]
-                if not completed_sets:
-                    print(f"Warning: No completed sets for exercise {exercise.name}")
-                    continue
-                
-                print(f"Processing exercise: {exercise.name} with {len(completed_sets)} completed sets")
-                
-                # Format exercise for display
-                formatted_exercise = {
-                    'name': exercise.name,
-                    'sets': len(completed_sets)
-                }
-                
-                formatted_exercises.append(formatted_exercise)
-                print(f"Formatted exercise: {formatted_exercise}")
-                
-            except Exception as ex:
-                print(f"Error processing exercise: {ex}")
-                continue
-        
-        # Store the formatted exercise data
-        try:
-            # Also create a session entry for backward compatibility
-            session = Session(
-                user_id=current_user.id,
-                session_date=datetime.now(),
-                duration=formatted_duration,
-                volume=int(volume),
-                exercises=json.dumps(formatted_exercises),
-                session_rating=rating,
-                title=title,
-                description=description,
-                sets_completed=sets_completed,
-                total_reps=total_reps,
-                exp_gained=exp_gained
-            )
-            
-            db_session.add(session)
-            db_session.flush()
-            print(f"Legacy session created with ID: {session.id}")
-            
-        except Exception as ex:
-            print(f"Error creating legacy session: {ex}")
-            # Continue anyway - the workout is the primary record
-        
-        # Update user streak
-        try:
-            user = current_user
-            last_workout = Workout.query.filter_by(user_id=user.id).order_by(Workout.date.desc()).offset(1).first()
-            
-            today = datetime.now().date()
-            
-            # Update current streak safely
-            if not hasattr(user, 'current_streak'):
-                # If the current_streak attribute is missing, use the streak attribute instead
-                if not last_workout:
-                    user.streak = 1
-                    print("First workout, setting streak=1")
-                else:
-                    last_workout_date = last_workout.date.date()
-                    days_since_last = (today - last_workout_date).days
+                # Get all completed sets for this exercise
+                if 'sets' in exercise_data:
+                    completed_sets = [s for s in exercise_data['sets'] if s.get('completed', False)]
+                    completed_sets_count += len(completed_sets)
                     
-                    if days_since_last <= 1:  # Same day or consecutive day workout
-                        user.streak += 1
-                        print(f"Consecutive day workout, streak increased to {user.streak}")
-                    elif days_since_last > 1:  # Streak broken
-                        user.streak = 1
-                        print(f"Streak broken after {days_since_last} days, reset to 1")
-            else:
-                # Use current_streak attribute if it exists
-                if not last_workout:
-                    user.current_streak = 1
-                    print("First workout, setting current_streak=1")
-                else:
-                    last_workout_date = last_workout.date.date()
-                    days_since_last = (today - last_workout_date).days
-                    
-                    if days_since_last <= 1:  # Same day or consecutive day workout
-                        user.current_streak += 1
-                        print(f"Consecutive day workout, current_streak increased to {user.current_streak}")
-                    elif days_since_last > 1:  # Streak broken
-                        user.current_streak = 1
-                        print(f"Streak broken after {days_since_last} days, current_streak reset to 1")
-        except Exception as streak_error:
-            print(f"Error updating streak: {streak_error}")
+                    for i, set_data in enumerate(completed_sets):
+                        # Create a new Set for the history
+                        new_set = Set(
+                            exercise_id=exercise_id,
+                            session_id=new_session.id,
+                            completed=True,
+                            order=i,
+                            set_type=set_data.get('set_type', 'normal')
+                        )
+                        
+                        # Copy all the exercise-specific fields from the set data
+                        for field in ['weight', 'reps', 'distance', 'additional_weight', 'assistance_weight']:
+                            if field in set_data and set_data[field] is not None:
+                                setattr(new_set, field, set_data[field])
+                        
+                        # Handle time/duration field (different naming)
+                        if 'time' in set_data and set_data['time'] is not None:
+                            new_set.time = set_data['time']
+                        elif 'duration' in set_data and set_data['duration'] is not None:
+                            new_set.time = set_data['duration']
+                        
+                        # Calculate volume based on exercise type
+                        if exercise.input_type == 'weight_reps' and 'weight' in set_data and 'reps' in set_data:
+                            new_set.volume = float(set_data['weight']) * int(set_data['reps'])
+                        elif exercise.input_type == 'duration' and ('time' in set_data or 'duration' in set_data):
+                            time_value = set_data.get('time') or set_data.get('duration') or 0
+                            new_set.volume = float(time_value)  # Volume is time for duration exercises
+                        elif exercise.input_type == 'duration_weight':
+                            weight = set_data.get('weight', 0)
+                            time_value = set_data.get('time') or set_data.get('duration') or 0
+                            if weight and time_value:
+                                new_set.volume = float(weight) * float(time_value) / 60  # Weight * minutes
+                        elif exercise.input_type == 'weighted_bodyweight':
+                            additional_weight = set_data.get('additional_weight', 0)
+                            reps = set_data.get('reps', 0)
+                            if reps:
+                                new_set.volume = (bodyweight + float(additional_weight)) * int(reps)
+                        elif exercise.input_type == 'assisted_bodyweight':
+                            assistance_weight = set_data.get('assistance_weight', 0)
+                            reps = set_data.get('reps', 0)
+                            if reps:
+                                new_set.volume = (bodyweight - float(assistance_weight)) * int(reps)
+                        elif 'volume' in set_data:  # Use provided volume if available
+                            new_set.volume = float(set_data['volume'])
+                            
+                        # Check if within range
+                        if exercise is not None and exercise.range_enabled:
+                            new_set.within_range = new_set.check_within_range()
+                        
+                        db.session.add(new_set)
+                        
+        # Update the session with the number of completed sets
+        new_session.sets_completed = completed_sets_count
         
-        # Update user EXP if not already provided
-        try:
-            if not exp_gained:
-                daily_bonus = 0
-                streak_bonus = 0
-                
-                # Fallback: Assign 10 XP per minute, capped at 3 hours (1800 XP)
-                base_exp = min(duration / 60 * 10, 1800)
-                
-                # Check if user already worked out today
-                today_workout = Workout.query.filter(
-                    Workout.user_id == user.id,
-                    Workout.date >= datetime.combine(today, time.min),
-                    Workout.date <= datetime.combine(today, time.max),
-                    Workout.id != workout.id  # Exclude current workout
-                ).first()
-                
-                if not today_workout:
-                    daily_bonus = 100  # Bonus for first workout of the day
-                    print("First workout today, adding 100 XP daily bonus")
-                
-                # Streak bonus: +20 XP per day in streak
-                streak_value = getattr(user, 'current_streak', user.streak)
-                if streak_value > 1:
-                    streak_bonus = 20 * streak_value
-                    print(f"Streak bonus: +{streak_bonus} XP for {streak_value} day streak")
-                
-                total_exp = int(base_exp + daily_bonus + streak_bonus)
-                
-                # Only set exp_gained if it wasn't provided
-                workout.exp_gained = total_exp
-                if hasattr(session, 'id'):  # Make sure session was created
-                    session.exp_gained = total_exp
-                
-                print(f"Total XP calculated: {total_exp} (base: {base_exp}, daily: {daily_bonus}, streak: {streak_bonus})")
-            else:
-                # Use the provided exp_gained value
-                total_exp = exp_gained
-                print(f"Using provided exp_gained: {total_exp}")
+        # Award XP to user
+        exp_gained = data.get('exp_gained', 10)  # Default 10 XP
+        exp_gained += completed_sets_count * 3  # 3 XP per completed set
+        
+        # Additional XP for duration
+        if metrics['duration']:
+            # Extra XP for every 10 minutes
+            exp_gained += (metrics['duration'] // 600) * 5
             
-            # Add EXP to user
-            user.exp += total_exp
-            print(f"Added {total_exp} XP to user (new total: {user.exp})")
-        except Exception as exp_error:
-            print(f"Error calculating XP: {exp_error}")
-        
-        # Check for level up
-        level_up = False
-        new_level = 0
-        try:
-            # Use update_level method to handle level progression
-            level_info = user.update_level()
-            level_up = level_info.get('leveled_up', False)
-            new_level = level_info.get('new_level', user.level)
+        # Additional XP for volume
+        if metrics['volume']:
+            # Extra XP for every 1000kg of volume
+            exp_gained += (metrics['volume'] // 1000) * 10
             
-            if level_up:
-                print(f"User leveled up to level {new_level}!")
-            else:
-                print(f"No level up. User remains at level {user.level}")
-        except Exception as level_error:
-            print(f"Error updating level: {level_error}")
+        # Update user stats
+        current_user.exp += exp_gained
+        current_user.update_level()
         
-        # Save all changes
-        try:
-            db_session.commit()
-            print("Successfully saved workout and updated user stats")
-        except Exception as commit_error:
-            db_session.rollback()
-            raise commit_error
+        # Update streak
+        today = datetime.now().date()
+        yesterday = today - timedelta(days=1)
+        yesterday_start = datetime(yesterday.year, yesterday.month, yesterday.day, 0, 0, 0)
+        yesterday_end = datetime(yesterday.year, yesterday.month, yesterday.day, 23, 59, 59)
         
-        # Return success response with combined data
-        response_data = {
-            'success': True,
-            'workout_id': workout.id,
-            'exp_gained': total_exp,
-            'level': user.level,
-            'streak': getattr(user, 'current_streak', user.streak)
-        }
+        # Check if user worked out yesterday
+        worked_out_yesterday = Session.query.filter(
+            Session.user_id == current_user.id,
+            Session.session_date >= yesterday_start,
+            Session.session_date <= yesterday_end
+        ).first() is not None
         
-        # Add session ID for backward compatibility
-        if 'session' in locals() and hasattr(session, 'id'):
-            response_data['session_id'] = session.id
+        # Update streak based on yesterday's workout
+        if worked_out_yesterday:
+            current_user.streak += 1
         else:
-            # If session wasn't created, use workout ID as fallback
-            response_data['session_id'] = workout.id
+            current_user.streak = 1
             
-        # Add level up info
-        if level_up:
-            # Disable level up notifications - just log server-side
-            print(f"User leveled up to level {new_level} (notification disabled)")
-            # Don't add to response
-            # response_data['level_up'] = True
-            # response_data['new_level'] = new_level
-            # response_data['next_level_exp'] = user.next_level_exp
-            
-        return jsonify(response_data)
+        # Save all changes
+        db.session.commit()
         
-    except Exception as e:
-        # If any error occurred, roll back the transaction
-        if 'db_session' in locals():
-            db_session.rollback()
-        
-        # Log detailed error information
-        import traceback
-        error_details = traceback.format_exc()
-        print(f"ERROR in log_workout_api: {str(e)}")
-        print(f"Error details: {error_details}")
-        
-        # Return a user-friendly error message
+        print(f"Workout history saved with {completed_sets_count} completed sets")
+
+        # Return success response with redirect URL
         return jsonify({
-            'success': False,
-            'error': f"Failed to save workout: {str(e)}"
-        }), 500
+            'success': True,
+            'message': 'Workout logged successfully',
+            'redirect_url': url_for('workout.view_session', session_id=workout.id),
+            'session_id': workout.id
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error logging workout: {str(e)}")  # For debugging
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
 
 @workout.route('/api/routines/public', methods=['GET'])
 @login_required
@@ -1958,65 +2102,153 @@ def debug_explore_page():
 @workout.route('/api/routines/explore', methods=['GET'])
 @login_required
 def explore_routines_api():
-    """Get public routines for exploration from the shared routines table"""
-    page = request.args.get('page', 1, type=int)
-    per_page = request.args.get('per_page', 10, type=int)
-    
-    # Get filter parameters
-    level = request.args.get('level')
-    goal = request.args.get('goal')
-    muscle_group = request.args.get('muscle_group')
-    
-    # Build query - get from SharedRoutine table
-    query = SharedRoutine.query
-    
-    # Apply filters
-    if level and level != 'Any':
-        query = query.filter(SharedRoutine.level == level)
-    if goal and goal != 'Any':
-        query = query.filter(SharedRoutine.goal == goal)
-    if muscle_group and muscle_group != 'Any':
-        query = query.filter(SharedRoutine.muscle_groups.like(f'%{muscle_group}%'))
-    
-    # Get paginated results
-    pagination = query.order_by(SharedRoutine.copy_count.desc(), SharedRoutine.created_at.desc())\
-        .paginate(page=page, per_page=per_page, error_out=False)
-    
-    routines = pagination.items
-    
-    # Format routines for response
-    routine_data = []
-    for routine in routines:
-        creator = User.query.get(routine.user_id)
-        try:
-            exercises = json.loads(routine.exercises) if routine.exercises else []
-            exercise_count = len(exercises)
-        except:
-            exercise_count = 0
+    """API endpoint for exploring public routines"""
+    try:
+        # Get query parameters
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 9, type=int)
+        level = request.args.get('level', '')
+        goal = request.args.get('goal', '')
+        search_query = request.args.get('search', '')
+        sort_by = request.args.get('sort_by', 'popular')
+        
+        # Get muscle groups (can be multiple)
+        muscle_groups = request.args.getlist('muscle_groups')
+        print(f"Searching for muscle groups: {muscle_groups}")
+        
+        # Base query for shared routines
+        query = SharedRoutine.query.filter(SharedRoutine.is_public == True)
+        
+        # Apply filters
+        if level:
+            print(f"Filtering by level: {level}")
+            query = query.filter(SharedRoutine.level == level)
+        
+        if goal:
+            print(f"Filtering by goal: {goal}")
+            query = query.filter(SharedRoutine.goal == goal)
             
-        routine_data.append({
-            'id': routine.id,
-            'name': routine.name,
-            'level': routine.level,
-            'goal': routine.goal,
-            'muscle_groups': routine.muscle_groups.split(',') if routine.muscle_groups else [],
-            'description': routine.description,
-            'exercises': exercises,
-            'exercise_count': exercise_count,
-            'copy_count': routine.copy_count or 0,
-            'creator': {
-                'id': creator.id if creator else 0,
-                'username': creator.username if creator else "Unknown"
-            }
-        })
-    
-    return jsonify({
-        'success': True,
-        'routines': routine_data,
-        'total': pagination.total,
-        'pages': pagination.pages,
-        'current_page': page
-    })
+        # Apply search filter
+        if search_query:
+            print(f"Searching for: {search_query}")
+            search_terms = f"%{search_query.lower()}%"
+            query = query.filter(
+                or_(
+                    func.lower(SharedRoutine.name).like(search_terms),
+                    func.lower(SharedRoutine.description).like(search_terms)
+                )
+            )
+        
+        # Apply muscle group filter (must match any of the selected muscles)
+        if muscle_groups:
+            print(f"Filtering by muscles: {muscle_groups}")
+            # Create a list to hold all our OR conditions
+            muscle_filters = []
+            for muscle in muscle_groups:
+                # Try more flexible matching for muscles_worked field
+                muscle_filters.append(SharedRoutine.muscles_worked.ilike(f"%{muscle}%"))
+                # Also try matching in the data field which may contain exercise details
+                muscle_filters.append(SharedRoutine.data.ilike(f"%{muscle}%"))
+            
+            # Combine with OR logic (routine must contain at least one of the selected muscles)
+            query = query.filter(or_(*muscle_filters))
+        
+        # Apply sorting
+        if sort_by == 'newest':
+            query = query.order_by(SharedRoutine.created_at.desc())
+        elif sort_by == 'name':
+            query = query.order_by(SharedRoutine.name.asc())
+        else:  # Default: 'popular'
+            query = query.order_by(SharedRoutine.copy_count.desc())
+        
+        # Paginate results
+        paginated_routines = query.paginate(page=page, per_page=per_page)
+        print(f"Found {paginated_routines.total} routines matching criteria")
+        
+        # Prepare response data
+        response_data = {
+            'success': True,
+            'routines': [],
+            'current_page': page,
+            'pages': paginated_routines.pages,
+            'total': paginated_routines.total
+        }
+        
+        # Process each routine
+        for routine in paginated_routines.items:
+            # Get creator info
+            creator = User.query.get(routine.user_id) if routine.user_id else None
+            
+            # Count exercises and extract muscles
+            exercise_count = 0
+            muscles_worked = []
+            
+            try:
+                if routine.data:
+                    routine_data = json.loads(routine.data)
+                    
+                    # Extract exercise count
+                    if 'exercises' in routine_data:
+                        exercises = routine_data.get('exercises', [])
+                        exercise_count = len(exercises)
+                        
+                        # Extract muscles from exercises if available
+                        for exercise in exercises:
+                            if isinstance(exercise, dict):
+                                # Try different possible field names for muscles
+                                for field in ['muscles_worked', 'primary_muscle', 'exercise_type', 'muscle_group']:
+                                    if field in exercise and exercise[field]:
+                                        muscle = exercise[field]
+                                        if isinstance(muscle, str) and muscle not in muscles_worked:
+                                            muscles_worked.append(muscle)
+            except Exception as e:
+                print(f"Error parsing routine data: {e}")
+            
+            # Process muscles_worked field from routine itself
+            if routine.muscles_worked:
+                try:
+                    # Try to parse as JSON
+                    parsed_muscles = json.loads(routine.muscles_worked)
+                    if isinstance(parsed_muscles, list):
+                        for muscle in parsed_muscles:
+                            if muscle and muscle not in muscles_worked:
+                                muscles_worked.append(muscle)
+                    elif isinstance(parsed_muscles, str):
+                        if parsed_muscles not in muscles_worked:
+                            muscles_worked.append(parsed_muscles)
+                except:
+                    # Fallback to comma-separated string
+                    for muscle in routine.muscles_worked.split(','):
+                        muscle = muscle.strip()
+                        if muscle and muscle not in muscles_worked:
+                            muscles_worked.append(muscle)
+            
+            # Add routine to response
+            response_data['routines'].append({
+                'id': routine.id,
+                'name': routine.name,
+                'description': routine.description,
+                'level': routine.level,
+                'goal': routine.goal,
+                'muscles_worked': muscles_worked,
+                'exercise_count': exercise_count,
+                'copy_count': routine.copy_count,
+                'creator': {
+                    'username': creator.username if creator else 'Unknown',
+                    'badge': creator.badge if creator else 'Beginner'
+                } if creator else None
+            })
+        
+        return jsonify(response_data)
+        
+    except Exception as e:
+        print(f"Error in explore_routines_api: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 @workout.route('/explore/routines/<int:shared_id>')
 @login_required
@@ -2052,3 +2284,509 @@ def view_shared_routine(shared_id):
                           routine=shared_routine,
                           creator_name=creator_name,
                           exercises=exercises)
+
+@workout.route('/exercise/<int:exercise_id>', methods=['GET'], endpoint='view_exercise_simple')
+def view_exercise_simple(exercise_id):
+    """View exercise details with appropriate metrics based on exercise type"""
+    exercise = Exercise.query.get_or_404(exercise_id)
+    print(f"Loading exercise details for: {exercise.name} (ID: {exercise_id})")
+    
+    # Input type options for display
+    input_types = [
+        {'value': 'weight_reps', 'label': 'Weight & Reps'},
+        {'value': 'bodyweight_reps', 'label': 'Bodyweight & Reps'},
+        {'value': 'weighted_bodyweight', 'label': 'Weighted Bodyweight & Reps'},
+        {'value': 'assisted_bodyweight', 'label': 'Assisted Bodyweight & Reps'},
+        {'value': 'duration', 'label': 'Duration Only'},
+        {'value': 'duration_weight', 'label': 'Duration & Weight'},
+        {'value': 'distance_duration', 'label': 'Distance & Duration'},
+        {'value': 'weight_distance', 'label': 'Weight & Distance'}
+    ]
+    
+    # Get user's previous sets for this exercise if user is logged in
+    previous_sets = []
+    
+    if current_user.is_authenticated:
+        try:
+            # Debug print to show we're retrieving sets
+            print(f"Retrieving previous sets for user {current_user.id}, exercise {exercise_id}")
+            
+            # Find sets from recent workouts - get more data for better graphs - EXPLICITLY filter for completed sets
+            previous_sets_query = (
+                Set.query
+                .join(Session)
+                .filter(
+                    Set.exercise_id == exercise_id,
+                    Session.user_id == current_user.id,
+                    Set.completed == True  # Only get completed sets
+                )
+                .order_by(Session.session_date.asc()) # Sort chronologically for graphs
+                .limit(50)
+            )
+            
+            try:
+                previous_sets = previous_sets_query.all()
+                # Debug: print number of sets found
+                print(f"Found {len(previous_sets)} previous COMPLETED sets for exercise {exercise_id}")
+                
+                # Debug: print the actual set data to verify it's correctly populated
+                if previous_sets:
+                    print(f"First set sample: date={previous_sets[0].session.session_date}, "
+                          f"weight={previous_sets[0].weight}, reps={previous_sets[0].reps}, "
+                          f"volume={previous_sets[0].volume}")
+                else:
+                    print("No completed sets found - check if workouts were properly completed")
+            except Exception as e:
+                print(f"Error executing query: {str(e)}")
+                import traceback
+                traceback.print_exc()
+                previous_sets = []
+        except Exception as e:
+            print(f"Error retrieving previous sets: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            previous_sets = []
+    
+    # Calculate exercise-specific metrics based on input type
+    total_sets = len(previous_sets)
+    total_reps = 0
+    total_volume = 0
+    total_exp = 0
+    max_weight = 0
+    max_reps = 0
+    max_duration = 0
+    max_distance = 0
+    
+    # Group sets by date for trend analysis
+    grouped_sets = {}
+    
+    for set_data in previous_sets:
+        try:
+            # Extract date (just the day)
+            date_key = set_data.session.session_date.strftime('%Y-%m-%d')
+            
+            # Initialize date entry if not exists
+            if date_key not in grouped_sets:
+                grouped_sets[date_key] = {
+                    'display_date': set_data.session.session_date.strftime('%b %d'),
+                    'complete_date': set_data.session.session_date,
+                    'sets': 0,
+                    'volume': 0,
+                    'weight': 0,  # For max weight
+                    'reps': 0,    # Total reps
+                    'duration': 0, # Total duration
+                    'distance': 0, # Total distance
+                    'additional_weight': 0, # For weighted bodyweight
+                    'assistance_weight': 0  # For assisted exercises
+                }
+            
+            # Update daily stats
+            day_stats = grouped_sets[date_key]
+            day_stats['sets'] += 1
+            
+            # Update metrics based on exercise type
+            if exercise.input_type == 'weight_reps':
+                # Update reps
+                if set_data.reps:
+                    total_reps += set_data.reps
+                    day_stats['reps'] += set_data.reps
+                
+                # Update max weight
+                if set_data.weight and set_data.weight > max_weight:
+                    max_weight = set_data.weight
+                
+                # Update day max weight
+                if set_data.weight and set_data.weight > day_stats['weight']:
+                    day_stats['weight'] = set_data.weight
+                
+                # Update volume
+                if set_data.weight and set_data.reps:
+                    set_volume = set_data.weight * set_data.reps
+                    total_volume += set_volume
+                    day_stats['volume'] += set_volume
+                elif set_data.volume:
+                    total_volume += set_data.volume
+                    day_stats['volume'] += set_data.volume
+                    
+                # Track for 1RM calculation
+                if set_data.weight and set_data.reps:
+                    if set_data.weight > max_weight:
+                        max_weight = set_data.weight
+                        max_reps = set_data.reps
+                
+            elif exercise.input_type == 'bodyweight_reps':
+                # Update reps
+                if set_data.reps:
+                    total_reps += set_data.reps
+                    day_stats['reps'] += set_data.reps
+                    
+                # Use set volume if available
+                if set_data.volume:
+                    total_volume += set_data.volume
+                    day_stats['volume'] += set_data.volume
+                    
+            elif exercise.input_type == 'weighted_bodyweight':
+                # Update reps
+                if set_data.reps:
+                    total_reps += set_data.reps
+                    day_stats['reps'] += set_data.reps
+                    
+                # Update additional weight max
+                if set_data.additional_weight and set_data.additional_weight > day_stats['additional_weight']:
+                    day_stats['additional_weight'] = set_data.additional_weight
+                    
+                # Use set volume if available
+                if set_data.volume:
+                    total_volume += set_data.volume
+                    day_stats['volume'] += set_data.volume
+                    
+            elif exercise.input_type == 'assisted_bodyweight':
+                # Update reps
+                if set_data.reps:
+                    total_reps += set_data.reps
+                    day_stats['reps'] += set_data.reps
+                    
+                # Update assistance weight (lower is better)
+                if set_data.assistance_weight:
+                    if day_stats['assistance_weight'] == 0 or set_data.assistance_weight < day_stats['assistance_weight']:
+                        day_stats['assistance_weight'] = set_data.assistance_weight
+                    
+                # Use set volume if available
+                if set_data.volume:
+                    total_volume += set_data.volume
+                    day_stats['volume'] += set_data.volume
+                    
+            elif exercise.input_type == 'duration':
+                # Track duration
+                if set_data.time:
+                    time_value = set_data.time
+                    day_stats['duration'] += time_value
+                    max_duration = max(max_duration, time_value)
+                    
+                    # For duration-only exercises, we don't track traditional weight volume
+                    # Instead, we track time as the volume metric (in seconds)
+                    day_stats['volume'] += time_value
+                    total_volume += time_value
+                elif set_data.volume:
+                    # Fallback to stored volume
+                    total_volume += set_data.volume
+                    day_stats['volume'] += set_data.volume
+                    
+            elif exercise.input_type == 'duration_weight':
+                # Track duration
+                if set_data.time:
+                    time_value = set_data.time
+                    day_stats['duration'] += time_value
+                    max_duration = max(max_duration, time_value)
+                    
+                # Track weight
+                if set_data.weight and set_data.weight > day_stats['weight']:
+                    day_stats['weight'] = set_data.weight
+                    max_weight = max(max_weight, set_data.weight)
+                    
+                # Calculate volume as weight * duration for this exercise type
+                if set_data.volume:
+                    total_volume += set_data.volume
+                    day_stats['volume'] += set_data.volume
+                elif set_data.weight and set_data.time:
+                    set_volume = set_data.weight * set_data.time / 60  # Weight * minutes
+                    total_volume += set_volume
+                    day_stats['volume'] += set_volume
+                    
+            elif exercise.input_type == 'distance_duration':
+                # Track distance
+                if set_data.distance:
+                    distance_value = set_data.distance
+                    day_stats['distance'] += distance_value
+                    max_distance = max(max_distance, distance_value)
+                    
+                # Track duration
+                if set_data.time:
+                    time_value = set_data.time
+                    day_stats['duration'] += time_value
+                    max_duration = max(max_duration, time_value)
+                    
+                # For distance exercises, volume can be distance * time as a measure of work
+                if set_data.volume:
+                    total_volume += set_data.volume
+                    day_stats['volume'] += set_data.volume
+                elif set_data.distance and set_data.time:
+                    set_volume = set_data.distance * set_data.time / 60  # Distance * minutes
+                    total_volume += set_volume
+                    day_stats['volume'] += set_volume
+                    
+            elif exercise.input_type == 'weight_distance':
+                # Track weight
+                if set_data.weight:
+                    weight_value = set_data.weight
+                    if weight_value > day_stats['weight']:
+                        day_stats['weight'] = weight_value
+                    max_weight = max(max_weight, weight_value)
+                    
+                # Track distance
+                if set_data.distance:
+                    distance_value = set_data.distance
+                    day_stats['distance'] += distance_value
+                    max_distance = max(max_distance, distance_value)
+                    
+                # For weight_distance, volume is weight * distance
+                if set_data.volume:
+                    total_volume += set_data.volume
+                    day_stats['volume'] += set_data.volume
+                elif set_data.weight and set_data.distance:
+                    set_volume = set_data.weight * set_data.distance
+                    total_volume += set_volume
+                    day_stats['volume'] += set_volume
+        except Exception as e:
+            print(f"Error processing set: {str(e)}")
+            continue
+    
+    # Calculate EXP based on exercise type
+    if exercise.input_type == 'duration':
+        # For duration-only exercises like planks, EXP is based on time (1 EXP per 10 seconds)
+        total_exp = int(total_volume / 10) if total_volume else 0
+    else:
+        # For weight-based exercises, EXP is 1 per 10kg of volume as before
+        total_exp = int(total_volume / 10) if total_volume else 0
+    
+    # Sort grouped sets by date
+    sorted_days = sorted(grouped_sets.values(), key=lambda x: x['complete_date']) if grouped_sets else []
+    
+    # Calculate 1RM if applicable
+    one_rm = None
+    if exercise.input_type in ['weight_reps'] and max_weight > 0 and max_reps > 0:
+        # Use Brzycki formula: weight * (36 / (37 - reps))
+        try:
+            one_rm = max_weight * (36 / (37 - min(36, max_reps)))
+        except Exception as e:
+            print(f"Error calculating 1RM: {str(e)}")
+            one_rm = None
+    
+    # Format volume display and units based on exercise type
+    volume_unit = ""
+    if exercise.input_type == 'duration':
+        volume_unit = "seconds"
+    else:
+        volume_unit = "kg" 
+    
+    # Prepare trend data safely
+    trend_data = {
+        'dates': [day['display_date'] for day in sorted_days],
+        'volume': [day['volume'] for day in sorted_days],
+        'weight': [day['weight'] for day in sorted_days],
+        'reps': [day['reps'] for day in sorted_days],
+        'duration': [day['duration'] for day in sorted_days],
+        'distance': [day['distance'] for day in sorted_days],
+        'additional_weight': [day['additional_weight'] for day in sorted_days],
+        'assistance_weight': [day['assistance_weight'] for day in sorted_days],
+    } if sorted_days else {
+        'dates': [],
+        'volume': [],
+        'weight': [],
+        'reps': [],
+        'duration': [],
+        'distance': [],
+        'additional_weight': [],
+        'assistance_weight': [],
+    }
+    
+    print(f"Rendering exercise view with {total_sets} sets, total volume: {total_volume} {volume_unit}")
+    
+    return render_template(
+        'workout/view_exercise.html',
+        exercise=exercise,
+        previous_sets=previous_sets,
+        input_type_info=Exercise.INPUT_TYPES.get(exercise.input_type, {}),
+        input_types=input_types,
+        stats={
+            'total_sets': total_sets,
+            'total_reps': total_reps,
+            'total_volume': int(total_volume) if total_volume else 0,
+            'total_exp': total_exp,
+            'max_weight': max_weight,
+            'max_reps': max_reps,
+            'max_duration': max_duration,
+            'max_distance': max_distance,
+            'one_rm': int(one_rm) if one_rm else None,
+            'volume_unit': volume_unit
+        },
+        grouped_days=sorted_days,
+        trend_data=json.dumps(trend_data)
+    )
+
+@workout.route('/api/workout/create-exercise', methods=['POST'])
+@login_required
+def create_exercise_api():
+    """Create a new exercise"""
+    try:
+        # Debug the incoming request
+        print("Received create exercise request")
+        
+        # Check if the request has JSON content
+        if not request.is_json:
+            print("Request does not contain JSON")
+            return jsonify({'success': False, 'error': 'Request must be JSON'}), 400
+        
+        data = request.get_json()
+        print(f"Received data: {data}")
+        
+        if not data:
+            return jsonify({'success': False, 'error': 'No data provided'}), 400
+        
+        # Required fields
+        name = data.get('name')
+        if not name:
+            return jsonify({'success': False, 'error': 'Exercise name is required'}), 400
+        
+        # Create new exercise
+        new_exercise = Exercise(
+            name=name,
+            equipment=data.get('equipment', ''),
+            muscles_worked=data.get('muscles_worked', ''),
+            exercise_type=data.get('exercise_type', ''),
+            input_type=data.get('input_type', 'weight_reps'),
+            user_created=True,
+            created_by=current_user.id
+        )
+        
+        # Add to database
+        db.session.add(new_exercise)
+        db.session.commit()
+        
+        print(f"Successfully created exercise: {new_exercise.id} - {new_exercise.name}")
+        
+        return jsonify({
+            'success': True,
+            'exercise': {
+                'id': new_exercise.id,
+                'name': new_exercise.name,
+                'equipment': new_exercise.equipment,
+                'muscles_worked': new_exercise.muscles_worked,
+                'input_type': new_exercise.input_type
+            }
+        })
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error creating exercise: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': f'Failed to create exercise: {str(e)}'}), 500
+
+@workout.route('/exercise/create', methods=['GET'])
+@login_required
+def create_exercise_page():
+    """Page for creating a new exercise"""
+    # Constants for form selections
+    equipment_options = [
+        'Barbell', 'Dumbbell', 'Body Weight', 'Cable Machine', 'Leverage Machine',
+        'EZ Bar', 'Trap Bar', 'Smith Machine', 'Weighted', 'Battling Rope',
+        'Medicine Ball', 'Kettlebell', 'Sled Machine', 'Band', 'Bosu Ball',
+        'Power Sled', 'Resistance Band', 'Roll', 'Roll Ball', 'Rope',
+        'Stability Ball', 'Suspension', 'Wheel Roller'
+    ]
+    
+    body_parts = [
+        'Chest', 'Biceps', 'Triceps', 'Abs', 'Hips', 'Quadriceps',
+        'Hamstrings', 'Back', 'Shoulders', 'Forearms', 'Calves', 'Neck', 'Cardio'
+    ]
+    
+    muscles = [
+        'Abdominals', 'Abductors', 'Adductors', 'Biceps', 'Calves', 'Cardio',
+        'Chest', 'Forearms', 'Full Body', 'Glutes', 'Hamstrings', 'Lats',
+        'Lower Back', 'Neck', 'Quadriceps', 'Shoulders', 'Traps', 'Triceps',
+        'Upper Back', 'Other'
+    ]
+    
+    input_types = [
+        {'value': 'weight_reps', 'label': 'Weight & Reps'},
+        {'value': 'bodyweight_reps', 'label': 'Bodyweight & Reps'},
+        {'value': 'weighted_bodyweight', 'label': 'Weighted Bodyweight & Reps'},
+        {'value': 'assisted_bodyweight', 'label': 'Assisted Bodyweight & Reps'},
+        {'value': 'duration', 'label': 'Duration Only'},
+        {'value': 'duration_weight', 'label': 'Duration & Weight'},
+        {'value': 'distance_duration', 'label': 'Distance & Duration'},
+        {'value': 'weight_distance', 'label': 'Weight & Distance'}
+    ]
+    
+    return render_template(
+        'workout/create_exercise.html',
+        equipment_options=equipment_options,
+        body_parts=body_parts,
+        muscles=muscles,
+        input_types=input_types
+    )
+
+@workout.route('/create-exercise', methods=['POST'])
+@login_required
+def create_exercise():
+    """Create a new exercise"""
+    return create_exercise_api()
+
+def calculate_workout_metrics(workout_data):
+    """
+    Calculate workout metrics from the workout data.
+    Returns a dictionary with volume, duration, and rating.
+    """
+    # Initialize metrics
+    total_volume = 0
+    max_exercise_duration = 0
+    timer_duration = workout_data.get('duration', 0)
+    rating = workout_data.get('rating', 3)
+    
+    # Extract exercises data
+    exercises = workout_data.get('exercises', [])
+    
+    # Calculate total volume and find max exercise duration
+    for exercise in exercises:
+        if isinstance(exercise, dict):
+            # Add exercise volume if directly available
+            if 'volume' in exercise and exercise['volume']:
+                try:
+                    total_volume += float(exercise['volume'])
+                except (ValueError, TypeError):
+                    pass
+                
+            # Handle exercise duration
+            if 'duration' in exercise and exercise['duration']:
+                try:
+                    duration = float(exercise['duration'])
+                    max_exercise_duration = max(max_exercise_duration, duration)
+                except (ValueError, TypeError):
+                    pass
+                    
+            # Process sets if available
+            if 'sets' in exercise and isinstance(exercise['sets'], list):
+                for set_data in exercise['sets']:
+                    if isinstance(set_data, dict):
+                        # Add set volume if available
+                        if 'volume' in set_data and set_data['volume']:
+                            try:
+                                total_volume += float(set_data['volume'])
+                            except (ValueError, TypeError):
+                                pass
+                                
+                        # Calculate volume from weight and reps if available
+                        elif 'weight' in set_data and 'reps' in set_data:
+                            try:
+                                weight = float(set_data['weight'])
+                                reps = float(set_data['reps'])
+                                total_volume += weight * reps
+                            except (ValueError, TypeError):
+                                pass
+                                
+                        # Check for set duration/time
+                        if 'time' in set_data and set_data['time']:
+                            try:
+                                time = float(set_data['time'])
+                                max_exercise_duration = max(max_exercise_duration, time)
+                            except (ValueError, TypeError):
+                                pass
+    
+    # Use the longer of timer duration or max exercise duration
+    final_duration = max(timer_duration, max_exercise_duration)
+    
+    return {
+        'volume': round(total_volume, 1),
+        'duration': int(final_duration),
+        'rating': rating
+    }

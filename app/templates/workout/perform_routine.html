@@ -628,7 +628,15 @@ document.addEventListener('click', function(event) {
                     },
                     function(data) {
                         // Success callback
-                        window.location.href = '/workout/session/' + data.session_id;
+                        if (data.redirect_url) {
+                            window.location.href = data.redirect_url;
+                        } else if (data.session_id && data.session_id !== 'null') {
+                            // As a fallback, try to redirect to session page
+                            window.location.href = '/workout/session/' + data.session_id;
+                        } else {
+                            // Always redirect to workout page if all else fails
+                            window.location.href = '/workout/workout';
+                        }
                     },
                     function(error) {
                         // Error callback

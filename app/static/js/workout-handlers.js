@@ -151,6 +151,28 @@ const workoutHandlers = {
                     } else if (exercise.input_type === 'assisted_bodyweight') {
                         cleanSet.assistance_weight = parseFloat(set.assistance_weight) || 0;
                         cleanSet.reps = parseInt(set.reps) || 0;
+                    } else if (exercise.input_type === 'duration_weight') {
+                        cleanSet.weight = parseFloat(set.weight) || 0;
+                        cleanSet.time = parseInt(set.time) || 0;
+                        
+                        // Special handling for planks to ensure duration is set
+                        if (exercise.name && exercise.name.toLowerCase().includes('plank')) {
+                            // If time is not set, use defaults or fallback to 60 seconds
+                            if (!cleanSet.time) {
+                                cleanSet.time = exercise.defaults?.time || 60;
+                                console.log(`Setting plank duration to ${cleanSet.time}s from defaults`);
+                            }
+                            
+                            // Store user weight separately if available 
+                            const volumeElement = document.getElementById('workout-volume');
+                            if (volumeElement && volumeElement.dataset.userWeight) {
+                                cleanSet.userWeight = parseFloat(volumeElement.dataset.userWeight);
+                                console.log(`Storing user weight for plank: ${cleanSet.userWeight}kg`);
+                            }
+                        }
+                    } else if (exercise.input_type === 'weight_distance') {
+                        cleanSet.weight = parseFloat(set.weight) || 0;
+                        cleanSet.distance = parseFloat(set.distance) || 0;
                     }
                     
                     return cleanSet;
@@ -231,7 +253,29 @@ const workoutHandlers = {
                 this.resetWorkoutData();
                 
                 if (successCallback) {
-                    successCallback(data);
+                    // Use the redirect_url from the server response if available
+                    if (data.redirect_url) {
+                        console.log(`Using server-provided redirect URL: ${data.redirect_url}`);
+                        // Call success callback with the data
+                        successCallback({
+                            ...data,
+                            session_id: data.session_id || null
+                        });
+                    } else if (data.session_id) {
+                        console.log(`Using session_id for redirect: ${data.session_id}`);
+                        // Always redirect to the workout page after routine completion
+                        // instead of trying to access the session directly
+                        successCallback({
+                            ...data,
+                            redirect_url: '/workout/workout'
+                        });
+                    } else {
+                        console.log(`No redirect info available, using workout page`);
+                        successCallback({
+                            ...data,
+                            redirect_url: '/workout/workout'
+                        });
+                    }
                 }
             } else {
                 console.error('Error saving workout:', data.error);
@@ -287,12 +331,40 @@ const workoutHandlers = {
         
         if (set.reps) {
             stats.totalReps += parseInt(set.reps);
+        }
+        
+        // Get user weight from data attribute if available
+        const volumeElement = document.getElementById('workout-volume');
+        const userWeight = volumeElement && volumeElement.dataset.userWeight ? 
+            parseFloat(volumeElement.dataset.userWeight) : null;
+        
+        // Special handling for duration-weight exercises like weighted planks
+        if (exercise.input_type === 'duration_weight' && exercise.name && exercise.name.toLowerCase().includes('plank')) {
+            console.log(`Processing plank exercise with weight=${set.weight || 0}, time=${set.time || 0}`);
             
-            // Get user weight from data attribute if available
-            const volumeElement = document.getElementById('workout-volume');
-            const userWeight = volumeElement && volumeElement.dataset.userWeight ? 
-                parseFloat(volumeElement.dataset.userWeight) : null;
+            // Make sure we have weight and time values
+            if (!set.weight) set.weight = exercise.defaults?.weight || 0;
+            if (!set.time) set.time = exercise.defaults?.time || 0;
             
+            // Make sure we record weight and time in the set data
+            if (set.weight > 0) {
+                console.log(`Setting plank weight: ${set.weight}kg`);
+            }
+            if (set.time > 0) {
+                console.log(`Setting plank duration: ${set.time}s`);
+            }
+            
+            // Include user weight in volume calculation if available
+            const totalWeight = (userWeight ? userWeight : 0) + parseFloat(set.weight || 0);
+            const duration = parseFloat(set.time || 0);
+            
+            if (totalWeight > 0 && duration > 0) {
+                // Calculate volume: total weight * (duration in seconds / 60)
+                const setVolume = totalWeight * (duration / 60);
+                console.log(`Calculated plank volume: ${setVolume} (${totalWeight}kg × ${duration}s ÷ 60)`);
+                stats.volume = (stats.volume || 0) + setVolume;
+            }
+        } else {
             // Calculate volume using our volume calculation function
             const setVolume = this.calculateVolume(exercise, set, userWeight);
             if (setVolume > 0) {
