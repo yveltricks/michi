@@ -279,7 +279,7 @@
         
         <!-- Volume is relevant for all exercise types but with different units -->
         <div class="stat-card">
-            <div class="stat-card-value">{{ stats.total_volume }} {{ stats.volume_unit }}</div>
+            <div class="stat-card-value">{{ stats.total_volume }} {{ current_user.preferred_weight_unit }}</div>
             <div class="stat-card-label">Total Volume</div>
         </div>
         
@@ -757,7 +757,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const volumeChartEl = document.getElementById('volume-chart');
         if (volumeChartEl) {
             const volumeCtx = volumeChartEl.getContext('2d');
-            const volumeUnit = '{{ stats.volume_unit }}';
+            const volumeUnit = '{{ current_user.preferred_weight_unit }}';
             
             new Chart(volumeCtx, {
                 type: 'line',

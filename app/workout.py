@@ -241,70 +241,159 @@ def log_workout():
 @login_required
 def get_previous_values(exercise_id):
     # Get the last completed session that has this exercise with completed sets
-    subquery = db.session.query(Session.id)\
-        .join(Set)\
-        .filter(
+    try:
+        print(f"Getting previous values for exercise ID: {exercise_id}")
+        
+        # Get the most recent set for this exercise that was completed
+        subquery = db.session.query(
+            Set.session_id,
+            func.max(Session.session_date).label('max_date')
+        ).join(Session, Set.session_id == Session.id)\
+         .filter(
+            Set.exercise_id == exercise_id,
             Session.user_id == current_user.id,
+            Set.completed == True
+        ).group_by(Set.session_id).subquery()
+        
+        # Join back to get the session with the max date
+        last_session = db.session.query(Session)\
+            .join(subquery, Session.id == subquery.c.session_id)\
+            .filter(Session.session_date == subquery.c.max_date)\
+            .order_by(Session.session_date.desc())\
+            .first()
+            
+        if not last_session:
+            print("No previous sessions found")
+            return jsonify([])
+            
+        print(f"Found last session: {last_session.id} from {last_session.session_date}")
+        
+        # Get the sets for this exercise in that session
+        previous_sets = Set.query.filter(
+            Set.session_id == last_session.id,
             Set.exercise_id == exercise_id,
             Set.completed == True
-        )\
-        .order_by(Session.session_date.desc())\
-        .limit(1)\
-        .subquery()
-
-    previous_sets = Set.query\
-        .filter(
-            Set.session_id.in_(subquery),
-            Set.exercise_id == exercise_id,
-            Set.completed == True
-        )\
-        .order_by(Set.order)\
-        .all()
-
-    # Add some debug logging
-    print(f"Found {len(previous_sets)} previous sets for exercise {exercise_id}")
-    for set in previous_sets:
-        print(f"Set {set.order + 1}: {set.weight}kg x {set.reps} reps")
-
-    return jsonify([{
-        'weight': set.weight,
-        'reps': set.reps,
-        'order': set.order
-    } for set in previous_sets])
+        ).order_by(Set.order).all()
+        
+        if not previous_sets:
+            print("No previous sets found in the session")
+            return jsonify([])
+            
+        print(f"Found {len(previous_sets)} previous sets")
+        
+        # Format the sets for the response
+        formatted_sets = []
+        for set_obj in previous_sets:
+            set_data = {
+                'weight': set_obj.weight,
+                'reps': set_obj.reps,
+                'time': set_obj.time,
+                'distance': set_obj.distance,
+                'completed': set_obj.completed,
+                'set_type': set_obj.set_type,
+                'order': set_obj.order
+            }
+            
+            # Add exercise-specific fields
+            if hasattr(set_obj, 'additional_weight'):
+                set_data['additional_weight'] = set_obj.additional_weight
+                
+            if hasattr(set_obj, 'assistance_weight'):
+                set_data['assistance_weight'] = set_obj.assistance_weight
+                
+            formatted_sets.append(set_data)
+            
+        print(f"Returning formatted sets: {formatted_sets}")
+        return jsonify(formatted_sets)
+        
+    except Exception as e:
+        print(f"Error getting previous values: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
 
 @workout.route('/api/previous-values/<int:exercise_id>/<int:set_number>')
 @login_required
 def get_specific_previous_value(exercise_id, set_number):
     # Get the last completed session that has this exercise with completed sets
-    subquery = db.session.query(Session.id)\
-        .join(Set)\
-        .filter(
+    try:
+        print(f"Getting specific previous value for exercise ID: {exercise_id}, set number: {set_number}")
+        
+        # Get the most recent set for this exercise that was completed
+        subquery = db.session.query(
+            Set.session_id,
+            func.max(Session.session_date).label('max_date')
+        ).join(Session, Set.session_id == Session.id)\
+         .filter(
+            Set.exercise_id == exercise_id,
             Session.user_id == current_user.id,
-            Set.exercise_id == exercise_id,
             Set.completed == True
-        )\
-        .order_by(Session.session_date.desc())\
-        .limit(1)\
-        .subquery()
-
-    previous_set = Set.query\
-        .filter(
-            Set.session_id.in_(subquery),
+        ).group_by(Set.session_id).subquery()
+        
+        # Join back to get the session with the max date
+        last_session = db.session.query(Session)\
+            .join(subquery, Session.id == subquery.c.session_id)\
+            .filter(Session.session_date == subquery.c.max_date)\
+            .order_by(Session.session_date.desc())\
+            .first()
+            
+        if not last_session:
+            print("No previous sessions found")
+            return jsonify({})
+            
+        print(f"Found last session: {last_session.id} from {last_session.session_date}")
+        
+        # Get the specific set in that session by order
+        previous_set = Set.query.filter(
+            Set.session_id == last_session.id,
             Set.exercise_id == exercise_id,
-            Set.order == set_number - 1,  # Convert to 0-based index
+            Set.order == set_number,
             Set.completed == True
-        )\
-        .first()
-
-    if not previous_set:
-        print(f"No previous set found for exercise {exercise_id}, set number {set_number}")
-        return jsonify(None)
-
-    print(f"Found previous set: {previous_set.weight}kg x {previous_set.reps} reps")
-    return jsonify({
-        'weight': previous_set.weight,
-        'reps': previous_set.reps
-    })
+        ).first()
+        
+        if not previous_set:
+            print(f"No previous set found at position {set_number}")
+            
+            # Try to find the last set in case order doesn't match
+            fallback_set = Set.query.filter(
+                Set.session_id == last_session.id,
+                Set.exercise_id == exercise_id,
+                Set.completed == True
+            ).order_by(Set.order).all()
+            
+            # If we have fewer sets than requested, use the last one
+            if fallback_set and len(fallback_set) > 0:
+                previous_set = fallback_set[-1] if set_number >= len(fallback_set) else fallback_set[set_number]
+                print(f"Using fallback set from position {previous_set.order}")
+            else:
+                return jsonify({})
+            
+        # Format the set for the response
+        set_data = {
+            'weight': previous_set.weight,
+            'reps': previous_set.reps,
+            'time': previous_set.time,
+            'distance': previous_set.distance,
+            'completed': previous_set.completed,
+            'set_type': previous_set.set_type,
+            'order': previous_set.order
+        }
+        
+        # Add exercise-specific fields
+        if hasattr(previous_set, 'additional_weight'):
+            set_data['additional_weight'] = previous_set.additional_weight
+            
+        if hasattr(previous_set, 'assistance_weight'):
+            set_data['assistance_weight'] = previous_set.assistance_weight
+            
+        print(f"Returning set data: {set_data}")
+        return jsonify(set_data)
+        
+    except Exception as e:
+        print(f"Error getting specific previous value: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
 
 @workout.route('/workout/session/<int:session_id>')
 @login_required
@@ -509,6 +598,12 @@ def get_exercise_details(exercise_id):
             'muscles_worked': exercise.muscles_worked,
             'input_type': exercise.input_type,
             'range_enabled': exercise.range_enabled,
+            'min_reps': exercise.min_reps,
+            'max_reps': exercise.max_reps,
+            'min_duration': exercise.min_duration,
+            'max_duration': exercise.max_duration,
+            'min_distance': exercise.min_distance,
+            'max_distance': exercise.max_distance,
             'rest_duration': exercise.rest_duration
         }
         
@@ -519,67 +614,189 @@ def get_exercise_details(exercise_id):
         # Import conversion utilities
         from .utils import convert_weight, convert_distance
         
-        # Add range information based on exercise type
-        if exercise.input_type.endswith('reps'):
-            exercise_data['min_reps'] = exercise.min_reps
-            exercise_data['max_reps'] = exercise.max_reps
-        elif exercise.input_type.endswith('duration'):
-            exercise_data['min_duration'] = exercise.min_duration
-            exercise_data['max_duration'] = exercise.max_duration
-        elif exercise.input_type.endswith('distance'):
-            # Convert min/max distance if user prefers miles
-            if distance_unit == 'mi' and exercise.min_distance is not None:
-                exercise_data['min_distance'] = convert_distance(exercise.min_distance, 'km', 'mi')
+        # Check if the exercise has min_weight and max_weight attributes and add them
+        # Some exercises might not have these attributes if they don't require weight
+        if hasattr(exercise, 'min_weight'):
+            if weight_unit == 'lbs' and exercise.min_weight:
+                exercise_data['min_weight'] = round(convert_weight(exercise.min_weight, 'kg', 'lbs'), 2)
             else:
-                exercise_data['min_distance'] = exercise.min_distance
-                
-            if distance_unit == 'mi' and exercise.max_distance is not None:
-                exercise_data['max_distance'] = convert_distance(exercise.max_distance, 'km', 'mi')
+                exercise_data['min_weight'] = exercise.min_weight
+        else:
+            exercise_data['min_weight'] = None
+            
+        if hasattr(exercise, 'max_weight'):
+            if weight_unit == 'lbs' and exercise.max_weight:
+                exercise_data['max_weight'] = round(convert_weight(exercise.max_weight, 'kg', 'lbs'), 2)
             else:
-                exercise_data['max_distance'] = exercise.max_distance
+                exercise_data['max_weight'] = exercise.max_weight
+        else:
+            exercise_data['max_weight'] = None
+            
+        if distance_unit == 'mi' and exercise.min_distance:
+            exercise_data['min_distance'] = round(convert_distance(exercise.min_distance, 'km', 'mi'), 2)
+        else:
+            exercise_data['min_distance'] = exercise.min_distance
+            
+        if distance_unit == 'mi' and exercise.max_distance:
+            exercise_data['max_distance'] = round(convert_distance(exercise.max_distance, 'km', 'mi'), 2)
+        else:
+            exercise_data['max_distance'] = exercise.max_distance
         
-        # Get the field units with user preferences
-        exercise_data['units'] = exercise.get_units(current_user)
-        
-        # Get previous sets
+        # Get previous sets for this exercise
         previous_sets = []
-        recent_sets = Set.query.filter_by(exercise_id=exercise_id, completed=True).order_by(Set.id.desc()).limit(5).all()
+        previous_session = None
         
-        for set_obj in recent_sets:
-            # Use to_dict with user preferences
-            set_data = set_obj.to_dict(user=current_user)
-            previous_sets.append(set_data)
+        # Get the most recent completed session for this exercise
+        recent_session = db.session.query(Session)\
+            .join(Set)\
+            .filter(
+                Session.user_id == current_user.id,
+                Set.exercise_id == exercise_id,
+                Set.completed == True
+            )\
+            .order_by(Session.session_date.desc())\
+            .first()
             
-        exercise_data['previous_sets'] = previous_sets
-        
-        # Get exercise history
-        history_data = []
-        history_sets = Set.query.filter_by(exercise_id=exercise_id, completed=True).order_by(Set.id.desc()).limit(100).all()
-        
-        # Process history data grouped by session
-        sessions = {}
-        for set_obj in history_sets:
-            session_id = set_obj.session_id
-            if session_id not in sessions:
-                session = Session.query.get(session_id)
-                sessions[session_id] = {
-                    'date': session.session_date.strftime('%Y-%m-%d'),
-                    'sets': []
+        if recent_session:
+            previous_session = recent_session
+            
+            # Get completed sets from the recent session
+            session_sets = Set.query\
+                .filter(
+                    Set.session_id == recent_session.id,
+                    Set.exercise_id == exercise_id,
+                    Set.completed == True
+                )\
+                .order_by(Set.order)\
+                .all()
+                
+            # Process each set for the response
+            for set_obj in session_sets:
+                set_data = {
+                    'weight': set_obj.weight,
+                    'reps': set_obj.reps,
+                    'time': set_obj.time,
+                    'distance': set_obj.distance,
+                    'completed': set_obj.completed,
+                    'set_type': set_obj.set_type,
+                    'order': set_obj.order
                 }
+                
+                # Convert units if needed
+                if weight_unit == 'lbs' and set_data['weight']:
+                    set_data['weight'] = round(convert_weight(set_data['weight'], 'kg', 'lbs'), 2)
+                    
+                if distance_unit == 'mi' and set_data['distance']:
+                    set_data['distance'] = round(convert_distance(set_data['distance'], 'km', 'mi'), 2)
+                    
+                # Add exercise-specific fields
+                if hasattr(set_obj, 'additional_weight'):
+                    set_data['additional_weight'] = set_obj.additional_weight
+                    if weight_unit == 'lbs' and set_data['additional_weight']:
+                        set_data['additional_weight'] = round(convert_weight(set_data['additional_weight'], 'kg', 'lbs'), 2)
+                        
+                if hasattr(set_obj, 'assistance_weight'):
+                    set_data['assistance_weight'] = set_obj.assistance_weight
+                    if weight_unit == 'lbs' and set_data['assistance_weight']:
+                        set_data['assistance_weight'] = round(convert_weight(set_data['assistance_weight'], 'kg', 'lbs'), 2)
+                        
+                previous_sets.append(set_data)
+        
+        # Calculate recommended values based on previous performance
+        recommended_values = None
+        if previous_sets and exercise.range_enabled:
+            # Get the latest weight for this exercise
+            latest_weight = None
+            latest_reps = None
             
-            # Add set data with unit conversion based on user preferences
-            sessions[session_id]['sets'].append(set_obj.to_dict(user=current_user))
+            for set_data in previous_sets:
+                if exercise.input_type in ['weight_reps', 'weighted_bodyweight', 'duration_weight', 'weight_distance']:
+                    if set_data.get('weight') is not None:
+                        latest_weight = set_data['weight']
+                        
+                if exercise.input_type in ['weight_reps', 'bodyweight_reps', 'weighted_bodyweight', 'assisted_bodyweight']:
+                    if set_data.get('reps') is not None:
+                        latest_reps = set_data['reps']
+            
+            # Generate recommendation based on the exercise type and target range
+            recommended_values = {}
+            
+            if exercise.input_type == 'weight_reps' and latest_weight is not None and latest_reps is not None:
+                # For weight and reps exercises
+                if exercise.min_reps and exercise.max_reps:
+                    # Check if all reps were at upper end of range
+                    if latest_reps >= exercise.max_reps:
+                        # Increase weight for next workout
+                        weight_increment = 2.5  # In kg
+                        if weight_unit == 'lbs':
+                            weight_increment = 5  # In lbs
+                            
+                        recommended_values['weight'] = latest_weight + weight_increment
+                        recommended_values['reps'] = exercise.min_reps
+                        recommended_values['isRecommended'] = {'weight': True, 'reps': True}
+                    elif latest_reps < exercise.min_reps:
+                        # Decrease weight if struggling
+                        weight_decrement = 2.5  # In kg
+                        if weight_unit == 'lbs':
+                            weight_decrement = 5  # In lbs
+                            
+                        recommended_values['weight'] = max(latest_weight - weight_decrement, weight_decrement)
+                        recommended_values['reps'] = exercise.min_reps
+                        recommended_values['isRecommended'] = {'weight': True, 'reps': True}
+                    else:
+                        # Keep same weight, try to increase reps
+                        recommended_values['weight'] = latest_weight
+                        recommended_values['reps'] = min(latest_reps + 1, exercise.max_reps)
+                        recommended_values['isRecommended'] = {'weight': False, 'reps': True}
+            
+            # Add similar logic for other exercise types
+            # ...
         
-        # Convert to list and sort by date
-        for session_id, session_data in sessions.items():
-            history_data.append(session_data)
+        # Add previous sets and recommendations to the response
+        exercise_data['previousSets'] = previous_sets
+        exercise_data['recommendedValues'] = recommended_values
         
-        history_data.sort(key=lambda x: x['date'], reverse=True)
-        exercise_data['history'] = history_data
+        # Get exercise history - up to 5 recent sessions
+        history = []
+        recent_sessions = db.session.query(Session)\
+            .join(Set)\
+            .filter(
+                Session.user_id == current_user.id,
+                Set.exercise_id == exercise_id,
+                Set.completed == True
+            )\
+            .order_by(Session.session_date.desc())\
+            .limit(5)\
+            .all()
+            
+        for session in recent_sessions:
+            session_sets = Set.query\
+                .filter(
+                    Set.session_id == session.id,
+                    Set.exercise_id == exercise_id,
+                    Set.completed == True
+                )\
+                .all()
+                
+            if session_sets:
+                history_entry = {
+                    'date': session.session_date.strftime('%Y-%m-%d'),
+                    'set_count': len(session_sets),
+                    'volume': sum(s.volume or 0 for s in session_sets)
+                }
+                
+                if weight_unit == 'lbs' and history_entry['volume']:
+                    history_entry['volume'] = round(convert_weight(history_entry['volume'], 'kg', 'lbs'), 2)
+                
+                history.append(history_entry)
+        
+        exercise_data['history'] = history
         
         return jsonify(exercise_data)
     except Exception as e:
         print(f"Error getting exercise details: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 @workout.route('/measurements')
@@ -2411,15 +2628,25 @@ def view_shared_routine(shared_id):
 def view_exercise(exercise_id):
     """Display detailed view of an exercise with history"""
     try:
+        # Import unit conversion function
+        from .utils import convert_volume_to_preferred_unit
+        
         # Get the exercise from the database
         exercise = Exercise.query.get_or_404(exercise_id)
         
-        # Get exercise sets from the database
-        sets = Set.query.filter_by(exercise_id=exercise_id).all()
-        total_sets = len(sets)
+        # Get exercise sets from the database - these are all completed sets for this exercise
+        previous_sets = Set.query.join(Session).filter(
+            Set.exercise_id == exercise_id,
+            Session.user_id == current_user.id,
+            Set.completed == True
+        ).order_by(Session.session_date.desc()).all()
+        
+        total_sets = len(previous_sets)
         
         # Process the sets to get statistics
         total_volume = 0
+        total_reps = 0
+        total_exp = 0
         max_weight = 0
         max_reps = 0
         max_duration = 0
@@ -2433,11 +2660,15 @@ def view_exercise(exercise_id):
         elif exercise.input_type in ['weight_reps', 'weighted_bodyweight', 'duration_weight', 'weight_distance']:
             volume_unit = current_user.preferred_weight_unit  # Use the user's preferred unit
         
-        for set_obj in sets:
+        for set_obj in previous_sets:
             # Calculate total volume
             if set_obj.volume:
                 total_volume += set_obj.volume
             
+            # Count total reps for rep-based exercises
+            if set_obj.reps and exercise.input_type in ['weight_reps', 'bodyweight_reps', 'weighted_bodyweight', 'assisted_bodyweight']:
+                total_reps += set_obj.reps
+                
             # Track max values
             if set_obj.weight and set_obj.weight > max_weight:
                 max_weight = set_obj.weight
@@ -2481,6 +2712,14 @@ def view_exercise(exercise_id):
             # Brzycki formula: 1RM = weight × (36 / (37 - reps))
             if max_reps < 37:  # Formula breaks down at 37+ reps
                 one_rep_max = max_weight * (36 / (37 - max_reps))
+        
+        # Calculate total EXP gained
+        # For weight-based exercises: 1 EXP per 10kg of volume
+        # For duration exercises: 1 EXP per 10 seconds
+        if exercise.input_type == 'duration':
+            total_exp = int(total_volume / 10) if total_volume else 0
+        else:
+            total_exp = int(total_volume / 10) if total_volume else 0
                 
         print(f"Rendering exercise view with {total_sets} sets, total volume: {total_volume} {volume_unit}")
         
@@ -2511,26 +2750,107 @@ def view_exercise(exercise_id):
                 'volume': session_volume
             })
         
+        # Convert volumes to preferred units for display
+        total_volume = convert_volume_to_preferred_unit(total_volume, current_user.preferred_weight_unit)
+        max_weight = convert_volume_to_preferred_unit(max_weight, current_user.preferred_weight_unit)
+        if one_rep_max:
+            one_rep_max = convert_volume_to_preferred_unit(one_rep_max, current_user.preferred_weight_unit)
+            
         # Prepare statistics for the template
         stats = {
-            'total_volume': total_volume,
-            'max_weight': max_weight,
+            'total_volume': round(total_volume, 2),
+            'total_sets': total_sets,
+            'total_reps': total_reps,
+            'total_exp': total_exp,
+            'max_weight': round(max_weight, 2),
             'max_reps': max_reps,
             'max_duration': max_duration,
             'max_distance': max_distance,
-            'one_rm': round(one_rep_max, 1) if one_rep_max else None,
+            'one_rm': round(one_rep_max, 2) if one_rep_max else None,
             'volume_unit': volume_unit
         }
         
+        # Define input types for the template
+        input_types = [
+            {'value': 'weight_reps', 'label': 'Weight & Reps'},
+            {'value': 'bodyweight_reps', 'label': 'Bodyweight & Reps'},
+            {'value': 'weighted_bodyweight', 'label': 'Weighted Bodyweight & Reps'},
+            {'value': 'assisted_bodyweight', 'label': 'Assisted Bodyweight & Reps'},
+            {'value': 'duration', 'label': 'Duration Only'},
+            {'value': 'duration_weight', 'label': 'Duration & Weight'},
+            {'value': 'distance_duration', 'label': 'Distance & Duration'},
+            {'value': 'weight_distance', 'label': 'Weight & Distance'}
+        ]
+        
+        # Create grouped_days structure needed for chart display
+        grouped_days = []
+        if previous_sets:
+            # Create a dictionary to group sets by date
+            date_groups = {}
+            for set_data in previous_sets:
+                date_key = set_data.session.session_date.strftime('%Y-%m-%d')
+                if date_key not in date_groups:
+                    date_groups[date_key] = {
+                        'display_date': set_data.session.session_date.strftime('%b %d'),
+                        'complete_date': set_data.session.session_date,
+                        'sets': 0,
+                        'volume': 0,
+                        'weight': 0,
+                        'reps': 0,
+                        'duration': 0,
+                        'distance': 0,
+                        'additional_weight': 0,
+                        'assistance_weight': 0
+                    }
+                
+                # Update stats for this day
+                date_group = date_groups[date_key]
+                date_group['sets'] += 1
+                
+                if set_data.volume:
+                    date_group['volume'] += set_data.volume
+                
+                if set_data.weight and set_data.weight > date_group['weight']:
+                    date_group['weight'] = set_data.weight
+                
+                if set_data.reps:
+                    date_group['reps'] += set_data.reps
+                
+                if set_data.time:
+                    date_group['duration'] += set_data.time
+                    
+                if set_data.distance:
+                    date_group['distance'] += set_data.distance
+                    
+                if hasattr(set_data, 'additional_weight') and set_data.additional_weight:
+                    date_group['additional_weight'] = max(date_group['additional_weight'], set_data.additional_weight)
+                    
+                if hasattr(set_data, 'assistance_weight') and set_data.assistance_weight:
+                    if date_group['assistance_weight'] == 0:
+                        date_group['assistance_weight'] = set_data.assistance_weight
+                    else:
+                        date_group['assistance_weight'] = min(date_group['assistance_weight'], set_data.assistance_weight)
+                    
+            # Convert dict to sorted list
+            grouped_days = sorted(date_groups.values(), key=lambda x: x['complete_date'])
+            
+            # Convert weights to preferred units
+            for day in grouped_days:
+                day['weight'] = convert_volume_to_preferred_unit(day['weight'], current_user.preferred_weight_unit)
+                day['volume'] = convert_volume_to_preferred_unit(day['volume'], current_user.preferred_weight_unit)
+        
         return render_template('workout/view_exercise.html',
                                exercise=exercise,
-                               sets=sets,
-                               total_sets=total_sets,
+                               previous_sets=previous_sets,
+                               input_types=input_types,
+                               grouped_days=grouped_days,
                                stats=stats,
                                trend_data=trend_data,
                                session_data=session_data)
     except Exception as e:
         print(f"Error viewing exercise: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 @workout.route('/api/workout/create-exercise', methods=['POST'])
