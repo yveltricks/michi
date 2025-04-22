@@ -1152,10 +1152,10 @@ function completeWorkoutWithData(title, description, rating, notes, photoBase64)
         console.error('Error completing workout:', error);
         showErrorMessage('Failed to complete workout: ' + error.message);
     });
-}
-
-// Calculate workout duration
-function calculateWorkoutDuration() {
+  }
+  
+  // Calculate workout duration
+  function calculateWorkoutDuration() {
     // Get timer duration in seconds
     const timerDurationSeconds = getWorkoutDuration();
     

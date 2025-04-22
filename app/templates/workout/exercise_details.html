@@ -119,9 +119,9 @@
 
 {% block scripts %}
 <script>
-document.addEventListener('DOMContentLoaded', function() {
+    // Initialize chart
     const ctx = document.getElementById('exerciseChart').getContext('2d');
-    const chartData = {{ chart_data|tojson|safe }};
+    const chartData = JSON.parse('{{ chart_data|tojson|safe }}');
     
     // Create the chart
     new Chart(ctx, {
@@ -129,6 +129,5 @@ document.addEventListener('DOMContentLoaded', function() {
         data: chartData,
         options: chartData.options
     });
-});
 </script>
 {% endblock %} 

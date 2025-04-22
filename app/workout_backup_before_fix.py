@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, abort, current_app
 from flask_login import login_required, current_user
 from .models import Exercise, Session, User, Measurement, Set, Routine, Workout, WorkoutExercise, WorkoutSet, SharedRoutine, WorkoutLike, WorkoutComment, Notification
 from . import db
@@ -8,13 +8,10 @@ from sqlalchemy import or_, func
 
 # Constants for workout options
 WORKOUT_LEVELS = ['Beginner', 'Intermediate', 'Advanced']
-WORKOUT_GOALS = ['Strength', 'Hypertrophy',
-    'Endurance', 'Weight Loss', 'General Fitness']
-MUSCLE_GROUPS = ['Chest', 'Back', 'Shoulders',
-    'Arms', 'Core', 'Legs', 'Full Body']
+WORKOUT_GOALS = ['Strength', 'Hypertrophy', 'Endurance', 'Weight Loss', 'General Fitness']
+MUSCLE_GROUPS = ['Chest', 'Back', 'Shoulders', 'Arms', 'Core', 'Legs', 'Full Body']
 
 workout = Blueprint('workout', __name__)
-
 
 @workout.route('/start-workout')
 @login_required
@@ -22,22 +19,22 @@ def start_workout():
     """Start a new workout or load a template"""
     # Get all exercises for the dropdown
     all_exercises = Exercise.query.all()
-
+    
     # Get the 5 most recent completed exercises for this user for quick selection
     recent_sets = Set.query.join(Session).filter(
         Session.user_id == current_user.id,
         Set.completed == True
     ).order_by(Session.session_date.desc()).limit(100).all()
-
+    
     # Extract unique exercise IDs while preserving order
     recent_exercise_ids = []
     for set in recent_sets:
         if set.exercise_id not in recent_exercise_ids:
             recent_exercise_ids.append(set.exercise_id)
-
+    
     # Limit to top 5
     recent_exercise_ids = recent_exercise_ids[:5]
-
+    
     # Check if there's a repeat workout request
     repeat_id = request.args.get('repeat')
     if repeat_id:
@@ -45,27 +42,27 @@ def start_workout():
             repeat_id = int(repeat_id)
             # Check if it's a Session
             session = Session.query.get(repeat_id)
-
+            
             if session and session.user_id == current_user.id:
                 # Extract exercises from session
                 session_exercises = []
-
+                
                 # Get the sets for this session
                 sets = Set.query.filter_by(session_id=repeat_id).all()
-
+                
                 # Group sets by exercise
                 exercise_sets = {}
                 for s in sets:
                     if s.exercise_id not in exercise_sets:
                         exercise_sets[s.exercise_id] = []
                     exercise_sets[s.exercise_id].append(s)
-
+                
                 # Format exercises data
                 for exercise_id, sets in exercise_sets.items():
                     exercise = Exercise.query.get(exercise_id)
                     if not exercise:
                         continue
-
+                        
                     # Create exercise data structure
                     exercise_data = {
                         'id': exercise_id,
@@ -73,7 +70,7 @@ def start_workout():
                         'input_type': exercise.input_type,
                         'sets': []
                     }
-
+                    
                     # Add sets data
                     for s in sets:
                         set_data = {
@@ -85,61 +82,58 @@ def start_workout():
                             'assistance_weight': s.assistance_weight
                         }
                         exercise_data['sets'].append(set_data)
-
+                        
                     session_exercises.append(exercise_data)
-
+                
                 # Store the exercises in session for the start-workout page
                 from flask import session as flask_session
                 flask_session['repeat_workout_exercises'] = session_exercises
-
+                
                 # Redirect back to the start-workout page (without the repeat parameter to avoid loops)
-                flash(
-                    'Workout loaded for repeat. Customize as needed and start when ready.', 'success')
+                flash('Workout loaded for repeat. Customize as needed and start when ready.', 'success')
                 return redirect(url_for('workout.start_workout'))
         except Exception as e:
             print(f"Error loading repeat workout: {str(e)}")
             import traceback
             traceback.print_exc()
             # Continue with normal page loading
-
+    
     # Sort exercises by most recently used, then alphabetically
     def sort_key(exercise):
         try:
             # Get the index in recent exercises (lower is more recent)
-            recent_index = recent_exercise_ids.index(
-                exercise.id) if exercise.id in recent_exercise_ids else float('inf')
+            recent_index = recent_exercise_ids.index(exercise.id) if exercise.id in recent_exercise_ids else float('inf')
             return (recent_index, exercise.name)
         except Exception as e:
             print(f"Error sorting exercise {exercise.id}: {e}")
             return (float('inf'), exercise.name)
-
+    
     sorted_exercises = sorted(all_exercises, key=sort_key)
-
+    
     # Get user's latest bodyweight for volume calculations
     latest_bodyweight = Measurement.query.filter_by(user_id=current_user.id, type='weight')\
         .order_by(Measurement.date.desc()).first()
     user_weight = latest_bodyweight.value if latest_bodyweight else None
-
+    
     # Get unread notification count for the notification badge
     unread_notification_count = Notification.query.filter_by(
         user_id=current_user.id,
         is_read=False
     ).count()
-
+    
     # Check if there are pre-filled exercises from a repeated workout
     from flask import session as flask_session
     prefilled_exercises = flask_session.get('repeat_workout_exercises', None)
-
+    
     # Remove the exercises from session after retrieving them to avoid persisting
     if prefilled_exercises:
         flask_session.pop('repeat_workout_exercises', None)
-
-    return render_template('workout/start.html',
-                          exercises=sorted_exercises,
+    
+    return render_template('workout/start.html', 
+                          exercises=sorted_exercises, 
                           user_weight=user_weight,
                           unread_notification_count=unread_notification_count,
                           prefilled_exercises=prefilled_exercises)
-
 
 @workout.route('/log-workout', methods=['POST'])
 @login_required
@@ -164,7 +158,7 @@ def log_workout():
             photo=data.get('photo_url', None),
             volume=data.get('volume', 0)  # Store volume from client
         )
-
+        
         # Try to set the new columns, but handle if they don't exist
         try:
             new_session.sets_completed = data.get('sets_completed', 0)
@@ -172,7 +166,7 @@ def log_workout():
         except Exception as column_error:
             print(f"Warning: Could not set new columns: {str(column_error)}")
             # Continue without these fields
-
+        
         db.session.add(new_session)
         db.session.flush()  # Get new_session.id
 
@@ -185,8 +179,7 @@ def log_workout():
             if not exercise:
                 continue
 
-            completed_sets = [
-                set for set in exercise_data['sets'] if set.get('completed', False)]
+            completed_sets = [set for set in exercise_data['sets'] if set.get('completed', False)]
             if not completed_sets:
                 continue
 
@@ -217,7 +210,7 @@ def log_workout():
                     # Check if set is within range and set the flag
                     if exercise and exercise.range_enabled:
                         within_range = False
-
+                        
                         if exercise.input_type.endswith('reps'):
                             if exercise.min_reps and exercise.max_reps:
                                 reps = set_data.get('reps', 0)
@@ -230,18 +223,18 @@ def log_workout():
                             if exercise.min_distance and exercise.max_distance:
                                 distance = set_data.get('distance', 0)
                                 within_range = exercise.min_distance <= distance <= exercise.max_distance
-
+                        
                         new_set.within_range = within_range
 
                 db.session.add(new_set)
 
         # Update session with total volume and exercise data
         new_session.exercises = json.dumps(formatted_exercises)
-
+        
         # If client provided volume is 0, use our calculated volume
         if new_session.volume == 0:
             new_session.volume = total_volume
-
+        
         # Format duration properly for display
         duration_seconds = data.get('duration', 0)
         if duration_seconds:
@@ -254,39 +247,37 @@ def log_workout():
             except (ValueError, TypeError) as e:
                 print(f"Error formatting duration: {str(e)}")
                 new_session.duration = "0 minutes"  # Default if conversion fails
-
+        
         # Use the EXP gained during the workout from the client
         base_exp = data.get('exp_gained', 0)
-
+        
         # Calculate consistency bonus
         consistency_bonus = 0
-
+        
         # Check workout frequency (last 7 days)
         one_week_ago = datetime.utcnow() - timedelta(days=7)
         recent_workouts = Session.query.filter(
             Session.user_id == current_user.id,
             Session.session_date >= one_week_ago
         ).count()
-
+        
         # Bonus for multiple workouts per week
         if recent_workouts >= 3:
             consistency_bonus += 20  # Bonus for 3+ workouts per week
         elif recent_workouts >= 1:
             consistency_bonus += 10  # Smaller bonus for at least 1 workout per week
-
+        
         # Check for streaks (consecutive days)
         yesterday = datetime.utcnow() - timedelta(days=1)
-        yesterday_start = datetime(
-            yesterday.year, yesterday.month, yesterday.day, 0, 0, 0)
-        yesterday_end = datetime(
-            yesterday.year, yesterday.month, yesterday.day, 23, 59, 59)
-
+        yesterday_start = datetime(yesterday.year, yesterday.month, yesterday.day, 0, 0, 0)
+        yesterday_end = datetime(yesterday.year, yesterday.month, yesterday.day, 23, 59, 59)
+        
         worked_out_yesterday = Session.query.filter(
             Session.user_id == current_user.id,
             Session.session_date >= yesterday_start,
             Session.session_date <= yesterday_end
         ).first() is not None
-
+        
         # Update streak
         if worked_out_yesterday:
             # If they worked out yesterday, increment streak
@@ -294,13 +285,13 @@ def log_workout():
         else:
             # Reset streak if they didn't work out yesterday
             current_user.streak = 1
-
+        
         # Bonus for maintaining streak
         if current_user.streak >= 7:
             consistency_bonus += 30  # Bonus for 7+ day streak
         elif current_user.streak >= 3:
             consistency_bonus += 15  # Bonus for 3+ day streak
-
+        
         # Set total EXP gained (base + bonus)
         total_exp_gained = base_exp + consistency_bonus
         new_session.exp_gained = total_exp_gained
@@ -325,14 +316,13 @@ def log_workout():
             'error': str(e)
         }), 500
 
-
 @workout.route('/api/previous-values/<int:exercise_id>')
 @login_required
 def get_previous_values(exercise_id):
     # Get the last completed session that has this exercise with completed sets
     try:
         print(f"Getting previous values for exercise ID: {exercise_id}")
-
+        
         # Get the most recent set for this exercise that was completed
         subquery = db.session.query(
             Set.session_id,
@@ -343,34 +333,33 @@ def get_previous_values(exercise_id):
             Session.user_id == current_user.id,
             Set.completed == True
         ).group_by(Set.session_id).subquery()
-
+        
         # Join back to get the session with the max date
         last_session = db.session.query(Session)\
             .join(subquery, Session.id == subquery.c.session_id)\
             .filter(Session.session_date == subquery.c.max_date)\
         .order_by(Session.session_date.desc())\
             .first()
-
+            
         if not last_session:
             print("No previous sessions found")
             return jsonify([])
-
-        print(
-            f"Found last session: {last_session.id} from {last_session.session_date}")
-
+            
+        print(f"Found last session: {last_session.id} from {last_session.session_date}")
+        
         # Get the sets for this exercise in that session
         previous_sets = Set.query.filter(
             Set.session_id == last_session.id,
             Set.exercise_id == exercise_id,
             Set.completed == True
         ).order_by(Set.order).all()
-
+        
         if not previous_sets:
             print("No previous sets found in the session")
             return jsonify([])
-
+            
         print(f"Found {len(previous_sets)} previous sets")
-
+        
         # Format the sets for the response
         formatted_sets = []
         for set_obj in previous_sets:
@@ -383,128 +372,107 @@ def get_previous_values(exercise_id):
                 'set_type': set_obj.set_type,
                 'order': set_obj.order
             }
-
+            
             # Add exercise-specific fields
             if hasattr(set_obj, 'additional_weight'):
                 set_data['additional_weight'] = set_obj.additional_weight
-
+                
             if hasattr(set_obj, 'assistance_weight'):
                 set_data['assistance_weight'] = set_obj.assistance_weight
-
+                
             formatted_sets.append(set_data)
-
+            
         print(f"Returning formatted sets: {formatted_sets}")
         return jsonify(formatted_sets)
-
+        
     except Exception as e:
         print(f"Error getting previous values: {str(e)}")
         import traceback
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
-
 @workout.route('/api/previous-values/<int:exercise_id>/<int:set_number>')
 @login_required
 def get_specific_previous_value(exercise_id, set_number):
     # Get the last completed session that has this exercise with completed sets
     try:
-        # Get the most recent set for this exercise at this position
-        previous_set = db.session.query(Set)\
-            .join(Session, Set.session_id == Session.id)\
-            .filter(
-                Set.exercise_id == exercise_id,
-                Session.user_id == current_user.id,
-                Set.completed == True,
-                Set.order == set_number
-            )\
-            .order_by(Session.session_date.desc())\
+        print(f"Getting specific previous value for exercise ID: {exercise_id}, set number: {set_number}")
+        
+        # Get the most recent set for this exercise that was completed
+        subquery = db.session.query(
+            Set.session_id,
+            func.max(Session.session_date).label('max_date')
+        ).join(Session, Set.session_id == Session.id)\
+        .filter(
+            Set.exercise_id == exercise_id,
+            Session.user_id == current_user.id,
+            Set.completed == True
+        ).group_by(Set.session_id).subquery()
+        
+        # Join back to get the session with the max date
+        last_session = db.session.query(Session)\
+            .join(subquery, Session.id == subquery.c.session_id)\
+            .filter(Session.session_date == subquery.c.max_date)\
+        .order_by(Session.session_date.desc())\
             .first()
+            
+        if not last_session:
+            print("No previous sessions found")
+            return jsonify({})
+            
+        print(f"Found last session: {last_session.id} from {last_session.session_date}")
+        
+        # Get the specific set in that session by order
+        previous_set = Set.query.filter(
+            Set.session_id == last_session.id,
+            Set.exercise_id == exercise_id,
+            Set.order == set_number,
+            Set.completed == True
+        ).first()
 
-        if not previous_set:
+    if not previous_set:
             print(f"No previous set found at position {set_number}")
-
+            
             # Try to find the last set in case order doesn't match
-            any_previous_set = db.session.query(Set)\
-                .join(Session, Set.session_id == Session.id)\
-                .filter(
-                    Set.exercise_id == exercise_id,
-                    Session.user_id == current_user.id,
-                    Set.completed == True
-                )\
-                .order_by(Session.session_date.desc())\
-                .first()
-                
-            if any_previous_set:
-                print(f"Found a previous set (not at the same position)")
-                return jsonify({
-                    'success': True,
-                    'has_previous': True,
-                    'weight': any_previous_set.weight,
-                    'reps': any_previous_set.reps,
-                    'time': any_previous_set.time,
-                    'distance': any_previous_set.distance,
-                    'additional_weight': getattr(any_previous_set, 'additional_weight', None),
-                    'assistance_weight': getattr(any_previous_set, 'assistance_weight', None),
-                    'set_type': any_previous_set.set_type,
-                    'is_exact_position': False
-                })
+            fallback_set = Set.query.filter(
+                Set.session_id == last_session.id,
+                Set.exercise_id == exercise_id,
+                Set.completed == True
+            ).order_by(Set.order).all()
+            
+            # If we have fewer sets than requested, use the last one
+            if fallback_set and len(fallback_set) > 0:
+                previous_set = fallback_set[-1] if set_number >= len(fallback_set) else fallback_set[set_number]
+                print(f"Using fallback set from position {previous_set.order}")
             else:
-                print(f"No previous sets found at all for exercise {exercise_id}")
-                return jsonify({
-                    'success': True,
-                    'has_previous': False
-                })
-        
-        print(f"Found previous set at position {set_number}: {previous_set.id}")
-        
-        # Get unit preferences for display
-        weight_unit = current_user.preferred_weight_unit
-        distance_unit = current_user.preferred_distance_unit
-        
-        # Import conversion utilities
-        from .utils import convert_weight, convert_distance
-        
-        # Create response with all fields
-        response = {
-            'success': True,
-            'has_previous': True,
-            'weight': previous_set.weight,
+                return jsonify({})
+            
+        # Format the set for the response
+        set_data = {
+        'weight': previous_set.weight,
             'reps': previous_set.reps,
             'time': previous_set.time,
             'distance': previous_set.distance,
-            'order': previous_set.order,
+            'completed': previous_set.completed,
             'set_type': previous_set.set_type,
-            'is_exact_position': True
+            'order': previous_set.order
         }
         
-        # Add exercise-specific fields if they exist
+        # Add exercise-specific fields
         if hasattr(previous_set, 'additional_weight'):
-            response['additional_weight'] = previous_set.additional_weight
-        
+            set_data['additional_weight'] = previous_set.additional_weight
+            
         if hasattr(previous_set, 'assistance_weight'):
-            response['assistance_weight'] = previous_set.assistance_weight
+            set_data['assistance_weight'] = previous_set.assistance_weight
+            
+        print(f"Returning set data: {set_data}")
+        return jsonify(set_data)
         
-        # Convert units if needed
-        if weight_unit == 'lbs':
-            if response.get('weight'):
-                response['weight'] = round(convert_weight(response['weight'], 'kg', 'lbs'), 2)
-            if response.get('additional_weight'):
-                response['additional_weight'] = round(convert_weight(response['additional_weight'], 'kg', 'lbs'), 2)
-            if response.get('assistance_weight'):
-                response['assistance_weight'] = round(convert_weight(response['assistance_weight'], 'kg', 'lbs'), 2)
-        
-        if distance_unit == 'mi' and response.get('distance'):
-            response['distance'] = round(convert_distance(response['distance'], 'km', 'mi'), 2)
-        
-        return jsonify(response)
     except Exception as e:
-        print(f"Error getting previous values: {str(e)}")
+        print(f"Error getting specific previous value: {str(e)}")
         import traceback
         traceback.print_exc()
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+        return jsonify({'error': str(e)}), 500
 
 @workout.route('/workout/session/<int:session_id>')
 @login_required
@@ -736,7 +704,7 @@ def get_exercises():
 @login_required
 def get_exercise_details(exercise_id):
     try:
-        exercise = Exercise.query.get_or_404(exercise_id)
+    exercise = Exercise.query.get_or_404(exercise_id)
 
         # Get the exercise's primary attributes
         exercise_data = {
@@ -896,49 +864,10 @@ def get_exercise_details(exercise_id):
                         recommended_values['weight'] = latest_weight
                         recommended_values['reps'] = min(latest_reps + 1, exercise.max_reps)
                         recommended_values['isRecommended'] = {'weight': False, 'reps': True}
-            
-            # Add similar logic for other exercise types
-            # ...
         
         # Add previous sets and recommendations to the response
         exercise_data['previousSets'] = previous_sets
         exercise_data['recommendedValues'] = recommended_values
-        
-        # Get exercise history - up to 5 recent sessions
-        history = []
-        recent_sessions = db.session.query(Session)\
-            .join(Set)\
-            .filter(
-                Session.user_id == current_user.id,
-                Set.exercise_id == exercise_id,
-                Set.completed == True
-            )\
-            .order_by(Session.session_date.desc())\
-            .limit(5)\
-            .all()
-            
-        for session in recent_sessions:
-            session_sets = Set.query\
-                .filter(
-                    Set.session_id == session.id,
-                    Set.exercise_id == exercise_id,
-                    Set.completed == True
-                )\
-                .all()
-                
-            if session_sets:
-                history_entry = {
-                    'date': session.session_date.strftime('%Y-%m-%d'),
-                    'set_count': len(session_sets),
-                    'volume': sum(s.volume or 0 for s in session_sets)
-                }
-                
-                if weight_unit == 'lbs' and history_entry['volume']:
-                    history_entry['volume'] = round(convert_weight(history_entry['volume'], 'kg', 'lbs'), 2)
-                
-                history.append(history_entry)
-        
-        exercise_data['history'] = history
         
         return jsonify(exercise_data)
     except Exception as e:
@@ -1406,96 +1335,96 @@ def edit_routine(routine_id):
                           exercises=exercises,
                           is_edit=True)
 
-@workout.route('/routine/<int:routine_id>/perform')
-@login_required
+@workout.route('/routine/perform/<int:routine_id>')
 def perform_routine(routine_id):
-    routine = Routine.query.filter_by(id=routine_id).first_or_404()
+    routine = Routine.query.get_or_404(routine_id)
     
-    # Check if user can access this routine
+    # Check if user has permission to access this routine
     if not routine.is_public and routine.user_id != current_user.id:
-        flash('You do not have permission to view this routine.', 'danger')
-        return redirect(url_for('workout.workout_page'))
+        abort(403)
     
-    # Get all exercises for display
+    # Get all exercises for dropdown
     all_exercises = Exercise.query.all()
     
-    # Get the 5 most recent completed exercises for this user for quick selection
-    recent_sets = Set.query.join(Session).filter(
-        Session.user_id == current_user.id,
-        Set.completed == True
-    ).order_by(Session.session_date.desc()).limit(100).all()
+    # Get 5 most recent completed exercises for the user
+    recent_exercises = db.session.query(Exercise)\
+        .join(Set, Set.exercise_id == Exercise.id)\
+        .join(Session, Session.id == Set.session_id)\
+        .filter(Session.user_id == current_user.id)\
+        .group_by(Exercise.id)\
+        .order_by(db.func.max(Session.date).desc())\
+        .limit(5)\
+        .all()
     
-    # Extract unique exercise IDs while preserving order
-    recent_exercise_ids = []
-    for set in recent_sets:
-        if set.exercise_id not in recent_exercise_ids:
-            recent_exercise_ids.append(set.exercise_id)
-    
-    # Limit to top 5
-    recent_exercise_ids = recent_exercise_ids[:5]
-    
-    # Parse exercises from the routine's JSON
+    # Prefilled exercises from routine
     prefilled_exercises = []
-    if routine.exercises:
-        try:
-            routine_exercises = json.loads(routine.exercises)
-            for exercise_data in routine_exercises:
-                exercise = Exercise.query.get(exercise_data.get('id'))
-                if exercise:
-                    # Format the exercise for the template
-                    prefilled_exercise = {
-                        'id': exercise.id,
-                        'name': exercise.name,
-                        'input_type': exercise.input_type,
-                        'sets': []
+    try:
+        routine_exercises = json.loads(routine.exercises)
+        for exercise_data in routine_exercises:
+            exercise_id = exercise_data.get('id')
+            exercise = Exercise.query.get(exercise_id)
+            if exercise:
+                # Format the exercise for the template
+                prefilled_exercise = {
+                    'id': exercise.id,
+                    'name': exercise.name,
+                    'input_type': exercise.input_type,
+                    'sets': []
+                }
+                
+                # Add default sets
+                num_sets = exercise_data.get('sets', 3)
+                for _ in range(int(num_sets)):
+                    set_data = {
+                        'weight': exercise_data.get('weight', 0),
+                        'reps': exercise_data.get('reps', 8),
+                        'time': exercise_data.get('time', 0),
+                        'distance': exercise_data.get('distance', 0),
+                        'additional_weight': exercise_data.get('additional_weight', 0),
+                        'assistance_weight': exercise_data.get('assistance_weight', 0)
                     }
-                    
-                    # Add default sets
-                    num_sets = exercise_data.get('sets', 3)
-                    for _ in range(int(num_sets)):
-                        set_data = {
-                            'weight': exercise_data.get('weight', 0),
-                            'reps': exercise_data.get('reps', 8),
-                            'time': exercise_data.get('time', 0),
-                            'distance': exercise_data.get('distance', 0),
-                            'additional_weight': exercise_data.get('additional_weight', 0),
-                            'assistance_weight': exercise_data.get('assistance_weight', 0)
-                        }
-                        prefilled_exercise['sets'].append(set_data)
-                        
-                    prefilled_exercises.append(prefilled_exercise)
-        except Exception as e:
-            print(f"Error parsing routine exercises: {str(e)}")
-            prefilled_exercises = []
+                    prefilled_exercise['sets'].append(set_data)
+                
+                prefilled_exercises.append(prefilled_exercise)
+    except Exception as e:
+        current_app.logger.error(f"Error parsing routine exercises: {e}")
+        flash('There was an error loading the routine exercises', 'danger')
     
-    # Sort exercises by most recently used, then alphabetically
-    def sort_key(exercise):
-        try:
-            # Get the index in recent exercises (lower is more recent)
-            recent_index = recent_exercise_ids.index(exercise.id) if exercise.id in recent_exercise_ids else float('inf')
-            return (recent_index, exercise.name)
-        except Exception as e:
-            print(f"Error sorting exercise {exercise.id}: {e}")
-            return (float('inf'), exercise.name)
+    # Sorting logic
+    recently_used = {ex.id: i for i, ex in enumerate(recent_exercises)}
+    
+    def sort_key(ex):
+        # Sort by recently used first, then alphabetically
+        recent_index = recently_used.get(ex.id, len(all_exercises))
+        return (recent_index, ex.name)
     
     sorted_exercises = sorted(all_exercises, key=sort_key)
     
-    # Get user's latest bodyweight for volume calculations
-    latest_bodyweight = Measurement.query.filter_by(user_id=current_user.id, type='weight')\
-        .order_by(Measurement.date.desc()).first()
-    user_weight = latest_bodyweight.value if latest_bodyweight else None
-    
-    # Get unread notification count for the notification badge
-    unread_notification_count = Notification.query.filter_by(
+    # Get latest user weight for volume calculations
+    latest_weight = 0
+    latest_measurement = Measurement.query.filter_by(
         user_id=current_user.id,
-        is_read=False
+        type='weight'
+    ).order_by(Measurement.date.desc()).first()
+    
+    if latest_measurement:
+        latest_weight = latest_measurement.value
+    
+    # Count unread notifications
+    unread_count = Notification.query.filter_by(
+        user_id=current_user.id,
+        read=False
     ).count()
     
-    return render_template('workout/start.html', 
-                          exercises=sorted_exercises, 
-                          user_weight=user_weight,
-                          unread_notification_count=unread_notification_count,
-                          prefilled_exercises=prefilled_exercises)
+    # Render the same template as start_workout, but with prefilled exercises
+    return render_template(
+        'workout/start.html', 
+        exercises=sorted_exercises,
+        weight=latest_weight,
+        unread_count=unread_count,
+        prefilled_exercises=prefilled_exercises,
+        routine_name=routine.name
+    )
 
 @workout.route('/api/routines', methods=['GET'])
 @login_required
@@ -3420,14 +3349,15 @@ def like_workout(workout_id):
         if not workout:
             workout = Workout(
                 user_id=session.user_id,
-                title=session.title,
+                title=session.title or "Workout",
                 date=session.session_date,
+                duration=session.duration or 0,
                 exp_gained=session.exp_gained or 0,
                 volume=session.volume or 0,
                 completed=True
             )
             db.session.add(workout)
-            db.session.flush()  # Get ID without committing
+            db.session.commit()  # Commit to get the workout ID
         
         # Check if already liked
         existing_like = WorkoutLike.query.filter_by(
@@ -3475,7 +3405,8 @@ def like_workout(workout_id):
         return jsonify({
             'success': True,
             'liked': liked,
-            'like_count': like_count
+            'like_count': like_count,
+            'workout_id': workout.id  # Return the actual workout ID for reference
         })
     
     except Exception as e:
@@ -3483,7 +3414,7 @@ def like_workout(workout_id):
         print(f"Error liking workout: {str(e)}")
         return jsonify({
             'success': False,
-            'error': 'Could not process like'
+            'error': 'Could not process like: ' + str(e)
         }), 500
 
 @workout.route('/api/workouts/<int:workout_id>/comments', methods=['GET'])
@@ -3802,58 +3733,55 @@ def mark_notifications_read():
             'error': 'Could not mark notifications as read'
         }), 500
 
-@workout.route('/<int:workout_id>/like', methods=['POST'])
-@login_required
-def like_workout_page(workout_id):
-    """Like or unlike a workout"""
-    # Check if session exists
-    session = Session.query.get_or_404(workout_id)
-    
-    # Check if user has already liked this workout
-    existing_like = WorkoutLike.query.filter_by(
-        workout_id=workout_id,
-        user_id=current_user.id
-    ).first()
-    
-    if existing_like:
-        # Unlike
-        db.session.delete(existing_like)
-        db.session.commit()
+@workout.route('/like_workout/<int:workout_id>', methods=['POST'])
+def like_workout_legacy(workout_id):
+    try:
+        user_id = current_user.id
+        workout = Workout.query.filter_by(id=workout_id).first()
         
-        # Get updated like count
-        like_count = WorkoutLike.query.filter_by(workout_id=workout_id).count()
+        # If no Workout entry exists, create one to handle likes
+        if not workout:
+            try:
+                workout = Workout(
+                    user_id=session.user_id,
+                )
+                db.session.add(workout)
+                db.session.commit()  # Commit to get the workout ID
+                print(f"Created new workout record with ID {workout.id} for session {workout_id}")
+            except Exception as e:
+                print(f"Error creating workout: {str(e)}")
+                db.session.rollback()
+                raise
+        
+        # Check if already liked
+        existing_like = WorkoutLike.query.filter_by(
+            user_id=user_id, workout_id=workout.id).first()
+        
+        if existing_like:
+            # User already liked, so unlike
+            db.session.delete(existing_like)
+            liked = False
+        else:
+            # User hasn't liked, so add like
+            like = WorkoutLike(user_id=user_id, workout_id=workout.id)
+            db.session.add(like)
+            liked = True
+        
+        db.session.commit()
+        print(f"Like operation completed: liked={liked}, workout_id={workout.id}")
+        
+        # Count total likes
+        total_likes = WorkoutLike.query.filter_by(workout_id=workout.id).count()
         
         return jsonify({
             'success': True,
-            'liked': False,
-            'count': like_count,
-            'message': 'Workout unliked'
+            'liked': liked,
+            'total_likes': total_likes
         })
-    else:
-        # Like
-        like = WorkoutLike(
-            workout_id=workout_id,
-            user_id=current_user.id
-        )
-        db.session.add(like)
-        db.session.commit()
         
-        # If this isn't the user's own workout, create a notification for the workout owner
-        if session.user_id != current_user.id:
-            notification = Notification(
-                user_id=session.user_id,
-                message=f"{current_user.username} liked your workout!",
-                is_read=False
-            )
-            db.session.add(notification)
-            db.session.commit()
-        
-        # Get updated like count
-        like_count = WorkoutLike.query.filter_by(workout_id=workout_id).count()
-        
+    except Exception as e:
+        db.session.rollback()
         return jsonify({
-            'success': True,
-            'liked': True,
-            'count': like_count,
-            'message': 'Workout liked'
-        })
+            'success': False,
+            'error': f'Could not process like: {str(e)}'
+        }), 500

@@ -318,4 +318,37 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 </script>
+
+{% if prefilled_exercises %}
+<script>
+// This data comes from the server via the Jinja2 template
+var prefilledExercises = JSON.parse('{{ prefilled_exercises|tojson|safe }}');
+
+// When the document is ready, process the prefilled exercises
+document.addEventListener("DOMContentLoaded", function() {
+    console.log("Loading prefilled exercises from repeated workout:", prefilledExercises);
+    
+    // Wait for workout.js to fully initialize
+    setTimeout(function() {
+        // Process each exercise
+        for (var i = 0; i < prefilledExercises.length; i++) {
+            var exercise = prefilledExercises[i];
+            console.log("Adding exercise:", exercise.name, "ID:", exercise.id);
+            
+            // Use the addExerciseAndStayOpen function from workout.js
+            if (typeof addExerciseAndStayOpen === 'function') {
+                addExerciseAndStayOpen(exercise.id, exercise.name);
+            }
+        }
+        
+        // Show a success message
+        if (typeof showSuccessMessage === 'function') {
+            showSuccessMessage("Workout loaded from previous session. Adjust as needed and start when ready.");
+        } else {
+            alert("Workout loaded from previous session. Adjust as needed and start when ready.");
+        }
+    }, 1000);
+});
+</script>
+{% endif %}
 {% endblock %}

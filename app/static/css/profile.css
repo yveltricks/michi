@@ -1,0 +1,370 @@
+/* Profile page styles */
+.profile-header {
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+}
+
+.profile-pic-container {
+    width: 150px;
+    height: 150px;
+    margin: 0 auto;
+    border-radius: 50%;
+    overflow: hidden;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+}
+
+.profile-pic {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.profile-pic-placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #4a5568;
+    color: white;
+    font-size: 60px;
+    font-weight: bold;
+}
+
+.stats-row {
+    display: flex;
+    justify-content: flex-start;
+    margin: 20px 0;
+}
+
+.stat-box {
+    text-align: center;
+    margin-right: 30px;
+}
+
+.stat-value {
+    font-size: 22px;
+    font-weight: bold;
+    display: block;
+}
+
+.stat-label {
+    font-size: 14px;
+    color: #718096;
+}
+
+.level-container {
+    padding: 20px;
+    border-radius: 10px;
+    background-color: #f7fafc;
+    margin-top: 10px;
+}
+
+.level-label {
+    font-size: 16px;
+    color: #4a5568;
+    margin-bottom: 5px;
+}
+
+.level-badge {
+    font-size: 48px;
+    font-weight: bold;
+    color: #4f46e5;
+    margin: 10px 0;
+}
+
+.rank-badge {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 15px 0;
+}
+
+.rank-icon {
+    width: 30px;
+    height: 30px;
+    margin-right: 10px;
+}
+
+.joined-date {
+    font-size: 14px;
+    color: #718096;
+    margin-top: 10px;
+}
+
+/* Stat cards */
+.stat-card {
+    background-color: white;
+    border-radius: 10px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+    height: 100%;
+}
+
+.stat-card-inner {
+    padding: 15px;
+    display: flex;
+    align-items: center;
+}
+
+.stat-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background-color: #f7fafc;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 15px;
+    font-size: 18px;
+    color: #4f46e5;
+}
+
+.stat-info {
+    flex-grow: 1;
+}
+
+.stat-trend {
+    margin-left: 10px;
+    font-size: 16px;
+}
+
+/* Streak card */
+.streak-card {
+    background-color: white;
+    border-radius: 10px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    padding: 15px;
+    display: flex;
+    align-items: center;
+    height: 100%;
+}
+
+.streak-icon {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background-color: #fef2f2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 20px;
+    font-size: 20px;
+    color: #ef4444;
+}
+
+.streak-info {
+    flex-grow: 1;
+}
+
+.streak-value {
+    font-size: 24px;
+    font-weight: bold;
+}
+
+.streak-label {
+    font-size: 14px;
+    color: #718096;
+}
+
+.buttons-container {
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+    height: 100%;
+    align-items: center;
+}
+
+/* Chart toggle */
+.chart-toggle {
+    margin-left: auto;
+}
+
+/* Best Lifts */
+.lift-card {
+    background-color: white;
+    border-radius: 10px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    padding: 15px;
+    text-align: center;
+    height: 100%;
+}
+
+.lift-name {
+    font-size: 14px;
+    color: #718096;
+    margin-bottom: 5px;
+}
+
+.lift-weight {
+    font-size: 20px;
+    font-weight: bold;
+    color: #4f46e5;
+}
+
+/* Workout cards */
+.workout-card {
+    background-color: white;
+    border-radius: 10px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    margin-bottom: 20px;
+    overflow: hidden;
+}
+
+.workout-header {
+    padding: 15px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.workout-user-info {
+    display: flex;
+    align-items: center;
+}
+
+.user-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    overflow: hidden;
+    margin-right: 10px;
+}
+
+.user-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.avatar-placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #4a5568;
+    color: white;
+    font-size: 18px;
+    font-weight: bold;
+}
+
+.user-details {
+    display: flex;
+    flex-direction: column;
+}
+
+.username {
+    font-weight: bold;
+    margin-bottom: 2px;
+}
+
+.user-level {
+    font-size: 12px;
+    color: #718096;
+}
+
+.workout-date {
+    font-size: 14px;
+    color: #718096;
+}
+
+.workout-title {
+    padding: 15px;
+    font-size: 18px;
+    font-weight: bold;
+}
+
+.workout-photo {
+    width: 100%;
+    max-height: 400px;
+    overflow: hidden;
+}
+
+.workout-photo img {
+    width: 100%;
+    object-fit: cover;
+}
+
+.workout-stats {
+    display: flex;
+    padding: 15px;
+    border-top: 1px solid #f0f0f0;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.stat {
+    display: flex;
+    align-items: center;
+    margin-right: 20px;
+}
+
+.stat i {
+    margin-right: 5px;
+    color: #4f46e5;
+}
+
+.workout-exercises {
+    padding: 15px;
+}
+
+.exercise-item {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.exercise-item:last-child {
+    margin-bottom: 0;
+    padding-bottom: 0;
+    border-bottom: none;
+}
+
+.exercise-name {
+    font-weight: 500;
+}
+
+.exercise-sets {
+    color: #718096;
+}
+
+.workout-actions {
+    display: flex;
+    padding: 15px;
+    border-top: 1px solid #f0f0f0;
+}
+
+.action-item {
+    display: flex;
+    align-items: center;
+    margin-right: 20px;
+    cursor: pointer;
+}
+
+.action-item i {
+    margin-right: 5px;
+}
+
+/* Card headers */
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: #f7fafc;
+    padding: 15px 20px;
+}
+
+.card-header h3 {
+    margin: 0;
+    font-size: 20px;
+}
+
+/* Progress Chart */
+#progressChart {
+    width: 100%;
+    height: 250px;
+} 

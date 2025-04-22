@@ -9,14 +9,20 @@ let resetTimeout = null;
 
 // Start the timer immediately when the page loads
 document.addEventListener('DOMContentLoaded', function() {
-    startTimer();
+    if (document.getElementById('workout-timer')) {
+        startTimer();
+    }
 });
 
 function startTimer() {
     startTime = Date.now() - elapsedTime;
     timerInterval = setInterval(updateTimer, 1000);
     isPaused = false;
-    document.getElementById('pause-timer').textContent = 'Pause Timer';
+    
+    const pauseTimerButton = document.getElementById('pause-timer');
+    if (pauseTimerButton) {
+        pauseTimerButton.textContent = 'Pause Timer';
+    }
 }
 
 function updateTimer() {
@@ -32,7 +38,10 @@ function displayTime(time) {
     const seconds = Math.floor((time % (1000 * 60)) / 1000);
 
     const display = `${padNumber(hours)}:${padNumber(minutes)}:${padNumber(seconds)}`;
-    document.getElementById('workout-timer').textContent = display;
+    const timerElement = document.getElementById('workout-timer');
+    if (timerElement) {
+        timerElement.textContent = display;
+    }
 }
 
 function padNumber(number) {
@@ -45,7 +54,11 @@ function toggleTimer() {
     } else {
         clearInterval(timerInterval);
         isPaused = true;
-        document.getElementById('pause-timer').textContent = 'Resume Timer';
+        
+        const pauseTimerButton = document.getElementById('pause-timer');
+        if (pauseTimerButton) {
+            pauseTimerButton.textContent = 'Resume Timer';
+        }
     }
     hideTimerMenu();
 }
@@ -58,12 +71,21 @@ function confirmReset() {
         displayTime(0);
         startTimer();
         resetConfirmationActive = false;
-        document.getElementById('reset-timer').textContent = 'Reset Timer';
+        
+        const resetTimerButton = document.getElementById('reset-timer');
+        if (resetTimerButton) {
+            resetTimerButton.textContent = 'Reset Timer';
+        }
+        
         hideTimerMenu(); // Only hide after confirmed
     } else {
         // Show confirmation
         resetConfirmationActive = true;
-        document.getElementById('reset-timer').textContent = 'Click again to confirm reset';
+        
+        const resetTimerButton = document.getElementById('reset-timer');
+        if (resetTimerButton) {
+            resetTimerButton.textContent = 'Click again to confirm reset';
+        }
         
         // Reset the confirmation state after 3 seconds
         if (resetTimeout) {
@@ -71,34 +93,47 @@ function confirmReset() {
         }
         resetTimeout = setTimeout(() => {
             resetConfirmationActive = false;
-            document.getElementById('reset-timer').textContent = 'Reset Timer';
+            
+            const resetTimerButton = document.getElementById('reset-timer');
+            if (resetTimerButton) {
+                resetTimerButton.textContent = 'Reset Timer';
+            }
         }, 3000);
     }
 }
 
 function toggleTimerMenu() {
     const menu = document.getElementById('timer-menu');
-    menu.classList.toggle('show');
-    
-    // Reset the confirmation state when opening/closing menu
-    if (!menu.classList.contains('show')) {
-        resetConfirmationActive = false;
-        document.getElementById('reset-timer').textContent = 'Reset Timer';
-        if (resetTimeout) {
-            clearTimeout(resetTimeout);
+    if (menu) {
+        menu.classList.toggle('show');
+        
+        // Reset the confirmation state when opening/closing menu
+        if (!menu.classList.contains('show')) {
+            resetConfirmationActive = false;
+            
+            const resetTimerButton = document.getElementById('reset-timer');
+            if (resetTimerButton) {
+                resetTimerButton.textContent = 'Reset Timer';
+            }
+            
+            if (resetTimeout) {
+                clearTimeout(resetTimeout);
+            }
         }
     }
 }
 
 function hideTimerMenu() {
     const menu = document.getElementById('timer-menu');
-    menu.classList.remove('show');
+    if (menu) {
+        menu.classList.remove('show');
+    }
 }
 
 // Hide menu when clicking outside
 document.addEventListener('click', function(event) {
     const timerContainer = document.querySelector('.timer-container');
-    if (!timerContainer.contains(event.target)) {
+    if (timerContainer && !timerContainer.contains(event.target)) {
         hideTimerMenu();
     }
 });

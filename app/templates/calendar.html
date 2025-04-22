@@ -1,0 +1,235 @@
+{% extends "base.html" %}
+
+{% block title %}Activity Calendar{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/calendar.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="page-header d-flex align-items-center mb-4">
+                <a href="{{ url_for('auth.profile') }}" class="back-button mr-3">
+                    <i class="fas fa-arrow-left"></i>
+                </a>
+                <h1 class="page-title">Activity Calendar</h1>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <h2>Your Workout Activity</h2>
+            <div class="legend-container">
+                <div class="legend-item">
+                    <div class="legend-color" style="background-color: rgba(53, 162, 235, 0.2);"></div>
+                    <div class="legend-label">Light Workout</div>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background-color: rgba(53, 162, 235, 0.5);"></div>
+                    <div class="legend-label">Medium Workout</div>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background-color: rgba(53, 162, 235, 0.8);"></div>
+                    <div class="legend-label">Intense Workout</div>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background-color: rgba(255, 99, 132, 0.8);"></div>
+                    <div class="legend-label">Decreased Performance</div>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background-color: rgba(75, 192, 192, 0.8);"></div>
+                    <div class="legend-label">Improved Performance</div>
+                </div>
+            </div>
+        </div>
+        <div class="card-body">
+            <div id="calendar-container">
+                <div id="calendar-header" class="d-flex justify-content-between align-items-center mb-3">
+                    <button id="prev-year-btn" class="btn btn-outline-primary">
+                        <i class="fas fa-chevron-left"></i> Previous Year
+                    </button>
+                    <h3 id="calendar-year">{{ current_year }}</h3>
+                    <button id="next-year-btn" class="btn btn-outline-primary">
+                        Next Year <i class="fas fa-chevron-right"></i>
+                    </button>
+                </div>
+                
+                <div id="calendar-grid">
+                    <!-- Calendar will be generated here by JavaScript -->
+                </div>
+            </div>
+            
+            <div id="daily-details" class="mt-4" style="display: none;">
+                <h4>Workout Details: <span id="selected-date"></span></h4>
+                <div class="daily-stats">
+                    <div class="daily-stat">
+                        <div class="stat-label">Workouts:</div>
+                        <div id="daily-workout-count" class="stat-value">0</div>
+                    </div>
+                    <div class="daily-stat">
+                        <div class="stat-label">Volume:</div>
+                        <div id="daily-volume" class="stat-value">0</div>
+                    </div>
+                    <div class="daily-stat">
+                        <div class="stat-label">EXP:</div>
+                        <div id="daily-exp" class="stat-value">0</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Get calendar data from server
+    const calendarData = JSON.parse('{{ calendar_data|tojson|safe }}');
+    
+    // Current date tracking
+    const today = new Date();
+    let currentYear = today.getFullYear();
+    
+    // Calendar elements
+    const calendarGrid = document.getElementById('calendar-grid');
+    const calendarYear = document.getElementById('calendar-year');
+    const prevYearBtn = document.getElementById('prev-year-btn');
+    const nextYearBtn = document.getElementById('next-year-btn');
+    
+    // Daily details elements
+    const dailyDetails = document.getElementById('daily-details');
+    const selectedDate = document.getElementById('selected-date');
+    const dailyWorkoutCount = document.getElementById('daily-workout-count');
+    const dailyVolume = document.getElementById('daily-volume');
+    const dailyExp = document.getElementById('daily-exp');
+    
+    // Initialize calendar
+    renderCalendar(currentYear);
+    
+    // Event listeners for year navigation
+    prevYearBtn.addEventListener('click', function() {
+        currentYear--;
+        renderCalendar(currentYear);
+    });
+    
+    nextYearBtn.addEventListener('click', function() {
+        currentYear++;
+        renderCalendar(currentYear);
+    });
+    
+    function renderCalendar(year) {
+        calendarYear.textContent = year;
+        calendarGrid.innerHTML = '';
+        
+        const months = ['January', 'February', 'March', 'April', 'May', 'June', 
+                        'July', 'August', 'September', 'October', 'November', 'December'];
+        
+        // Create month containers
+        for (let i = 0; i < 12; i++) {
+            const monthContainer = document.createElement('div');
+            monthContainer.className = 'month-container';
+            
+            const monthHeader = document.createElement('div');
+            monthHeader.className = 'month-header';
+            monthHeader.textContent = months[i];
+            monthContainer.appendChild(monthHeader);
+            
+            const daysContainer = document.createElement('div');
+            daysContainer.className = 'days-container';
+            
+            // Add day labels (Mon, Tue, etc.)
+            const dayLabels = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+            for (let j = 0; j < 7; j++) {
+                const dayLabel = document.createElement('div');
+                dayLabel.className = 'day-label';
+                dayLabel.textContent = dayLabels[j];
+                daysContainer.appendChild(dayLabel);
+            }
+            
+            // Calculate days in month and offset for first day
+            const daysInMonth = new Date(year, i + 1, 0).getDate();
+            const firstDay = new Date(year, i, 1).getDay(); // 0 = Sunday, 1 = Monday, etc.
+            const offset = firstDay === 0 ? 6 : firstDay - 1; // Adjust for Monday as first day of week
+            
+            // Add empty cells for offset
+            for (let j = 0; j < offset; j++) {
+                const emptyDay = document.createElement('div');
+                emptyDay.className = 'day empty';
+                daysContainer.appendChild(emptyDay);
+            }
+            
+            // Add days
+            for (let j = 1; j <= daysInMonth; j++) {
+                const dayCell = document.createElement('div');
+                dayCell.className = 'day';
+                dayCell.textContent = j;
+                
+                // Format date as YYYY-MM-DD
+                const month = (i + 1).toString().padStart(2, '0');
+                const day = j.toString().padStart(2, '0');
+                const dateStr = `${year}-${month}-${day}`;
+                
+                // Check if this date has workout data
+                if (calendarData[dateStr]) {
+                    const data = calendarData[dateStr];
+                    
+                    // Determine color intensity based on number of workouts
+                    let intensity = 'light';
+                    if (data.count >= 3) {
+                        intensity = 'intense';
+                    } else if (data.count == 2) {
+                        intensity = 'medium';
+                    }
+                    
+                    // Add workout class and intensity
+                    dayCell.classList.add('workout', intensity);
+                    
+                    // Add performance indicator
+                    // This is a simplified example - actual performance calculation would come from the server
+                    if (data.volume > 1000) { // Arbitrary threshold
+                        dayCell.classList.add('good-performance');
+                    } else if (data.volume < 500) { // Arbitrary threshold
+                        dayCell.classList.add('bad-performance');
+                    }
+                    
+                    // Add data attributes for details view
+                    dayCell.setAttribute('data-date', dateStr);
+                    dayCell.setAttribute('data-count', data.count);
+                    dayCell.setAttribute('data-volume', data.volume);
+                    dayCell.setAttribute('data-exp', data.exp);
+                    
+                    // Add click event to show details
+                    dayCell.addEventListener('click', function() {
+                        const date = this.getAttribute('data-date');
+                        const count = this.getAttribute('data-count');
+                        const volume = this.getAttribute('data-volume');
+                        const exp = this.getAttribute('data-exp');
+                        
+                        selectedDate.textContent = date;
+                        dailyWorkoutCount.textContent = count;
+                        dailyVolume.textContent = volume + ' kg';
+                        dailyExp.textContent = exp;
+                        
+                        dailyDetails.style.display = 'block';
+                    });
+                }
+                
+                // Highlight today
+                if (year === today.getFullYear() && i === today.getMonth() && j === today.getDate()) {
+                    dayCell.classList.add('today');
+                }
+                
+                daysContainer.appendChild(dayCell);
+            }
+            
+            monthContainer.appendChild(daysContainer);
+            calendarGrid.appendChild(monthContainer);
+        }
+    }
+});
+</script>
+{% endblock %} 

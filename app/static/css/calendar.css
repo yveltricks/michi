@@ -1,0 +1,207 @@
+/* Calendar page styles */
+.page-header {
+    margin-bottom: 30px;
+}
+
+.back-button {
+    font-size: 24px;
+    color: #4a5568;
+    margin-right: 20px;
+    transition: color 0.2s;
+}
+
+.back-button:hover {
+    color: #4f46e5;
+    text-decoration: none;
+}
+
+.page-title {
+    font-size: 28px;
+    font-weight: bold;
+    margin: 0;
+}
+
+.card {
+    border-radius: 10px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    margin-bottom: 30px;
+    overflow: hidden;
+}
+
+.card-header {
+    background-color: #f7fafc;
+    padding: 15px 20px;
+    border-bottom: 1px solid #e2e8f0;
+    display: flex;
+    flex-direction: column;
+}
+
+.card-header h2 {
+    margin: 0 0 15px 0;
+    font-size: 20px;
+    color: #4a5568;
+}
+
+.legend-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+    margin-top: 10px;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+}
+
+.legend-color {
+    width: 20px;
+    height: 20px;
+    border-radius: 4px;
+    margin-right: 8px;
+}
+
+.legend-label {
+    font-size: 14px;
+    color: #718096;
+}
+
+#calendar-container {
+    margin-top: 20px;
+}
+
+#calendar-header {
+    margin-bottom: 20px;
+}
+
+#calendar-year {
+    font-size: 24px;
+    font-weight: bold;
+    margin: 0;
+}
+
+#calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 20px;
+}
+
+.month-container {
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    overflow: hidden;
+}
+
+.month-header {
+    background-color: #f7fafc;
+    padding: 10px;
+    font-weight: bold;
+    text-align: center;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.days-container {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    padding: 10px;
+    gap: 5px;
+}
+
+.day-label {
+    text-align: center;
+    font-size: 12px;
+    color: #718096;
+    font-weight: bold;
+    padding: 5px 0;
+}
+
+.day {
+    aspect-ratio: 1/1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.day.empty {
+    background-color: transparent;
+    cursor: default;
+}
+
+.day:hover:not(.empty) {
+    background-color: #e2e8f0;
+}
+
+.day.today {
+    border: 2px solid #4f46e5;
+    font-weight: bold;
+}
+
+.day.workout {
+    cursor: pointer;
+}
+
+.day.workout.light {
+    background-color: rgba(53, 162, 235, 0.2);
+}
+
+.day.workout.medium {
+    background-color: rgba(53, 162, 235, 0.5);
+}
+
+.day.workout.intense {
+    background-color: rgba(53, 162, 235, 0.8);
+    color: white;
+}
+
+.day.good-performance {
+    background-color: rgba(75, 192, 192, 0.8);
+    color: white;
+}
+
+.day.bad-performance {
+    background-color: rgba(255, 99, 132, 0.8);
+    color: white;
+}
+
+#daily-details {
+    background-color: #f7fafc;
+    border-radius: 8px;
+    padding: 20px;
+    margin-top: 20px;
+}
+
+#daily-details h4 {
+    margin-top: 0;
+    margin-bottom: 15px;
+    font-size: 18px;
+}
+
+.daily-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 15px;
+}
+
+.daily-stat {
+    background-color: white;
+    padding: 15px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.daily-stat .stat-label {
+    font-size: 14px;
+    color: #718096;
+    margin-bottom: 8px;
+}
+
+.daily-stat .stat-value {
+    font-size: 18px;
+    font-weight: bold;
+    color: #4f46e5;
+} 

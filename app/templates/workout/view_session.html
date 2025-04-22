@@ -89,6 +89,32 @@
             </div>
             {% endif %}
         </div>
+
+        <!-- Social interaction section -->
+        <div class="social-interaction">
+            <div class="interaction-buttons">
+                <button class="like-button {% if session.user_liked %}liked{% endif %}" data-id="{{ session.id }}">
+                    <i class="{% if session.user_liked %}fas{% else %}far{% endif %} fa-thumbs-up"></i>
+                    <span class="like-count">{{ session.like_count|default(0) }}</span> Likes
+                </button>
+                <button class="comment-button" data-id="{{ session.id }}">
+                    <i class="far fa-comment"></i>
+                    <span>{{ session.comment_count|default(0) }}</span> Comments
+                </button>
+            </div>
+            
+            <!-- Comments section (hidden by default) -->
+            <div class="comments-section hidden" id="comments-{{ session.id }}">
+                <div class="comments-list" id="comments-list-{{ session.id }}">
+                    <!-- Comments will be loaded dynamically -->
+                    <div class="loading-comments">Loading comments...</div>
+                </div>
+                <div class="comment-form">
+                    <input type="text" class="comment-input" id="comment-input-{{ session.id }}" placeholder="Write a comment...">
+                    <button class="submit-comment" data-id="{{ session.id }}">Post</button>
+                </div>
+            </div>
+        </div>
     </div>
     
     <div class="action-buttons">
@@ -242,5 +268,252 @@
         background-color: #007bff;
         color: white;
     }
+    
+    /* Social interaction styles */
+    .social-interaction {
+        padding: 1rem;
+        border-top: 1px solid #eee;
+    }
+    
+    .interaction-buttons {
+        display: flex;
+        gap: 1rem;
+    }
+    
+    .like-button, .comment-button {
+        background: none;
+        border: none;
+        padding: 0.5rem 1rem;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.9rem;
+        color: #6c757d;
+        transition: color 0.2s;
+    }
+    
+    .like-button:hover, .comment-button:hover {
+        color: #007bff;
+    }
+    
+    .like-button.liked {
+        color: #007bff;
+    }
+    
+    .comments-section {
+        margin-top: 1rem;
+        border-top: 1px solid #eee;
+        padding-top: 1rem;
+    }
+    
+    .comments-section.hidden {
+        display: none;
+    }
+    
+    .comments-list {
+        max-height: 300px;
+        overflow-y: auto;
+        margin-bottom: 1rem;
+    }
+    
+    .loading-comments {
+        text-align: center;
+        color: #6c757d;
+        padding: 0.5rem;
+    }
+    
+    .comment-form {
+        display: flex;
+        gap: 0.5rem;
+    }
+    
+    .comment-input {
+        flex: 1;
+        padding: 0.5rem;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+    }
+    
+    .submit-comment {
+        background-color: #007bff;
+        color: white;
+        border: none;
+        padding: 0.5rem 1rem;
+        border-radius: 4px;
+        cursor: pointer;
+    }
 </style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Like button functionality
+    const likeButton = document.querySelector('.like-button');
+    if (likeButton) {
+        likeButton.addEventListener('click', function() {
+            const workoutId = this.getAttribute('data-id');
+            
+            // Show loading state
+            this.classList.add('opacity-50');
+            
+            fetch(`/api/workouts/${workoutId}/like`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`Server responded with status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                // Remove loading state
+                this.classList.remove('opacity-50');
+                
+                if (data.success) {
+                    // Update like count
+                    const likeCountEl = this.querySelector('.like-count');
+                    likeCountEl.textContent = data.like_count;
+                    
+                    // Toggle thumbs up icon
+                    const iconEl = this.querySelector('i');
+                    if (data.liked) {
+                        iconEl.classList.remove('far');
+                        iconEl.classList.add('fas');
+                        this.classList.add('liked');
+                    } else {
+                        iconEl.classList.remove('fas');
+                        iconEl.classList.add('far');
+                        this.classList.remove('liked');
+                    }
+                } else {
+                    console.error('Error liking workout:', data.error);
+                    alert('Could not like this workout. Please try again later.');
+                }
+            })
+            .catch(error => {
+                // Remove loading state
+                this.classList.remove('opacity-50');
+                console.error('Error:', error);
+                alert('Could not like this workout. Please try again later.');
+            });
+        });
+    }
+    
+    // Comment button functionality
+    const commentButton = document.querySelector('.comment-button');
+    if (commentButton) {
+        commentButton.addEventListener('click', function() {
+            const workoutId = this.getAttribute('data-id');
+            const commentsSection = document.getElementById(`comments-${workoutId}`);
+            const commentsList = document.getElementById(`comments-list-${workoutId}`);
+            
+            if (commentsSection.classList.contains('hidden')) {
+                commentsSection.classList.remove('hidden');
+                
+                // Show loading state
+                commentsList.innerHTML = '<div class="loading-comments">Loading comments...</div>';
+                
+                // Load comments
+                fetch(`/api/workouts/${workoutId}/comments`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`Server responded with status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.success) {
+                        if (data.comments.length === 0) {
+                            commentsList.innerHTML = '<div class="loading-comments">No comments yet</div>';
+                        } else {
+                            commentsList.innerHTML = '';
+                            data.comments.forEach(comment => {
+                                const commentEl = document.createElement('div');
+                                commentEl.className = 'comment-item';
+                                commentEl.innerHTML = `
+                                    <div class="comment-header">
+                                        <span class="comment-author">${comment.user_name}</span>
+                                        <span class="comment-time">${comment.created_at}</span>
+                                    </div>
+                                    <div class="comment-text">${comment.text}</div>
+                                `;
+                                commentsList.appendChild(commentEl);
+                            });
+                        }
+                    } else {
+                        commentsList.innerHTML = '<div class="loading-comments text-red-500">Failed to load comments</div>';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    commentsList.innerHTML = '<div class="loading-comments text-red-500">Failed to load comments</div>';
+                });
+            } else {
+                commentsSection.classList.add('hidden');
+            }
+        });
+    }
+    
+    // Submit comment functionality
+    const submitCommentButton = document.querySelector('.submit-comment');
+    if (submitCommentButton) {
+        submitCommentButton.addEventListener('click', function() {
+            const workoutId = this.getAttribute('data-id');
+            const inputEl = document.getElementById(`comment-input-${workoutId}`);
+            const commentText = inputEl.value.trim();
+            
+            if (commentText) {
+                // Disable button during submission
+                this.disabled = true;
+                this.textContent = 'Posting...';
+                
+                fetch(`/api/workouts/${workoutId}/comments`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ text: commentText })
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`Server responded with status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    // Re-enable button
+                    this.disabled = false;
+                    this.textContent = 'Post';
+                    
+                    if (data.success) {
+                        // Clear input
+                        inputEl.value = '';
+                        
+                        // Refresh comments by simulating clicks
+                        const commentButton = document.querySelector(`.comment-button[data-id="${workoutId}"]`);
+                        commentButton.click(); // First click hides
+                        commentButton.click(); // Second click shows and refreshes
+                        
+                        // Update comment count
+                        const countEl = document.querySelector(`.comment-button[data-id="${workoutId}"] span`);
+                        countEl.textContent = parseInt(countEl.textContent) + 1;
+                    } else {
+                        alert('Failed to post comment: ' + (data.error || 'Unknown error'));
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    // Re-enable button
+                    this.disabled = false;
+                    this.textContent = 'Post';
+                    alert('Failed to post comment. Please try again.');
+                });
+            }
+        });
+    }
+});
+</script>
 {% endblock %}

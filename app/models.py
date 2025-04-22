@@ -29,6 +29,7 @@ class User(UserMixin, db.Model):
     profile_pic = db.Column(db.String(200))
     gender = db.Column(db.String(10), nullable=True)
     birthday = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
     preferred_weight_unit = db.Column(db.String(10), default='kg')
     preferred_distance_unit = db.Column(db.String(10), default='km')
     preferred_measurement_unit = db.Column(db.String(10), default='cm')
@@ -102,6 +103,10 @@ class User(UserMixin, db.Model):
                 'new_level': self.level,
                 'next_level_exp': (self.level + 1) * 100
             }
+
+    def is_following(self, user):
+        """Check if this user is following another user"""
+        return self.following.filter(followers.c.followed_id == user.id).count() > 0
 
 class Session(db.Model):
     id = db.Column(db.Integer, primary_key=True)

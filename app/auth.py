@@ -1,7 +1,7 @@
-from flask import Blueprint, render_template, redirect, url_for, request, flash
+from flask import Blueprint, render_template, redirect, url_for, request, flash, jsonify
 from flask_login import login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
-from .models import User, Session, Measurement, Workout, Exercise, WorkoutLike, WorkoutComment, Notification
+from .models import User, Session, Measurement, Workout, Exercise, WorkoutLike, WorkoutComment, Notification, Set
 from sqlalchemy import desc
 from . import db
 from datetime import datetime, timedelta
@@ -10,6 +10,8 @@ import re
 import json
 from .workout import calculate_workout_metrics  # Import the function from workout.py
 from .utils import convert_volume_to_preferred_unit, calculate_weekly_stats, compare_exercise_progress
+from werkzeug.utils import secure_filename
+import os
 
 @dataclass
 class YearRange:
@@ -52,23 +54,19 @@ def validate_weight(weight_value, unit='kg'):
 @auth.route('/home')
 @login_required
 def home():
-    """Display the home feed with recent workouts and achievements"""
-    # Get user's recent workouts
-    recent_workouts = Workout.query.filter_by(user_id=current_user.id)\
-        .filter(Workout.completed == True)\
-        .order_by(Workout.date.desc())\
-        .limit(5)\
-        .all()
+    """Home page route"""
+    # Get recent workouts
+    recent_workouts = Workout.query.filter_by(user_id=current_user.id).order_by(Workout.date.desc()).limit(10).all()
     
-    # Get workouts from followed users
-    followed_workouts = Workout.query.join(User)\
-        .filter(User.id.in_([u.id for u in current_user.following]))\
-        .filter(Workout.completed == True)\
-        .order_by(Workout.date.desc())\
-        .limit(5)\
-        .all()
+    # Get followed users' workouts
+    followed_users = current_user.following.all()
+    followed_user_ids = [user.id for user in followed_users]
+    followed_workouts = Workout.query.filter(Workout.user_id.in_(followed_user_ids)).order_by(Workout.date.desc()).limit(10).all()
     
-    # Calculate weekly stats for the current user
+    # Get recent sessions (completed workouts)
+    recent_sessions = Session.query.filter_by(user_id=current_user.id).order_by(Session.session_date.desc()).limit(10).all()
+    
+    # Calculate weekly stats
     weekly_stats = calculate_weekly_stats(current_user.id)
     
     # Make sure the weekly stats have default values if they're empty
@@ -91,198 +89,83 @@ def home():
     # Process each workout to get additional data
     combined_sessions = []
     
-    # Process recent workouts
-    for workout in recent_workouts:
+    # Process recent sessions first
+    for session in recent_sessions:
         try:
-            # Compare exercise performance with previous workouts
-            exercise_comparisons = compare_exercise_progress(workout.id, current_user.id)
+            # Get all sets for this session
+            sets = Set.query.filter_by(session_id=session.id).all()
             
-            # Load workout data
-            data = json.loads(workout.data) if workout.data else {}
-            exercises = data.get('exercises', [])
+            # Group sets by exercise
+            exercise_sets = {}
+            for s in sets:
+                if s.exercise_id not in exercise_sets:
+                    exercise_sets[s.exercise_id] = []
+                exercise_sets[s.exercise_id].append(s)
             
-            # Use our metrics calculation function to get accurate metrics
-            metrics = calculate_workout_metrics(data)
-            
-            # Use stored values if they exist, otherwise use calculated values
-            volume = workout.volume if hasattr(workout, 'volume') and workout.volume else metrics['volume']
-            
-            # Convert volume from kg to user's preferred unit
-            volume = convert_volume_to_preferred_unit(volume, current_user.preferred_weight_unit)
-            
-            duration = workout.duration if hasattr(workout, 'duration') and workout.duration else metrics['duration']
-            rating = workout.rating if hasattr(workout, 'rating') and workout.rating else metrics['rating']
-            
-            # Process each exercise to ensure it has an ID
-            for exercise in exercises:
-                if isinstance(exercise, dict):
-                    # If the exercise is a dictionary without an ID, try to find the exercise
-                    if 'id' not in exercise:
-                        exercise_name = exercise.get('name')
-                        if exercise_name:
-                            db_exercise = Exercise.query.filter_by(name=exercise_name).first()
-                            if db_exercise:
-                                exercise['id'] = db_exercise.id
-                    # If still no ID, generate a temporary one
-                    if 'id' not in exercise:
-                        exercise['id'] = f"temp_{hash(exercise.get('name', ''))}"
-                    
-                    # Add comparison indicator if available
-                    if 'id' in exercise and exercise['id'] in exercise_comparisons:
-                        exercise['comparison'] = exercise_comparisons[exercise['id']]
-            
-            # Check for exercise sets format and calculate sets count if needed
-            for exercise in exercises:
-                if isinstance(exercise, dict) and 'sets' in exercise and isinstance(exercise['sets'], list):
-                    # Count sets
-                    exercise['sets_count'] = len(exercise['sets'])
-                    
-                    # If there's no volume in the exercise but there is in the sets, calculate total
-                    if 'volume' not in exercise:
-                        exercise_volume = 0
-                        for set_data in exercise['sets']:
-                            if isinstance(set_data, dict) and 'volume' in set_data:
-                                exercise_volume += float(set_data['volume'])
-                            elif isinstance(set_data, dict) and 'weight' in set_data and 'reps' in set_data:
-                                exercise_volume += float(set_data['weight']) * float(set_data['reps'])
-                        exercise['volume'] = exercise_volume
-                    
-                    # Convert exercise volume to preferred unit if it exists
-                    if 'volume' in exercise:
-                        exercise['volume'] = convert_volume_to_preferred_unit(exercise['volume'], current_user.preferred_weight_unit)
+            # Format exercises
+            exercises = []
+            for exercise_id, sets_list in exercise_sets.items():
+                exercise = Exercise.query.get(exercise_id)
+                if not exercise:
+                    continue
+                
+                # Compare this exercise with the previous session's performance
+                comparison = 0  # Default to no change
+                try:
+                    comparison = compare_exercise_progress(session.id, current_user.id)
+                    if exercise_id in comparison:
+                        comparison = comparison[exercise_id]
+                    else:
+                        comparison = 0
+                except Exception as e:
+                    print(f"Error in exercise comparison: {e}")
+                    comparison = 0
+                
+                exercises.append({
+                    'id': exercise_id,
+                    'name': exercise.name,
+                    'sets_count': len(sets_list),
+                    'comparison': comparison
+                })
             
             # Get like count
-            like_count = WorkoutLike.query.filter_by(workout_id=workout.id).count()
+            like_count = WorkoutLike.query.filter_by(workout_id=session.id).count()
             
             # Check if current user has liked this workout
             user_liked = WorkoutLike.query.filter_by(
-                workout_id=workout.id, 
+                workout_id=session.id, 
                 user_id=current_user.id
             ).first() is not None
             
             # Get comment count
-            comment_count = WorkoutComment.query.filter_by(workout_id=workout.id).count()
+            comment_count = WorkoutComment.query.filter_by(workout_id=session.id).count()
             
-            # Get user's level at the time of the workout
-            user_level = calculate_user_level_at_time(current_user.id, workout.date)
+            # Get user level
+            user_level = current_user.level
             
             combined_sessions.append({
-                'id': workout.id,
-                'date': workout.date,
-                'session_date': workout.date,  # Add session_date for template compatibility
-                'title': workout.title,
+                'id': session.id,
+                'session_date': session.session_date,
+                'title': session.title,
+                'description': session.description,
                 'exercises': exercises,
                 'user': current_user,
                 'is_own': True,
-                'description': workout.notes if hasattr(workout, 'notes') and workout.notes else (
-                    data.get('description', '') if isinstance(data, dict) else ''
-                ),
-                'duration': duration,
-                'volume': volume,
-                'session_rating': rating,
+                'duration': session.duration,
+                'volume': convert_volume_to_preferred_unit(session.volume, current_user.preferred_weight_unit),
+                'session_rating': session.session_rating,
                 'like_count': like_count,
                 'user_liked': user_liked,
                 'comment_count': comment_count,
                 'user_level': user_level,
-                'photo': workout.photo
+                'photo': session.photo
             })
         except Exception as e:
-            print(f"Error processing recent workout: {e}")
-            continue
-    
-    # Process followed users' workouts
-    for workout in followed_workouts:
-        try:
-            data = json.loads(workout.data) if workout.data else {}
-            exercises = data.get('exercises', [])
-            
-            # Use our metrics calculation function to get accurate metrics
-            metrics = calculate_workout_metrics(data)
-            
-            # Use stored values if they exist, otherwise use calculated values
-            volume = workout.volume if hasattr(workout, 'volume') and workout.volume else metrics['volume']
-            
-            # Convert volume from kg to user's preferred unit
-            volume = convert_volume_to_preferred_unit(volume, current_user.preferred_weight_unit)
-            
-            duration = workout.duration if hasattr(workout, 'duration') and workout.duration else metrics['duration']
-            rating = workout.rating if hasattr(workout, 'rating') and workout.rating else metrics['rating']
-            
-            # Process each exercise to ensure it has an ID
-            for exercise in exercises:
-                if isinstance(exercise, dict):
-                    # If the exercise is a dictionary without an ID, try to find the exercise
-                    if 'id' not in exercise:
-                        exercise_name = exercise.get('name')
-                        if exercise_name:
-                            db_exercise = Exercise.query.filter_by(name=exercise_name).first()
-                            if db_exercise:
-                                exercise['id'] = db_exercise.id
-                    # If still no ID, generate a temporary one
-                    if 'id' not in exercise:
-                        exercise['id'] = f"temp_{hash(exercise.get('name', ''))}"
-            
-            # Check for exercise sets format and calculate sets count if needed
-            for exercise in exercises:
-                if isinstance(exercise, dict) and 'sets' in exercise and isinstance(exercise['sets'], list):
-                    # Count sets
-                    exercise['sets_count'] = len(exercise['sets'])
-                    
-                    # If there's no volume in the exercise but there is in the sets, calculate total
-                    if 'volume' not in exercise:
-                        exercise_volume = 0
-                        for set_data in exercise['sets']:
-                            if isinstance(set_data, dict) and 'volume' in set_data:
-                                exercise_volume += float(set_data['volume'])
-                            elif isinstance(set_data, dict) and 'weight' in set_data and 'reps' in set_data:
-                                exercise_volume += float(set_data['weight']) * float(set_data['reps'])
-                        exercise['volume'] = exercise_volume
-                    
-                    # Convert exercise volume to preferred unit if it exists
-                    if 'volume' in exercise:
-                        exercise['volume'] = convert_volume_to_preferred_unit(exercise['volume'], current_user.preferred_weight_unit)
-            
-            # Get like count
-            like_count = WorkoutLike.query.filter_by(workout_id=workout.id).count()
-            
-            # Check if current user has liked this workout
-            user_liked = WorkoutLike.query.filter_by(
-                workout_id=workout.id, 
-                user_id=current_user.id
-            ).first() is not None
-            
-            # Get comment count
-            comment_count = WorkoutComment.query.filter_by(workout_id=workout.id).count()
-            
-            # Get user's level at the time of the workout
-            user_level = calculate_user_level_at_time(workout.user_id, workout.date)
-            
-            combined_sessions.append({
-                'id': workout.id,
-                'date': workout.date,
-                'session_date': workout.date,  # Add session_date for template compatibility
-                'title': workout.title,
-                'exercises': exercises,
-                'user': workout.user,
-                'is_own': False,
-                'description': workout.notes if hasattr(workout, 'notes') and workout.notes else (
-                    data.get('description', '') if isinstance(data, dict) else ''
-                ),
-                'duration': duration,
-                'volume': volume,
-                'session_rating': rating,
-                'like_count': like_count,
-                'user_liked': user_liked,
-                'comment_count': comment_count,
-                'user_level': user_level,
-                'photo': workout.photo
-            })
-        except Exception as e:
-            print(f"Error processing followed workout: {e}")
+            print(f"Error processing recent session: {e}")
             continue
     
     # Sort combined sessions by date
-    combined_sessions.sort(key=lambda x: x['date'], reverse=True)
+    combined_sessions.sort(key=lambda x: x['session_date'], reverse=True)
     
     # Get unread notification count
     unread_notification_count = Notification.query.filter_by(
@@ -721,3 +604,528 @@ def start_workout():
                           exercises=exercises, 
                           user_weight=bodyweight,
                           unread_notification_count=unread_notification_count)
+
+@auth.route('/update-profile-pic', methods=['POST'])
+@login_required
+def update_profile_pic():
+    """Update or remove user's profile picture"""
+    try:
+        print("Starting profile picture update...")
+        
+        # Check if user wants to remove their profile picture
+        if 'remove' in request.form:
+            print("Removing profile picture...")
+            # Store old profile pic path for cleanup
+            old_pic = current_user.profile_pic
+            
+            # Update database first
+            current_user.profile_pic = None
+            db.session.commit()
+            
+            # Try to remove the old file if it exists
+            if old_pic and os.path.isabs(old_pic):
+                try:
+                    # Get the full path from the absolute URL path
+                    file_path = os.path.join(
+                        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                        old_pic.lstrip('/')
+                    )
+                    if os.path.exists(file_path):
+                        os.remove(file_path)
+                        print(f"Removed old profile picture: {file_path}")
+                except Exception as e:
+                    print(f"Error removing old picture file: {str(e)}")
+            
+            flash('Profile picture removed successfully', 'success')
+            return redirect(url_for('auth.settings'))
+        
+        # Check if a file was uploaded
+        if 'profile_pic' not in request.files:
+            flash('No file selected', 'error')
+            return redirect(url_for('auth.settings'))
+        
+        file = request.files['profile_pic']
+        
+        # Check if file is empty
+        if file.filename == '':
+            flash('No file selected', 'error')
+            return redirect(url_for('auth.settings'))
+        
+        # Check if file is allowed
+        allowed_extensions = {'png', 'jpg', 'jpeg', 'gif'}
+        if not '.' in file.filename or file.filename.split('.')[-1].lower() not in allowed_extensions:
+            flash('Only image files (PNG, JPG, JPEG, GIF) are allowed', 'error')
+            return redirect(url_for('auth.settings'))
+        
+        # Create uploads directory - IMPORTANT: Use app/static/uploads for web access
+        upload_dir = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)),
+            'static',
+            'uploads'
+        )
+        os.makedirs(upload_dir, exist_ok=True)
+        print(f"Upload directory: {upload_dir}")
+        
+        # Generate unique filename
+        import uuid
+        filename = f"{uuid.uuid4()}_{secure_filename(file.filename)}"
+        file_path = os.path.join(upload_dir, filename)
+        
+        # Save the new file
+        file.save(file_path)
+        print(f"Saved new profile picture to: {file_path}")
+        
+        # Set the URL path that will work in the browser
+        # This should match where the files are actually being saved
+        url_path = url_for('static', filename=f'uploads/{filename}')
+        print(f"Setting profile_pic in database to: {url_path}")
+        
+        current_user.profile_pic = url_path
+        db.session.commit()
+        
+        flash('Profile picture updated successfully', 'success')
+    except Exception as e:
+        db.session.rollback()
+        import traceback
+        traceback.print_exc()
+        print(f"Error in profile picture update: {str(e)}")
+        flash(f'Error updating profile picture: {str(e)}', 'error')
+    
+    return redirect(url_for('auth.settings'))
+
+@auth.route('/profile')
+@auth.route('/profile/<username>')
+@login_required
+def profile(username=None):
+    """
+    User profile page.
+    If username is not provided, show the current user's profile.
+    """
+    if username is None:
+        user = current_user
+    else:
+        user = User.query.filter_by(username=username).first_or_404()
+    
+    # Get workout count
+    workout_count = Workout.query.filter_by(user_id=user.id).count()
+    
+    # Get follower and following count
+    follower_count = user.followers.count()
+    following_count = user.following.count()
+    
+    # Calculate weekly stats
+    weekly_stats = calculate_weekly_stats(user.id)
+    
+    # Make sure the weekly stats have default values if they're empty
+    if not weekly_stats.get('current_week'):
+        weekly_stats['current_week'] = {
+            'workout_count': 0,
+            'total_volume': 0,
+            'total_duration': 0,
+            'total_exp': 0
+        }
+    
+    if not weekly_stats.get('comparisons'):
+        weekly_stats['comparisons'] = {
+            'workout_count': 0,
+            'total_volume': 0,
+            'total_duration': 0,
+            'total_exp': 0
+        }
+    
+    # Get user activity for the last 3 months
+    three_months_ago = datetime.now() - timedelta(days=90)
+    
+    # Get data for volume chart
+    volume_data = db.session.query(
+        db.func.strftime('%Y-%m-%d', Session.session_date).label('date'),
+        db.func.sum(Session.volume).label('volume')
+    ).filter(
+        Session.user_id == user.id,
+        Session.session_date >= three_months_ago
+    ).group_by('date').order_by('date').all()
+    
+    # Get data for duration chart
+    duration_data = db.session.query(
+        db.func.strftime('%Y-%m-%d', Session.session_date).label('date'),
+        db.func.sum(db.func.coalesce(Session.duration, '0')).label('duration')
+    ).filter(
+        Session.user_id == user.id,
+        Session.session_date >= three_months_ago
+    ).group_by('date').order_by('date').all()
+    
+    # Get data for reps chart
+    reps_data = db.session.query(
+        db.func.strftime('%Y-%m-%d', Session.session_date).label('date'),
+        db.func.sum(Session.total_reps).label('reps')
+    ).filter(
+        Session.user_id == user.id,
+        Session.session_date >= three_months_ago
+    ).group_by('date').order_by('date').all()
+    
+    # Get data for EXP chart
+    exp_data = db.session.query(
+        db.func.strftime('%Y-%m-%d', Session.session_date).label('date'),
+        db.func.sum(Session.exp_gained).label('exp')
+    ).filter(
+        Session.user_id == user.id,
+        Session.session_date >= three_months_ago
+    ).group_by('date').order_by('date').all()
+    
+    # Format chart data for JavaScript
+    chart_data = {
+        'dates': [str(date) for date, _ in volume_data],
+        'volume': [float(volume) for _, volume in volume_data],
+        'duration': [float(duration) for _, duration in duration_data],
+        'reps': [int(reps) if reps else 0 for _, reps in reps_data],
+        'exp': [int(exp) if exp else 0 for _, exp in exp_data]
+    }
+    
+    # Get user's recent workouts
+    recent_workouts = Session.query.filter_by(user_id=user.id).order_by(Session.session_date.desc()).limit(5).all()
+    
+    # Process each workout to get additional data
+    processed_workouts = []
+    
+    for session in recent_workouts:
+        try:
+            # Get all sets for this session
+            sets = Set.query.filter_by(session_id=session.id).all()
+            
+            # Group sets by exercise
+            exercise_sets = {}
+            for s in sets:
+                if s.exercise_id not in exercise_sets:
+                    exercise_sets[s.exercise_id] = []
+                exercise_sets[s.exercise_id].append(s)
+            
+            # Format exercises
+            exercises = []
+            for exercise_id, sets_list in exercise_sets.items():
+                exercise = Exercise.query.get(exercise_id)
+                if not exercise:
+                    continue
+                
+                # Compare this exercise with the previous session's performance
+                comparison = 0  # Default to no change
+                try:
+                    comparison = compare_exercise_progress(session.id, user.id)
+                    if exercise_id in comparison:
+                        comparison = comparison[exercise_id]
+                    else:
+                        comparison = 0
+                except Exception as e:
+                    print(f"Error in exercise comparison: {e}")
+                    comparison = 0
+                
+                exercises.append({
+                    'id': exercise_id,
+                    'name': exercise.name,
+                    'sets_count': len(sets_list),
+                    'comparison': comparison
+                })
+            
+            # Get like count
+            like_count = WorkoutLike.query.filter_by(workout_id=session.id).count()
+            
+            # Check if current user has liked this workout
+            user_liked = WorkoutLike.query.filter_by(
+                workout_id=session.id, 
+                user_id=current_user.id
+            ).first() is not None
+            
+            # Get comment count
+            comment_count = WorkoutComment.query.filter_by(workout_id=session.id).count()
+            
+            processed_workouts.append({
+                'id': session.id,
+                'session_date': session.session_date,
+                'title': session.title,
+                'description': session.description,
+                'exercises': exercises,
+                'user': user,
+                'is_own': user.id == current_user.id,
+                'duration': session.duration,
+                'volume': convert_volume_to_preferred_unit(session.volume, user.preferred_weight_unit),
+                'session_rating': session.session_rating,
+                'like_count': like_count,
+                'user_liked': user_liked,
+                'comment_count': comment_count,
+                'user_level': user.level,
+                'photo': session.photo
+            })
+        except Exception as e:
+            print(f"Error processing workout: {e}")
+            continue
+    
+    # Get unread notification count
+    unread_notification_count = Notification.query.filter_by(
+        user_id=current_user.id,
+        is_read=False
+    ).count()
+    
+    # Get best lifts
+    best_lifts = {}
+    
+    # Find all exercises with input_type containing 'weight' and 'reps'
+    weight_reps_exercises = Exercise.query.filter(
+        Exercise.input_type.like('%weight%'),
+        Exercise.input_type.like('%reps%')
+    ).all()
+    
+    for exercise in weight_reps_exercises:
+        # Find the highest weight for this exercise
+        best_set = Set.query.join(Session).filter(
+            Set.exercise_id == exercise.id,
+            Session.user_id == user.id,
+            Session.session_date >= three_months_ago
+        ).order_by(Set.weight.desc()).first()
+        
+        if best_set and best_set.weight > 0:
+            best_lifts[exercise.name] = f"{convert_volume_to_preferred_unit(best_set.weight, user.preferred_weight_unit)}{user.preferred_weight_unit}"
+    
+    # Calculate user account age
+    account_age = (datetime.now() - user.created_at).days if user.created_at else 0
+    
+    # Format account age in a human-readable way
+    if account_age == 0:
+        account_age_str = "today"
+    elif account_age == 1:
+        account_age_str = "yesterday"
+    elif account_age < 30:
+        account_age_str = f"{account_age} days ago"
+    elif account_age < 365:
+        months = account_age // 30
+        account_age_str = f"{months} month{'s' if months > 1 else ''} ago"
+    else:
+        years = account_age // 365
+        account_age_str = f"{years} year{'s' if years > 1 else ''} ago"
+    
+    return render_template('profile.html',
+                          user=user,
+                          workout_count=workout_count,
+                          follower_count=follower_count,
+                          following_count=following_count,
+                          weekly_stats=weekly_stats,
+                          chart_data=chart_data,
+                          workouts=processed_workouts,
+                          unread_notification_count=unread_notification_count,
+                          best_lifts=best_lifts,
+                          account_age=account_age,
+                          account_age_str=account_age_str)
+
+@auth.route('/statistics')
+@login_required
+def statistics():
+    """User statistics page"""
+    user = current_user
+    
+    # Calculate yearly stats
+    this_year_start = datetime(datetime.now().year, 1, 1)
+    
+    # Workout count for this year
+    yearly_workout_count = Session.query.filter(
+        Session.user_id == user.id,
+        Session.session_date >= this_year_start
+    ).count()
+    
+    # Total EXP gained this year
+    yearly_exp = db.session.query(db.func.sum(Session.exp_gained)).filter(
+        Session.user_id == user.id,
+        Session.session_date >= this_year_start
+    ).scalar() or 0
+    
+    # Total levels gained this year (approximation)
+    yearly_levels = yearly_exp // 100
+    
+    # Total workout duration this year
+    total_duration_seconds = db.session.query(db.func.sum(db.func.extract('epoch', db.func.cast(Session.duration, db.Time)))).filter(
+        Session.user_id == user.id,
+        Session.session_date >= this_year_start
+    ).scalar() or 0
+    
+    # Format duration as days, hours, minutes
+    days = total_duration_seconds // (24 * 3600)
+    remaining_seconds = total_duration_seconds % (24 * 3600)
+    hours = remaining_seconds // 3600
+    remaining_seconds %= 3600
+    minutes = remaining_seconds // 60
+    
+    yearly_duration = f"{days}d {hours}h {minutes}m"
+    
+    # Total weight lifted this year
+    yearly_volume = db.session.query(db.func.sum(Session.volume)).filter(
+        Session.user_id == user.id,
+        Session.session_date >= this_year_start
+    ).scalar() or 0
+    
+    # Format volume with the user's preferred unit
+    yearly_volume_formatted = f"{convert_volume_to_preferred_unit(yearly_volume, user.preferred_weight_unit)} {user.preferred_weight_unit}"
+    
+    # Get best lifts for all weight+reps exercises
+    best_lifts = {}
+    
+    # Find all exercises with input_type containing 'weight' and 'reps'
+    weight_reps_exercises = Exercise.query.filter(
+        Exercise.input_type.like('%weight%'),
+        Exercise.input_type.like('%reps%')
+    ).all()
+    
+    for exercise in weight_reps_exercises:
+        # Find the highest weight for this exercise
+        best_set = Set.query.join(Session).filter(
+            Set.exercise_id == exercise.id,
+            Session.user_id == user.id,
+            Session.session_date >= this_year_start
+        ).order_by(Set.weight.desc()).first()
+        
+        if best_set and best_set.weight > 0:
+            best_lifts[exercise.name] = f"{convert_volume_to_preferred_unit(best_set.weight, user.preferred_weight_unit)}{user.preferred_weight_unit}"
+    
+    # All-time stats (mostly the same as yearly stats for now)
+    all_time_workout_count = Session.query.filter(Session.user_id == user.id).count()
+    all_time_exp = db.session.query(db.func.sum(Session.exp_gained)).filter(Session.user_id == user.id).scalar() or 0
+    all_time_levels = all_time_exp // 100
+    
+    # Total all-time workout duration
+    all_time_duration_seconds = db.session.query(db.func.sum(db.func.extract('epoch', db.func.cast(Session.duration, db.Time)))).filter(
+        Session.user_id == user.id
+    ).scalar() or 0
+    
+    # Format duration as days, hours, minutes
+    days = all_time_duration_seconds // (24 * 3600)
+    remaining_seconds = all_time_duration_seconds % (24 * 3600)
+    hours = remaining_seconds // 3600
+    remaining_seconds %= 3600
+    minutes = remaining_seconds // 60
+    
+    all_time_duration = f"{days}d {hours}h {minutes}m"
+    
+    # Total all-time weight lifted
+    all_time_volume = db.session.query(db.func.sum(Session.volume)).filter(Session.user_id == user.id).scalar() or 0
+    all_time_volume_formatted = f"{convert_volume_to_preferred_unit(all_time_volume, user.preferred_weight_unit)} {user.preferred_weight_unit}"
+    
+    # Get best all-time lifts for all weight+reps exercises
+    all_time_best_lifts = {}
+    
+    for exercise in weight_reps_exercises:
+        # Find the highest weight for this exercise
+        best_set = Set.query.join(Session).filter(
+            Set.exercise_id == exercise.id,
+            Session.user_id == user.id
+        ).order_by(Set.weight.desc()).first()
+        
+        if best_set and best_set.weight > 0:
+            all_time_best_lifts[exercise.name] = f"{convert_volume_to_preferred_unit(best_set.weight, user.preferred_weight_unit)}{user.preferred_weight_unit}"
+    
+    # Get unread notification count
+    unread_notification_count = Notification.query.filter_by(
+        user_id=user.id,
+        is_read=False
+    ).count()
+    
+    return render_template('statistics.html',
+                          yearly_workout_count=yearly_workout_count,
+                          yearly_exp=yearly_exp,
+                          yearly_levels=yearly_levels,
+                          yearly_duration=yearly_duration,
+                          yearly_volume=yearly_volume_formatted,
+                          best_lifts=best_lifts,
+                          all_time_workout_count=all_time_workout_count,
+                          all_time_exp=all_time_exp,
+                          all_time_levels=all_time_levels,
+                          all_time_duration=all_time_duration,
+                          all_time_volume=all_time_volume_formatted,
+                          all_time_best_lifts=all_time_best_lifts,
+                          unread_notification_count=unread_notification_count)
+
+@auth.route('/calendar')
+@login_required
+def calendar():
+    """Activity calendar showing workout days"""
+    user = current_user
+    
+    # Get all workout dates for the past year
+    one_year_ago = datetime.now() - timedelta(days=365)
+    workouts = Session.query.filter(
+        Session.user_id == user.id,
+        Session.session_date >= one_year_ago
+    ).all()
+    
+    # Create calendar data
+    calendar_data = {}
+    
+    for workout in workouts:
+        date_str = workout.session_date.strftime('%Y-%m-%d')
+        if date_str not in calendar_data:
+            calendar_data[date_str] = {
+                'count': 1,
+                'volume': workout.volume,
+                'exp': workout.exp_gained
+            }
+        else:
+            calendar_data[date_str]['count'] += 1
+            calendar_data[date_str]['volume'] += workout.volume
+            calendar_data[date_str]['exp'] += workout.exp_gained
+    
+    # Get unread notification count
+    unread_notification_count = Notification.query.filter_by(
+        user_id=user.id,
+        is_read=False
+    ).count()
+    
+    # Get current year for calendar initialization
+    current_year = datetime.now().year
+    
+    return render_template('calendar.html',
+                          calendar_data=calendar_data,
+                          current_year=current_year,
+                          unread_notification_count=unread_notification_count)
+
+@auth.route('/user/<int:user_id>/follow', methods=['POST'])
+@login_required
+def follow_user(user_id):
+    """Follow or unfollow a user"""
+    # Check if user exists
+    user = User.query.get_or_404(user_id)
+    
+    # Don't allow following yourself
+    if user.id == current_user.id:
+        return jsonify({
+            'success': False,
+            'message': 'You cannot follow yourself'
+        }), 400
+    
+    # Check if already following
+    is_following = current_user.is_following(user)
+    
+    if is_following:
+        # Unfollow
+        current_user.following.remove(user)
+        db.session.commit()
+        return jsonify({
+            'success': True,
+            'following': False,
+            'follower_count': user.followers.count(),
+            'message': f'You unfollowed {user.username}'
+        })
+    else:
+        # Follow
+        current_user.following.append(user)
+        db.session.commit()
+        
+        # Create notification for the followed user
+        notification = Notification(
+            user_id=user.id,
+            message=f"{current_user.username} started following you!",
+            is_read=False
+        )
+        db.session.add(notification)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'following': True,
+            'follower_count': user.followers.count(),
+            'message': f'You are now following {user.username}'
+        })

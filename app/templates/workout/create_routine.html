@@ -474,78 +474,66 @@
         
         // Save routine
         document.getElementById('save-routine').addEventListener('click', function() {
-            // Validate form
-            const name = document.getElementById('routine-name').value.trim();
-            if (!name) {
-                alert('Please enter a routine name.');
+            const routineName = document.getElementById('routine-name').value;
+            if (!routineName) {
+                alert('Please enter a routine name');
                 return;
             }
             
-            if (workoutData.exercises.length === 0) {
-                alert('Please add at least one exercise to your routine.');
-                return;
-            }
-            
-            // Get muscle groups
-            const muscleGroups = [];
-            document.querySelectorAll('.muscle-group:checked').forEach(cb => {
-                muscleGroups.push(cb.value);
+            // Get exercises
+            const exercises = [];
+            document.querySelectorAll('.exercise-item').forEach(function(exerciseEl) {
+                const exerciseId = exerciseEl.getAttribute('data-id');
+                const exerciseName = exerciseEl.getAttribute('data-name');
+                const setCount = exerciseEl.querySelectorAll('.set-row').length;
+                
+                const sets = [];
+                exerciseEl.querySelectorAll('.set-row').forEach(function(setEl) {
+                    const setType = setEl.querySelector('.set-type').value;
+                    
+                    // Add different fields based on exercise type
+                    const set = {
+                        set_type: setType,
+                    };
+                    
+                    // Add weight & reps if applicable
+                    if (setEl.querySelector('.weight-input')) {
+                        set.weight = parseFloat(setEl.querySelector('.weight-input').value) || 0;
+                    }
+                    if (setEl.querySelector('.reps-input')) {
+                        set.reps = parseInt(setEl.querySelector('.reps-input').value) || 0;
+                    }
+                    
+                    // Add time if applicable
+                    if (setEl.querySelector('.time-input')) {
+                        set.time = parseInt(setEl.querySelector('.time-input').value) || 0;
+                    }
+                    
+                    // Add distance if applicable
+                    if (setEl.querySelector('.distance-input')) {
+                        set.distance = parseFloat(setEl.querySelector('.distance-input').value) || 0;
+                    }
+                    
+                    sets.push(set);
+                });
+                
+                exercises.push({
+                    id: exerciseId,
+                    name: exerciseName,
+                    sets: sets
+                });
             });
             
-            // Format exercises for saving
-            const formattedExercises = workoutData.exercises.map(exercise => {
-                return {
-                    id: exercise.id,
-                    name: exercise.name,
-                    muscles_worked: exercise.muscles_worked || '',
-                    input_type: exercise.input_type,
-                    rest_duration: exercise.rest_duration || 60,
-                    sets: exercise.sets.map(set => {
-                        const formattedSet = {
-                            set_type: set.set_type || 'normal'
-                        };
-                        
-                        // Add appropriate fields based on exercise type
-                        if (exercise.input_type === 'weight_reps') {
-                            formattedSet.weight = set.weight || 0;
-                            formattedSet.reps = set.reps || 0;
-                        } else if (exercise.input_type === 'bodyweight_reps') {
-                            formattedSet.reps = set.reps || 0;
-                        } else if (exercise.input_type === 'duration') {
-                            formattedSet.duration = set.duration || 0;
-                        } else if (exercise.input_type === 'distance_duration') {
-                            formattedSet.distance = set.distance || 0;
-                            formattedSet.duration = set.duration || 0;
-                        }
-                        
-                        return formattedSet;
-                    })
-                };
-            });
-            
-            // Create routine data object
             const routineData = {
-                name: name,
-                level: document.getElementById('routine-level').value,
+                name: routineName,
+                description: document.getElementById('routine-description').value,
                 goal: document.getElementById('routine-goal').value,
-                muscle_groups: muscleGroups,
-                description: document.getElementById('routine-description').value.trim(),
-                is_public: document.getElementById('routine-public').checked,
-                exercises: formattedExercises
+                exercises: exercises
             };
             
-            // If editing, include the routine ID
-            {% if routine %}
-            const routineUrl = '/workout/api/routines/{{ routine.id }}';
-            const routineMethod = 'PUT';
-            {% else %}
-            const routineUrl = '/workout/api/routines';
-            const routineMethod = 'POST';
-            {% endif %}
-            
-            // Send to server
-            fetch(routineUrl, {
-                method: routineMethod,
+            // Save routine via AJAX
+            fetch('{{ url_for("workout.create_routine_api") if not routine else url_for("workout.update_routine_api", routine_id=routine.id) }}', {
+                method: '{{ "POST" if not routine else "PUT" }}',
                 headers: {
                     'Content-Type': 'application/json'
                 },
@@ -555,7 +543,7 @@
             .then(data => {
                 if (data.success) {
                     alert('Routine {{ "updated" if routine else "created" }} successfully!');
-                    window.location.href = '/workout/workout';
+                    window.location.href = '{{ url_for("workout.workout_page") }}';
                 } else {
                     alert(data.error || 'Error saving routine');
                 }

@@ -32,7 +32,7 @@ def get_weekly_stats(user_id):
     this_week = {
         'exp_gained': sum(s.exp_gained for s in this_week_sessions),
         'workout_count': len(this_week_sessions),
-        'total_duration': sum(int(s.duration.split()[0]) for s in this_week_sessions),  # Assumes duration is stored as "X minutes"
+        'total_duration': sum(parse_duration(s.duration) for s in this_week_sessions),  # Handle "X minutes" format safely
         'total_volume': sum(s.volume for s in this_week_sessions)
     }
     
@@ -40,7 +40,7 @@ def get_weekly_stats(user_id):
     last_week = {
         'exp_gained': sum(s.exp_gained for s in last_week_sessions),
         'workout_count': len(last_week_sessions),
-        'total_duration': sum(int(s.duration.split()[0]) for s in last_week_sessions),
+        'total_duration': sum(parse_duration(s.duration) for s in last_week_sessions),
         'total_volume': sum(s.volume for s in last_week_sessions)
     }
     
@@ -129,7 +129,7 @@ def calculate_weekly_stats(user_id):
     current_week_stats = {
         'workout_count': len(current_week_workouts),
         'total_volume': sum(w.volume or 0 for w in current_week_workouts),
-        'total_duration': sum(w.duration or 0 for w in current_week_workouts),
+        'total_duration': sum(parse_duration(w.duration) for w in current_week_workouts),
         'total_exp': total_exp
     }
     
@@ -159,7 +159,7 @@ def calculate_weekly_stats(user_id):
     prev_week_stats = {
         'workout_count': len(prev_week_workouts),
         'total_volume': sum(w.volume or 0 for w in prev_week_workouts),
-        'total_duration': sum(w.duration or 0 for w in prev_week_workouts),
+        'total_duration': sum(parse_duration(w.duration) for w in prev_week_workouts),
         'total_exp': prev_total_exp
     }
     
@@ -346,3 +346,67 @@ def normalize_measurement_to_cm(measurement, unit):
     if unit == 'in':
         return measurement * IN_TO_CM
     return measurement  # Assume cm
+
+def parse_duration(duration_str):
+    """
+    Safely parse a duration value into seconds.
+    
+    Handles:
+    - Integers/floats (assumed to be in seconds)
+    - Strings like "10 minutes", "1h 30m", "90 seconds"
+    - None values
+    - String representations of numbers
+    - Complex string formats with both hours and minutes
+    
+    Returns integer seconds
+    """
+    try:
+        # If None or empty, return 0
+        if duration_str is None or duration_str == '':
+            return 0
+            
+        # If it's already a number, convert and return it
+        if isinstance(duration_str, (int, float)):
+            return int(duration_str)
+        
+        # Handle string values
+        duration_str = str(duration_str).strip().lower()
+        
+        # If it's just a number as string, convert directly
+        if duration_str.isdigit():
+            return int(duration_str)
+            
+        # Check for hours/minutes/seconds format
+        import re
+        
+        # Try to find hours, minutes, and seconds in the string
+        hours_match = re.search(r'(\d+)\s*(?:h|hour|hours)', duration_str)
+        minutes_match = re.search(r'(\d+)\s*(?:m|min|minute|minutes)', duration_str)
+        seconds_match = re.search(r'(\d+)\s*(?:s|sec|second|seconds)', duration_str)
+        
+        total_seconds = 0
+        
+        if hours_match:
+            total_seconds += int(hours_match.group(1)) * 3600
+            
+        if minutes_match:
+            total_seconds += int(minutes_match.group(1)) * 60
+            
+        if seconds_match:
+            total_seconds += int(seconds_match.group(1))
+            
+        # If we found any time units, return the total
+        if total_seconds > 0:
+            return total_seconds
+            
+        # Fallback: just extract any number and assume it's minutes
+        match = re.search(r'(\d+)', duration_str)
+        if match:
+            # Assume it's minutes if no unit specified
+            return int(match.group(1)) * 60
+        
+        # If all else fails, return 0
+        return 0
+    except Exception as e:
+        print(f"Error parsing duration '{duration_str}': {str(e)}")
+        return 0

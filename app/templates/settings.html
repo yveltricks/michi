@@ -25,6 +25,37 @@
     <!-- Personal Information Section -->
     <div class="bg-white p-6 rounded-lg shadow mb-6">
         <h2 class="text-xl font-semibold mb-4">Personal Information</h2>
+        
+        <!-- Profile Picture Section -->
+        <div class="mb-6">
+            <h3 class="text-lg font-medium mb-3">Profile Picture</h3>
+            <div class="flex items-center space-x-4">
+                <div class="h-24 w-24 bg-gray-200 rounded-full overflow-hidden">
+                    <img src="{{ current_user.profile_pic or url_for('static', filename='default_profile.jpg') }}" 
+                         alt="Profile Picture" class="h-full w-full object-cover">
+                </div>
+                <form action="{{ url_for('auth.update_profile_pic') }}" method="POST" enctype="multipart/form-data" class="flex-1">
+                    <div class="mb-2">
+                        <input type="file" name="profile_pic" id="profile_pic" 
+                               accept="image/*" class="block w-full text-sm text-gray-500
+                               file:mr-4 file:py-2 file:px-4
+                               file:rounded file:border-0
+                               file:text-sm file:font-semibold
+                               file:bg-blue-50 file:text-blue-700
+                               hover:file:bg-blue-100">
+                    </div>
+                    <div class="flex space-x-2">
+                        <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
+                            Update Profile Picture
+                        </button>
+                        <button type="submit" name="remove" value="true" class="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600">
+                            Remove Picture
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
         <form action="{{ url_for('auth.update_personal_info') }}" method="POST">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                 <div>

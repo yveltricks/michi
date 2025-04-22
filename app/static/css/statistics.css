@@ -1,0 +1,105 @@
+/* Statistics page styles */
+.page-header {
+    margin-bottom: 30px;
+}
+
+.back-button {
+    font-size: 24px;
+    color: #4a5568;
+    margin-right: 20px;
+    transition: color 0.2s;
+}
+
+.back-button:hover {
+    color: #4f46e5;
+    text-decoration: none;
+}
+
+.page-title {
+    font-size: 28px;
+    font-weight: bold;
+    margin: 0;
+}
+
+.stats-section {
+    background-color: white;
+    border-radius: 10px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    margin-bottom: 30px;
+    overflow: hidden;
+}
+
+.stats-section-header {
+    background-color: #f7fafc;
+    padding: 15px 20px;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.stats-section-header h2 {
+    margin: 0;
+    font-size: 20px;
+    color: #4a5568;
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 15px;
+    padding: 20px;
+}
+
+.stat-item {
+    padding: 15px;
+    background-color: #f7fafc;
+    border-radius: 8px;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.stat-item:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1);
+}
+
+.stat-label {
+    font-size: 14px;
+    color: #718096;
+    margin-bottom: 8px;
+}
+
+.stat-value {
+    font-size: 22px;
+    font-weight: bold;
+    color: #4f46e5;
+}
+
+.best-lifts-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 15px;
+    padding: 20px;
+}
+
+.best-lift-item {
+    padding: 15px;
+    background-color: #f7fafc;
+    border-radius: 8px;
+    transition: transform 0.2s, box-shadow 0.2s;
+    text-align: center;
+}
+
+.best-lift-item:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1);
+}
+
+.lift-label {
+    font-size: 14px;
+    color: #718096;
+    margin-bottom: 8px;
+}
+
+.lift-value {
+    font-size: 22px;
+    font-weight: bold;
+    color: #4f46e5;
+} 

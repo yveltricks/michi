@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+
+{% block title %}Statistics{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/statistics.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="page-header d-flex align-items-center mb-4">
+                <a href="{{ url_for('auth.profile') }}" class="back-button mr-3">
+                    <i class="fas fa-arrow-left"></i>
+                </a>
+                <h1 class="page-title">Statistics</h1>
+            </div>
+        </div>
+    </div>
+
+    <!-- This Year Stats -->
+    <div class="stats-section">
+        <div class="stats-section-header">
+            <h2>This Year</h2>
+        </div>
+        <div class="stats-grid">
+            <div class="stat-item">
+                <div class="stat-label">Workouts Done:</div>
+                <div class="stat-value">{{ yearly_workout_count }}</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">EXP Gained:</div>
+                <div class="stat-value">{{ yearly_exp }}</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">Levels Grown:</div>
+                <div class="stat-value">{{ yearly_levels }}</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">Duration:</div>
+                <div class="stat-value">{{ yearly_duration }}</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">Total Weight Lifted:</div>
+                <div class="stat-value">{{ yearly_volume }}</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- All Time Stats -->
+    <div class="stats-section">
+        <div class="stats-section-header">
+            <h2>All Time</h2>
+        </div>
+        <div class="stats-grid">
+            <div class="stat-item">
+                <div class="stat-label">Workouts Done:</div>
+                <div class="stat-value">{{ all_time_workout_count }}</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">EXP Gained:</div>
+                <div class="stat-value">{{ all_time_exp }}</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">Levels Grown:</div>
+                <div class="stat-value">{{ all_time_levels }}</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">Duration:</div>
+                <div class="stat-value">{{ all_time_duration }}</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">Total Weight Lifted:</div>
+                <div class="stat-value">{{ all_time_volume }}</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Best Lifts Out of Exercises Done This Year -->
+    <div class="stats-section">
+        <div class="stats-section-header">
+            <h2>Best Lifts Out of Exercises Done This Year:</h2>
+        </div>
+        <div class="best-lifts-grid">
+            <div class="best-lift-item">
+                <div class="lift-label">Bench Press:</div>
+                <div class="lift-value">{{ best_lifts.get('Bench Press', '0kg') }}</div>
+            </div>
+            <div class="best-lift-item">
+                <div class="lift-label">Squat:</div>
+                <div class="lift-value">{{ best_lifts.get('Squat', '0kg') }}</div>
+            </div>
+            <div class="best-lift-item">
+                <div class="lift-label">Dead lift:</div>
+                <div class="lift-value">{{ best_lifts.get('Deadlift', '0kg') }}</div>
+            </div>
+            <div class="best-lift-item">
+                <div class="lift-label">Bicep Curl:</div>
+                <div class="lift-value">{{ best_lifts.get('Bicep Curl', '0kg') }}</div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

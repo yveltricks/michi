@@ -64,17 +64,41 @@ def create_app():
 
     @app.template_filter('format_duration')
     def format_duration_filter(seconds):
-        if not seconds:
-            return '0 min'
-        
-        minutes = seconds // 60
-        hours = minutes // 60
-        minutes = minutes % 60
-        
-        if hours > 0:
-            return f'{hours}h {minutes}m'
-        else:
-            return f'{minutes} min'
+        """Convert seconds to a readable duration format"""
+        try:
+            # If None or empty, return default
+            if not seconds:
+                return '0 min'
+                
+            # Handle string inputs
+            if isinstance(seconds, str):
+                try:
+                    # Try to convert numeric strings
+                    if seconds.isdigit():
+                        seconds = int(seconds)
+                    else:
+                        # Use our parse_duration function
+                        from app.utils import parse_duration
+                        seconds = parse_duration(seconds)
+                except Exception as e:
+                    print(f"Error converting duration: {e}")
+                    return f"{seconds}"  # Return the original string if can't convert
+            
+            # Ensure we have an integer
+            seconds = int(seconds)
+            
+            # Convert to minutes and hours
+            minutes = seconds // 60
+            hours = minutes // 60
+            minutes = minutes % 60
+            
+            if hours > 0:
+                return f'{hours}h {minutes}m'
+            else:
+                return f'{minutes} min'
+        except Exception as e:
+            print(f"Error in format_duration: {e}")
+            return '0 min'  # Safe fallback
     
     @app.template_filter('dict_set')
     def dict_set_filter(d, key, value):
