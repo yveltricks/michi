@@ -333,28 +333,24 @@ document.addEventListener('DOMContentLoaded', function() {
     document.querySelectorAll('.comment-button').forEach(function(button) {
         button.addEventListener('click', function() {
             const workoutId = this.getAttribute('data-id');
-            const commentModal = document.getElementById('comment-modal');
-            const commentsList = document.getElementById('comments-list');
-            const commentForm = document.getElementById('comment-form');
-            const workoutIdInput = document.getElementById('workout-id-input');
+            const commentsSection = document.getElementById(`comments-${workoutId}`);
+            const commentsList = document.getElementById(`comments-list-${workoutId}`);
             
-            // Clear previous comments
-            commentsList.innerHTML = '';
-            
-            // Set workout ID for form submission
-            workoutIdInput.value = workoutId;
-            
-            // Show modal
-            commentModal.style.display = 'block';
-            
-            // Load comments
-            fetch(`/api/workouts/${workoutId}/comments`)
+            if (commentsSection.classList.contains('hidden')) {
+                commentsSection.classList.remove('hidden');
+                
+                // Show loading state
+                commentsList.innerHTML = '<div class="text-center text-sm text-gray-500 py-2">Loading comments...</div>';
+                
+                // Load comments
+                fetch(`/api/workouts/${workoutId}/comments`)
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
                         if (data.comments.length === 0) {
-                            commentsList.innerHTML = '<p class="text-center text-gray-500 py-4">No comments yet</p>';
+                            commentsList.innerHTML = '<div class="text-center text-sm text-gray-500 py-2">No comments yet</div>';
                         } else {
+                            commentsList.innerHTML = '';
                             data.comments.forEach(comment => {
                                 const commentEl = document.createElement('div');
                                 commentEl.className = 'border-b border-gray-100 p-3';
@@ -377,27 +373,32 @@ document.addEventListener('DOMContentLoaded', function() {
                             });
                         }
                     } else {
-                        commentsList.innerHTML = '<p class="text-center text-red-500 py-4">Failed to load comments</p>';
+                        commentsList.innerHTML = '<div class="text-center text-sm text-red-500 py-2">Failed to load comments</div>';
                     }
                 })
                 .catch(error => {
                     console.error('Error:', error);
-                    commentsList.innerHTML = '<p class="text-center text-red-500 py-4">Failed to load comments</p>';
+                    commentsList.innerHTML = '<div class="text-center text-sm text-red-500 py-2">Failed to load comments</div>';
                 });
+            } else {
+                commentsSection.classList.add('hidden');
+            }
         });
     });
     
     // Handle comment form submission
-    const commentForm = document.getElementById('comment-form');
-    if (commentForm) {
-        commentForm.addEventListener('submit', function(e) {
-            e.preventDefault();
-            
-            const workoutId = document.getElementById('workout-id-input').value;
-            const commentText = document.getElementById('comment-input').value.trim();
-            const commentsList = document.getElementById('comments-list');
+    document.querySelectorAll('.submit-comment').forEach(function(button) {
+        button.addEventListener('click', function() {
+            const workoutId = this.getAttribute('data-id');
+            const inputEl = document.getElementById(`comment-input-${workoutId}`);
+            const commentText = inputEl.value.trim();
+            const commentsList = document.getElementById(`comments-list-${workoutId}`);
             
             if (!commentText) return;
+            
+            // Disable button during submission
+            this.disabled = true;
+            this.textContent = 'Posting...';
             
             fetch(`/api/workouts/${workoutId}/comments`, {
                 method: 'POST',
@@ -408,12 +409,16 @@ document.addEventListener('DOMContentLoaded', function() {
             })
             .then(response => response.json())
             .then(data => {
+                // Re-enable button
+                this.disabled = false;
+                this.textContent = 'Post';
+                
                 if (data.success) {
                     // Clear input
-                    document.getElementById('comment-input').value = '';
+                    inputEl.value = '';
                     
                     // Check if "No comments yet" message is displayed
-                    if (commentsList.querySelector('p.text-center.text-gray-500')) {
+                    if (commentsList.querySelector('div.text-center.text-sm.text-gray-500')) {
                         commentsList.innerHTML = '';
                     }
                     
@@ -443,15 +448,18 @@ document.addEventListener('DOMContentLoaded', function() {
                     const commentCount = commentButton.querySelector('span');
                     commentCount.textContent = parseInt(commentCount.textContent || '0') + 1;
                 } else {
-                    alert('Failed to add comment: ' + data.error);
+                    alert('Failed to post comment: ' + (data.error || 'Unknown error'));
                 }
             })
             .catch(error => {
                 console.error('Error:', error);
-                alert('Failed to add comment');
+                // Re-enable button
+                this.disabled = false;
+                this.textContent = 'Post';
+                alert('Failed to post comment. Please try again.');
             });
         });
-    }
+    });
     
     // Close comment modal
     const closeModal = document.querySelector('.close-modal');
