@@ -947,14 +947,14 @@ def get_exercise_details(exercise_id):
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
-@workout.route('/measurements')
+@workout.route('/workout/measurements')
 @login_required
 def measurements():
     """Render the measurements landing page."""
     # Pass the Measurement class to the template context
     return render_template('workout/measurements.html', Measurement=Measurement)
 
-@workout.route('/measurements/<measurement_type>', methods=['GET'])
+@workout.route('/workout/measurements/<measurement_type>', methods=['GET'])
 @login_required
 def track_measurement(measurement_type):
     """Handle displaying measurement tracking pages."""
@@ -992,7 +992,7 @@ def track_measurement(measurement_type):
         limits=valid_types[measurement_type]
     )
 
-@workout.route('/api/weight-data')
+@workout.route('/workout/api/weight-data')
 @login_required
 def get_weight_data():
     range_param = request.args.get('range', '3m')
@@ -1025,7 +1025,7 @@ def get_weight_data():
         'values': values
     })
 
-@workout.route('/api/measurement-data/<measurement_type>')
+@workout.route('/workout/api/measurement-data/<measurement_type>')
 @login_required
 def get_measurement_data(measurement_type):
     range_param = request.args.get('range', '3m')
@@ -1069,7 +1069,7 @@ def get_measurement_data(measurement_type):
         'values': values
     })
 
-@workout.route('/measurements/<measurement_type>', methods=['POST'])
+@workout.route('/workout/measurements/<measurement_type>', methods=['POST'])
 @login_required
 def log_measurement(measurement_type):
     data = request.get_json()
@@ -1167,7 +1167,7 @@ def log_measurement(measurement_type):
     except (TypeError, ValueError) as e:
         return jsonify({'success': False, 'error': f'Invalid value: {str(e)}'}), 400
 
-@workout.route('/delete-measurement/<int:log_id>', methods=['DELETE'])
+@workout.route('/workout/delete-measurement/<int:log_id>', methods=['DELETE'])
 @login_required
 def delete_measurement(log_id):
     """Delete a specific measurement log."""

@@ -1108,6 +1108,7 @@ function completeWorkoutWithData(title, description, rating, notes, photoBase64)
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
+            'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
         },
         body: JSON.stringify(apiData)
     })

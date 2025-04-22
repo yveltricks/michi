@@ -85,154 +85,315 @@
 
     <!-- Workout feed -->
     <div class="workout-feed space-y-6">
-        {% for session in sessions %}
-        <div class="bg-white rounded-lg overflow-hidden shadow-md workout-post" data-workout-id="{{ session.id }}">
-            <!-- Post header -->
-            <div class="p-4 flex items-start justify-between">
-                <div class="flex items-start">
-                    <img src="{{ session.user.profile_pic or url_for('static', filename='default_profile.jpg') }}" 
-                         alt="Profile" class="w-12 h-12 rounded-full mr-4 object-cover">
-                    <div>
-                        <div class="flex items-center">
-                            <h3 class="font-bold text-gray-900">{{ session.user.first_name }} {{ session.user.last_name }}</h3>
-                            <span class="ml-2 text-xs px-2 py-1 bg-blue-100 text-blue-800 rounded-full">Lvl {{ session.user_level }}</span>
-                        </div>
-                        <span class="text-gray-600 text-sm">{{ session.session_date.strftime('%b %d, %Y') }}</span>
-                    </div>
-                </div>
-                
-                {% if session.is_own %}
-                <div class="relative" id="menu-container-{{ session.id }}">
-                    <button class="text-gray-500 hover:text-gray-700 p-1 menu-button" data-id="{{ session.id }}">
-                        <i class="fas fa-ellipsis-h"></i>
-                    </button>
-                    <div class="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-10 hidden menu-dropdown" id="menu-dropdown-{{ session.id }}">
-                        <a href="javascript:void(0)" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center delete-workout" data-id="{{ session.id }}">
-                            <i class="fas fa-trash mr-2"></i> Delete Workout
-                        </a>
-                        <a href="{{ url_for('workout.start_workout') }}?repeat={{ session.id }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center">
-                            <i class="fas fa-redo mr-2"></i> Repeat Workout
-                        </a>
-                    </div>
-                </div>
-                {% endif %}
-            </div>
-            
-            <!-- Post title and description -->
-            <div class="px-4 pb-3">
-                <h4 class="font-bold text-gray-900">{{ session.title }}</h4>
-                {% if session.description %}
-                    <p class="text-gray-700 mt-1">{{ session.description }}</p>
-                {% endif %}
-            </div>
-            
-            <!-- Exercises -->
-            <div class="px-4 pb-4 text-sm text-gray-700">
-                {% for exercise in session.exercises %}
-                    {% if exercise.name is defined %}
-                        <div class="mb-1 flex items-center">
-                            {% if exercise.sets_count is defined %}
-                                {% set sets_count = exercise.sets_count %}
-                            {% elif exercise.sets is defined and exercise.sets is number %}
-                                {% set sets_count = exercise.sets %}
-                            {% elif exercise is mapping and exercise.sets is defined and exercise.sets is iterable and exercise.sets is not string %}
-                                {% set sets_count = exercise.sets|length %}
-                            {% else %}
-                                {% set sets_count = 1 %}
-                            {% endif %}
-                            
-                            {{ sets_count }} {% if sets_count == 1 %}set{% else %}sets{% endif %}&nbsp;
-                            <a href="{{ url_for('workout.view_exercise', exercise_id=exercise.id) }}" class="text-blue-600 hover:text-blue-800">
-                                {{ exercise.name }}
-                            </a>
-                            
-                            {% if exercise.comparison is defined %}
-                                {% if exercise.comparison == 1 %}
-                                    <span class="ml-2 text-green-500"><i class="fas fa-arrow-up"></i></span>
-                                {% elif exercise.comparison == -1 %}
-                                    <span class="ml-2 text-red-500"><i class="fas fa-arrow-down"></i></span>
+        <!-- Home feed (followed users' sessions) -->
+        <div id="home-feed" style="display: block;">
+            {% if following_sessions %}
+                {% for session in following_sessions %}
+                <div class="bg-white rounded-lg overflow-hidden shadow-md workout-post" data-workout-id="{{ session.id }}">
+                    <!-- Post header -->
+                    <div class="p-4 flex items-start justify-between">
+                        <div class="flex items-start">
+                            <a href="{{ url_for('auth.profile', username=session.user.username) }}">
+                                {% if session.user.profile_pic %}
+                                <img src="{{ session.user.profile_pic }}" 
+                                     alt="Profile" class="w-12 h-12 rounded-full mr-4 object-cover">
+                                {% else %}
+                                <div class="w-12 h-12 rounded-full mr-4 flex items-center justify-center bg-gray-500 text-white">
+                                    {{ session.user.username[0]|upper }}
+                                </div>
                                 {% endif %}
+                            </a>
+                            <div>
+                                <div class="flex items-center">
+                                    <a href="{{ url_for('auth.profile', username=session.user.username) }}" class="font-bold text-gray-900">
+                                        {{ session.user.first_name }} {{ session.user.last_name }}
+                                    </a>
+                                    <span class="ml-2 text-xs px-2 py-1 bg-blue-100 text-blue-800 rounded-full">Lvl {{ session.user_level }}</span>
+                                </div>
+                                <span class="text-gray-600 text-sm">{{ session.session_date.strftime('%b %d, %Y') }}</span>
+                            </div>
+                        </div>
+                        
+                        {% if session.is_own %}
+                        <div class="relative" id="menu-container-{{ session.id }}">
+                            <button class="text-gray-500 hover:text-gray-700 p-1 menu-button" data-id="{{ session.id }}">
+                                <i class="fas fa-ellipsis-h"></i>
+                            </button>
+                            <div class="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-10 hidden menu-dropdown" id="menu-dropdown-{{ session.id }}">
+                                <a href="javascript:void(0)" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center delete-workout" data-id="{{ session.id }}">
+                                    <i class="fas fa-trash mr-2"></i> Delete Workout
+                                </a>
+                                <a href="{{ url_for('workout.start_workout') }}?repeat={{ session.id }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center">
+                                    <i class="fas fa-redo mr-2"></i> Repeat Workout
+                                </a>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Post title and description -->
+                    <div class="px-4 pb-3">
+                        <h4 class="font-bold text-gray-900">{{ session.title }}</h4>
+                        {% if session.description %}
+                            <p class="text-gray-700 mt-1">{{ session.description }}</p>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Exercises -->
+                    <div class="px-4 pb-4 text-sm text-gray-700">
+                        {% for exercise in session.exercises %}
+                            {% if exercise.name is defined %}
+                                <div class="mb-1 flex items-center">
+                                    {% if exercise.sets_count is defined %}
+                                        {% set sets_count = exercise.sets_count %}
+                                    {% elif exercise.sets is defined and exercise.sets is number %}
+                                        {% set sets_count = exercise.sets %}
+                                    {% elif exercise is mapping and exercise.sets is defined and exercise.sets is iterable and exercise.sets is not string %}
+                                        {% set sets_count = exercise.sets|length %}
+                                    {% else %}
+                                        {% set sets_count = 1 %}
+                                    {% endif %}
+                                    
+                                    {{ sets_count }} {% if sets_count == 1 %}set{% else %}sets{% endif %}&nbsp;
+                                    <a href="{{ url_for('workout.view_exercise', exercise_id=exercise.id) }}" class="text-blue-600 hover:text-blue-800">
+                                        {{ exercise.name }}
+                                    </a>
+                                    
+                                    {% if exercise.comparison is defined %}
+                                        {% if exercise.comparison == 1 %}
+                                            <span class="ml-2 text-green-500"><i class="fas fa-arrow-up"></i></span>
+                                        {% elif exercise.comparison == -1 %}
+                                            <span class="ml-2 text-red-500"><i class="fas fa-arrow-down"></i></span>
+                                        {% endif %}
+                                    {% endif %}
+                                </div>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                    
+                    <!-- Workout photo -->
+                    {% if session.photo %}
+                    <div class="workout-photo mb-3">
+                        <img src="{{ session.photo }}" alt="Workout photo" class="w-full h-auto max-h-60 object-contain rounded-md">
+                    </div>
+                    {% endif %}
+
+                    <!-- Workout stats -->
+                    <div class="flex justify-between p-4 bg-gray-50 text-sm">
+                        <div class="flex items-center text-gray-700">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            {% if session.duration is defined %}
+                                {{ session.duration|default(0)|format_duration }}
+                            {% else %}
+                                0 min
                             {% endif %}
                         </div>
-                    {% endif %}
+                        <div class="flex items-center text-gray-700">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2" />
+                            </svg>
+                            {{ session.volume|default(0)|round(1) }}{{ current_user.preferred_weight_unit }}
+                        </div>
+                        <div class="flex items-center text-gray-700">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                            </svg>
+                            {{ session.session_rating }}/5
+                        </div>
+                    </div>
+                    
+                    <!-- Social interaction section -->
+                    <div class="px-4 py-2 border-t border-gray-100">
+                        <div class="flex justify-between">
+                            <div class="flex space-x-4">
+                                <button class="flex items-center space-x-1 text-gray-500 hover:text-blue-500 like-button {% if session.user_liked %}text-blue-500{% endif %}" data-id="{{ session.id }}">
+                                    <i class="{% if session.user_liked %}fas{% else %}far{% endif %} fa-thumbs-up"></i>
+                                    <span class="like-count">{{ session.like_count }}</span>
+                                </button>
+                                <button class="flex items-center space-x-1 text-gray-500 hover:text-blue-500 comment-button" data-id="{{ session.id }}">
+                                    <i class="far fa-comment"></i>
+                                    <span>{{ session.comment_count }}</span>
+                                </button>
+                            </div>
+                            <a href="{{ url_for('workout.view_session', session_id=session.id) }}" class="text-blue-500 hover:text-blue-700">
+                                View Details
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                {% else %}
+                <div class="bg-white rounded-lg p-8 text-center shadow-md">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                    <h3 class="mt-2 text-lg font-medium text-gray-900">No workouts yet</h3>
+                    <p class="mt-1 text-sm text-gray-500">Follow other users to see their workouts in your feed!</p>
+                    <div class="mt-6">
+                        <a href="{{ url_for('auth.search_users') }}" class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                            Find Users to Follow
+                        </a>
+                    </div>
+                </div>
                 {% endfor %}
-            </div>
-            
-            <!-- Workout photo -->
-            {% if session.photo %}
-            <div class="workout-photo mb-3">
-                <img src="{{ session.photo }}" alt="Workout photo" class="w-full h-auto max-h-60 object-contain rounded-md">
+            {% else %}
+            <div class="bg-white rounded-lg p-8 text-center shadow-md">
+                <svg xmlns="http://www.w3.org/2000/svg" class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                </svg>
+                <h3 class="mt-2 text-lg font-medium text-gray-900">No workouts yet</h3>
+                <p class="mt-1 text-sm text-gray-500">Follow other users to see their workouts in your feed!</p>
+                <div class="mt-6">
+                    <a href="{{ url_for('auth.search_users') }}" class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                        Find Users to Follow
+                    </a>
+                </div>
             </div>
             {% endif %}
-
-            <!-- Workout stats -->
-            <div class="flex justify-between p-4 bg-gray-50 text-sm">
-                <div class="flex items-center text-gray-700">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    {% if session.duration is defined %}
-                        {{ session.duration|default(0)|format_duration }}
-                    {% else %}
-                        0 min
+        </div>
+        
+        <!-- Discover feed (all public sessions) -->
+        <div id="discover-feed" style="display: none;">
+            {% for session in public_sessions %}
+            <div class="bg-white rounded-lg overflow-hidden shadow-md workout-post" data-workout-id="{{ session.id }}">
+                <!-- Post header -->
+                <div class="p-4 flex items-start justify-between">
+                    <div class="flex items-start">
+                        <a href="{{ url_for('auth.profile', username=session.user.username) }}">
+                            {% if session.user.profile_pic %}
+                            <img src="{{ session.user.profile_pic }}" 
+                                 alt="Profile" class="w-12 h-12 rounded-full mr-4 object-cover">
+                            {% else %}
+                            <div class="w-12 h-12 rounded-full mr-4 flex items-center justify-center bg-gray-500 text-white">
+                                {{ session.user.username[0]|upper }}
+                            </div>
+                            {% endif %}
+                        </a>
+                        <div>
+                            <div class="flex items-center">
+                                <a href="{{ url_for('auth.profile', username=session.user.username) }}" class="font-bold text-gray-900">
+                                    {{ session.user.first_name }} {{ session.user.last_name }}
+                                </a>
+                                <span class="ml-2 text-xs px-2 py-1 bg-blue-100 text-blue-800 rounded-full">Lvl {{ session.user_level }}</span>
+                            </div>
+                            <span class="text-gray-600 text-sm">{{ session.session_date.strftime('%b %d, %Y') }}</span>
+                        </div>
+                    </div>
+                    
+                    {% if session.is_own %}
+                    <div class="relative" id="menu-container-{{ session.id }}">
+                        <button class="text-gray-500 hover:text-gray-700 p-1 menu-button" data-id="{{ session.id }}">
+                            <i class="fas fa-ellipsis-h"></i>
+                        </button>
+                        <div class="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-10 hidden menu-dropdown" id="menu-dropdown-{{ session.id }}">
+                            <a href="javascript:void(0)" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center delete-workout" data-id="{{ session.id }}">
+                                <i class="fas fa-trash mr-2"></i> Delete Workout
+                            </a>
+                            <a href="{{ url_for('workout.start_workout') }}?repeat={{ session.id }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center">
+                                <i class="fas fa-redo mr-2"></i> Repeat Workout
+                            </a>
+                        </div>
+                    </div>
                     {% endif %}
                 </div>
-                <div class="flex items-center text-gray-700">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2" />
-                    </svg>
-                    {{ session.volume|default(0)|round(1) }}{{ current_user.preferred_weight_unit }}
-                </div>
-                <div class="flex items-center text-gray-700">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
-                    </svg>
-                    {{ session.session_rating }}/5
-                </div>
-            </div>
-            
-            <!-- Social interaction section -->
-            <div class="px-4 py-2 border-t border-gray-100">
-                <div class="flex justify-between">
-                    <div class="flex space-x-4">
-                        <button class="flex items-center space-x-1 text-gray-500 hover:text-blue-500 like-button {% if session.user_liked %}text-blue-500{% endif %}" data-id="{{ session.id }}">
-                            <i class="{% if session.user_liked %}fas{% else %}far{% endif %} fa-thumbs-up"></i>
-                            <span class="like-count">{{ session.like_count }}</span>
-                        </button>
-                        <button class="flex items-center space-x-1 text-gray-500 hover:text-blue-500 comment-button" data-id="{{ session.id }}">
-                            <i class="far fa-comment"></i>
-                            <span>{{ session.comment_count }}</span>
-                        </button>
-                    </div>
+                
+                <!-- Post title and description -->
+                <div class="px-4 pb-3">
+                    <h4 class="font-bold text-gray-900">{{ session.title }}</h4>
+                    {% if session.description %}
+                        <p class="text-gray-700 mt-1">{{ session.description }}</p>
+                    {% endif %}
                 </div>
                 
-                <!-- Comments section (hidden by default) -->
-                <div class="mt-3 hidden comments-section" id="comments-{{ session.id }}">
-                    <div class="comments-list space-y-2 mb-3" id="comments-list-{{ session.id }}">
-                        <!-- Comments will be loaded dynamically -->
-                        <div class="text-center text-sm text-gray-500 py-2">Loading comments...</div>
-                    </div>
-                    <div class="flex items-center space-x-2">
-                        <input type="text" class="flex-grow p-2 border rounded-lg text-sm comment-input" id="comment-input-{{ session.id }}" placeholder="Write a comment...">
-                        <button class="bg-blue-500 text-white px-3 py-2 rounded-lg text-sm submit-comment" data-id="{{ session.id }}">Post</button>
-                    </div>
+                <!-- Exercises -->
+                <div class="px-4 pb-4 text-sm text-gray-700">
+                    {% for exercise in session.exercises %}
+                        {% if exercise.name is defined %}
+                            <div class="mb-1 flex items-center">
+                                {% if exercise.sets_count is defined %}
+                                    {% set sets_count = exercise.sets_count %}
+                                {% elif exercise.sets is defined and exercise.sets is number %}
+                                    {% set sets_count = exercise.sets %}
+                                {% elif exercise is mapping and exercise.sets is defined and exercise.sets is iterable and exercise.sets is not string %}
+                                    {% set sets_count = exercise.sets|length %}
+                                {% else %}
+                                    {% set sets_count = 1 %}
+                                {% endif %}
+                                
+                                {{ sets_count }} {% if sets_count == 1 %}set{% else %}sets{% endif %}&nbsp;
+                                <a href="{{ url_for('workout.view_exercise', exercise_id=exercise.id) }}" class="text-blue-600 hover:text-blue-800">
+                                    {{ exercise.name }}
+                                </a>
+                                
+                                {% if exercise.comparison is defined %}
+                                    {% if exercise.comparison == 1 %}
+                                        <span class="ml-2 text-green-500"><i class="fas fa-arrow-up"></i></span>
+                                    {% elif exercise.comparison == -1 %}
+                                        <span class="ml-2 text-red-500"><i class="fas fa-arrow-down"></i></span>
+                                    {% endif %}
+                                {% endif %}
+                            </div>
+                        {% endif %}
+                    {% endfor %}
                 </div>
-            </div>
-
-            <!-- Repeat workout button -->
-            <div class="flex justify-between pt-4">
-                <a href="{{ url_for('workout.view_session', session_id=session.id) }}" class="text-blue-600 hover:text-blue-800">
-                    <i class="fas fa-eye mr-1"></i> View Details
-                </a>
                 
-                {% if session.user_id == current_user.id %}
-                <a href="{{ url_for('workout.start_workout') }}?repeat={{ session.id }}" class="text-green-600 hover:text-green-800">
-                    <i class="fas fa-redo mr-1"></i> Repeat Workout
-                </a>
+                <!-- Workout photo -->
+                {% if session.photo %}
+                <div class="workout-photo mb-3">
+                    <img src="{{ session.photo }}" alt="Workout photo" class="w-full h-auto max-h-60 object-contain rounded-md">
+                </div>
                 {% endif %}
+
+                <!-- Workout stats -->
+                <div class="flex justify-between p-4 bg-gray-50 text-sm">
+                    <div class="flex items-center text-gray-700">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        {% if session.duration is defined %}
+                            {{ session.duration|default(0)|format_duration }}
+                        {% else %}
+                            0 min
+                        {% endif %}
+                    </div>
+                    <div class="flex items-center text-gray-700">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2" />
+                        </svg>
+                        {{ session.volume|default(0)|round(1) }}{{ current_user.preferred_weight_unit }}
+                    </div>
+                    <div class="flex items-center text-gray-700">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                        </svg>
+                        {{ session.session_rating }}/5
+                    </div>
+                </div>
+                
+                <!-- Social interaction section -->
+                <div class="px-4 py-2 border-t border-gray-100">
+                    <div class="flex justify-between">
+                        <div class="flex space-x-4">
+                            <button class="flex items-center space-x-1 text-gray-500 hover:text-blue-500 like-button {% if session.user_liked %}text-blue-500{% endif %}" data-id="{{ session.id }}">
+                                <i class="{% if session.user_liked %}fas{% else %}far{% endif %} fa-thumbs-up"></i>
+                                <span class="like-count">{{ session.like_count }}</span>
+                            </button>
+                            <button class="flex items-center space-x-1 text-gray-500 hover:text-blue-500 comment-button" data-id="{{ session.id }}">
+                                <i class="far fa-comment"></i>
+                                <span>{{ session.comment_count }}</span>
+                            </button>
+                        </div>
+                        <a href="{{ url_for('workout.view_session', session_id=session.id) }}" class="text-blue-500 hover:text-blue-700">
+                            View Details
+                        </a>
+                    </div>
+                </div>
             </div>
+            {% endfor %}
         </div>
-        {% endfor %}
     </div>
 
     <!-- Notification panel (hidden by default) -->
@@ -260,6 +421,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // Tab switching
     const tabHome = document.getElementById('tab-home');
     const tabDiscover = document.getElementById('tab-discover');
+    const homeFeed = document.getElementById('home-feed');
+    const discoverFeed = document.getElementById('discover-feed');
     
     if (tabHome && tabDiscover) {
         tabHome.addEventListener('click', function() {
@@ -267,7 +430,10 @@ document.addEventListener('DOMContentLoaded', function() {
             tabHome.classList.remove('bg-gray-50');
             tabDiscover.classList.remove('active', 'bg-white');
             tabDiscover.classList.add('bg-gray-50');
-            // Implement feed filtering if needed
+            
+            // Show home feed, hide discover feed
+            homeFeed.style.display = 'block';
+            discoverFeed.style.display = 'none';
         });
         
         tabDiscover.addEventListener('click', function() {
@@ -275,7 +441,10 @@ document.addEventListener('DOMContentLoaded', function() {
             tabDiscover.classList.remove('bg-gray-50');
             tabHome.classList.remove('active', 'bg-white');
             tabHome.classList.add('bg-gray-50');
-            // Implement feed filtering if needed
+            
+            // Show discover feed, hide home feed
+            discoverFeed.style.display = 'block';
+            homeFeed.style.display = 'none';
         });
     }
     
@@ -298,7 +467,8 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     // Handle likes
-    document.querySelectorAll('.like-button').forEach(function(button) {
+    const likeButtons = document.querySelectorAll('.like-button');
+    likeButtons.forEach(button => {
         button.addEventListener('click', function() {
             const workoutId = this.getAttribute('data-id');
             const likeIcon = this.querySelector('i');
@@ -307,7 +477,8 @@ document.addEventListener('DOMContentLoaded', function() {
             fetch(`/api/workouts/${workoutId}/like`, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
                 }
             })
             .then(response => response.json())
@@ -316,148 +487,53 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (data.liked) {
                         likeIcon.classList.remove('far');
                         likeIcon.classList.add('fas');
+                        this.classList.add('text-blue-500');
                     } else {
                         likeIcon.classList.remove('fas');
                         likeIcon.classList.add('far');
+                        this.classList.remove('text-blue-500');
                     }
                     likeCount.textContent = data.like_count;
                 }
             })
-            .catch(error => {
-                console.error('Error:', error);
-            });
+            .catch(error => console.error('Error:', error));
         });
     });
     
-    // Handle comments
-    document.querySelectorAll('.comment-button').forEach(function(button) {
+    // Handle comments toggle
+    const commentButtons = document.querySelectorAll('.comment-button');
+    commentButtons.forEach(button => {
         button.addEventListener('click', function() {
             const workoutId = this.getAttribute('data-id');
-            const commentsSection = document.getElementById(`comments-${workoutId}`);
-            const commentsList = document.getElementById(`comments-list-${workoutId}`);
-            
-            if (commentsSection.classList.contains('hidden')) {
-                commentsSection.classList.remove('hidden');
-                
-                // Show loading state
-                commentsList.innerHTML = '<div class="text-center text-sm text-gray-500 py-2">Loading comments...</div>';
-                
-                // Load comments
-                fetch(`/api/workouts/${workoutId}/comments`)
+            window.location.href = `/workout/session/${workoutId}`;
+        });
+    });
+    
+    // Handle delete workout
+    const deleteButtons = document.querySelectorAll('.delete-workout');
+    deleteButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            const workoutId = this.getAttribute('data-id');
+            if (confirm('Are you sure you want to delete this workout?')) {
+                fetch(`/api/workouts/${workoutId}/delete`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
-                        if (data.comments.length === 0) {
-                            commentsList.innerHTML = '<div class="text-center text-sm text-gray-500 py-2">No comments yet</div>';
-                        } else {
-                            commentsList.innerHTML = '';
-                            data.comments.forEach(comment => {
-                                const commentEl = document.createElement('div');
-                                commentEl.className = 'border-b border-gray-100 p-3';
-                                commentEl.innerHTML = `
-                                    <div class="flex items-start">
-                                        <div class="flex-shrink-0 mr-3">
-                                            ${comment.profile_pic ? 
-                                                `<img src="${comment.profile_pic}" alt="${comment.user_name}" class="w-8 h-8 rounded-full">` :
-                                                `<div class="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white">${comment.user_name[0]}</div>`
-                                            }
-                                        </div>
-                                        <div>
-                                            <div class="font-semibold">${comment.user_name}</div>
-                                            <div class="text-sm text-gray-500">${new Date(comment.created_at).toLocaleString()}</div>
-                                            <div class="mt-1">${comment.text}</div>
-                                        </div>
-                                    </div>
-                                `;
-                                commentsList.appendChild(commentEl);
-                            });
+                        // Remove the workout from the DOM
+                        const workoutPost = document.querySelector(`.workout-post[data-workout-id="${workoutId}"]`);
+                        if (workoutPost) {
+                            workoutPost.remove();
                         }
-                    } else {
-                        commentsList.innerHTML = '<div class="text-center text-sm text-red-500 py-2">Failed to load comments</div>';
                     }
                 })
-                .catch(error => {
-                    console.error('Error:', error);
-                    commentsList.innerHTML = '<div class="text-center text-sm text-red-500 py-2">Failed to load comments</div>';
-                });
-            } else {
-                commentsSection.classList.add('hidden');
+                .catch(error => console.error('Error:', error));
             }
-        });
-    });
-    
-    // Handle comment form submission
-    document.querySelectorAll('.submit-comment').forEach(function(button) {
-        button.addEventListener('click', function() {
-            const workoutId = this.getAttribute('data-id');
-            const inputEl = document.getElementById(`comment-input-${workoutId}`);
-            const commentText = inputEl.value.trim();
-            const commentsList = document.getElementById(`comments-list-${workoutId}`);
-            
-            if (!commentText) return;
-            
-            // Disable button during submission
-            this.disabled = true;
-            this.textContent = 'Posting...';
-            
-            fetch(`/api/workouts/${workoutId}/comments`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ comment: commentText })
-            })
-            .then(response => response.json())
-            .then(data => {
-                // Re-enable button
-                this.disabled = false;
-                this.textContent = 'Post';
-                
-                if (data.success) {
-                    // Clear input
-                    inputEl.value = '';
-                    
-                    // Check if "No comments yet" message is displayed
-                    if (commentsList.querySelector('div.text-center.text-sm.text-gray-500')) {
-                        commentsList.innerHTML = '';
-                    }
-                    
-                    // Add new comment to the list
-                    const comment = data.comment;
-                    const commentEl = document.createElement('div');
-                    commentEl.className = 'border-b border-gray-100 p-3';
-                    commentEl.innerHTML = `
-                        <div class="flex items-start">
-                            <div class="flex-shrink-0 mr-3">
-                                ${comment.profile_pic ? 
-                                    `<img src="${comment.profile_pic}" alt="${comment.user_name}" class="w-8 h-8 rounded-full">` :
-                                    `<div class="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white">${comment.user_name[0]}</div>`
-                                }
-                            </div>
-                            <div>
-                                <div class="font-semibold">${comment.user_name}</div>
-                                <div class="text-sm text-gray-500">${new Date(comment.created_at).toLocaleString()}</div>
-                                <div class="mt-1">${comment.text}</div>
-                            </div>
-                        </div>
-                    `;
-                    commentsList.appendChild(commentEl);
-                    
-                    // Update comment count
-                    const commentButton = document.querySelector(`.comment-button[data-id="${workoutId}"]`);
-                    const commentCount = commentButton.querySelector('span');
-                    commentCount.textContent = parseInt(commentCount.textContent || '0') + 1;
-                } else {
-                    alert('Failed to post comment: ' + (data.error || 'Unknown error'));
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                // Re-enable button
-                this.disabled = false;
-                this.textContent = 'Post';
-                alert('Failed to post comment. Please try again.');
-            });
         });
     });
     

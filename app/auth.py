@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, redirect, url_for, request, flash, jsonify
 from flask_login import login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
-from .models import User, Session, Measurement, Workout, Exercise, WorkoutLike, WorkoutComment, Notification, Set
+from .models import User, Session, Measurement, Workout, Exercise, WorkoutLike, WorkoutComment, Notification, Set, FollowRequest
 from sqlalchemy import desc
 from . import db
 from datetime import datetime, timedelta
@@ -9,7 +9,7 @@ from dataclasses import dataclass
 import re
 import json
 from .workout import calculate_workout_metrics  # Import the function from workout.py
-from .utils import convert_volume_to_preferred_unit, calculate_weekly_stats, compare_exercise_progress
+from .utils import convert_volume_to_preferred_unit, calculate_weekly_stats, compare_exercise_progress, parse_duration
 from werkzeug.utils import secure_filename
 import os
 
@@ -55,16 +55,16 @@ def validate_weight(weight_value, unit='kg'):
 @login_required
 def home():
     """Home page route"""
-    # Get recent workouts
+    # Get recent workouts for the current user
     recent_workouts = Workout.query.filter_by(user_id=current_user.id).order_by(Workout.date.desc()).limit(10).all()
     
-    # Get followed users' workouts
+    # Get followed users' workouts for "Home" feed
     followed_users = current_user.following.all()
-    followed_user_ids = [user.id for user in followed_users]
-    followed_workouts = Workout.query.filter(Workout.user_id.in_(followed_user_ids)).order_by(Workout.date.desc()).limit(10).all()
+    followed_user_ids = [user.id for user in followed_users] + [current_user.id]  # Include own posts
+    following_sessions = Session.query.filter(Session.user_id.in_(followed_user_ids)).order_by(Session.session_date.desc()).limit(10).all()
     
-    # Get recent sessions (completed workouts)
-    recent_sessions = Session.query.filter_by(user_id=current_user.id).order_by(Session.session_date.desc()).limit(10).all()
+    # Get all users' public workouts for "Discover" feed (excluding those already shown in Home feed)
+    public_sessions = Session.query.filter(~Session.user_id.in_(followed_user_ids)).order_by(Session.session_date.desc()).limit(10).all()
     
     # Calculate weekly stats
     weekly_stats = calculate_weekly_stats(current_user.id)
@@ -86,11 +86,29 @@ def home():
             'total_exp': 0
         }
     
-    # Process each workout to get additional data
-    combined_sessions = []
+    # Process following sessions for display
+    processed_following_sessions = process_sessions_for_display(following_sessions, current_user)
     
-    # Process recent sessions first
-    for session in recent_sessions:
+    # Process public sessions for display
+    processed_public_sessions = process_sessions_for_display(public_sessions, current_user)
+    
+    # Get unread notification count
+    unread_notification_count = Notification.query.filter_by(
+        user_id=current_user.id,
+        is_read=False
+    ).count()
+    
+    return render_template('home.html', 
+                          following_sessions=processed_following_sessions,
+                          public_sessions=processed_public_sessions,
+                          weekly_stats=weekly_stats,
+                          unread_notification_count=unread_notification_count)
+
+def process_sessions_for_display(sessions, current_user):
+    """Process a list of sessions for display in the feed"""
+    processed_sessions = []
+    
+    for session in sessions:
         try:
             # Get all sets for this session
             sets = Set.query.filter_by(session_id=session.id).all()
@@ -112,7 +130,7 @@ def home():
                 # Compare this exercise with the previous session's performance
                 comparison = 0  # Default to no change
                 try:
-                    comparison = compare_exercise_progress(session.id, current_user.id)
+                    comparison = compare_exercise_progress(session.id, session.user_id)
                     if exercise_id in comparison:
                         comparison = comparison[exercise_id]
                     else:
@@ -140,17 +158,22 @@ def home():
             # Get comment count
             comment_count = WorkoutComment.query.filter_by(workout_id=session.id).count()
             
+            # Get user for this session
+            user = User.query.get(session.user_id)
+            if not user:
+                continue
+                
             # Get user level
-            user_level = current_user.level
+            user_level = user.level
             
-            combined_sessions.append({
+            processed_sessions.append({
                 'id': session.id,
                 'session_date': session.session_date,
                 'title': session.title,
                 'description': session.description,
                 'exercises': exercises,
-                'user': current_user,
-                'is_own': True,
+                'user': user,
+                'is_own': session.user_id == current_user.id,
                 'duration': session.duration,
                 'volume': convert_volume_to_preferred_unit(session.volume, current_user.preferred_weight_unit),
                 'session_rating': session.session_rating,
@@ -161,22 +184,10 @@ def home():
                 'photo': session.photo
             })
         except Exception as e:
-            print(f"Error processing recent session: {e}")
+            print(f"Error processing session for feed: {e}")
             continue
     
-    # Sort combined sessions by date
-    combined_sessions.sort(key=lambda x: x['session_date'], reverse=True)
-    
-    # Get unread notification count
-    unread_notification_count = Notification.query.filter_by(
-        user_id=current_user.id,
-        is_read=False
-    ).count()
-    
-    return render_template('home.html', 
-                          sessions=combined_sessions, 
-                          weekly_stats=weekly_stats,
-                          unread_notification_count=unread_notification_count)
+    return processed_sessions
 
 def calculate_user_level_at_time(user_id, date):
     """Calculate what level a user was at a given time"""
@@ -706,6 +717,13 @@ def profile(username=None):
     else:
         user = User.query.filter_by(username=username).first_or_404()
     
+    # Check if the profile is private and not the current user
+    if user.id != current_user.id and user.privacy_setting == 'private':
+        # Check if current user is following this private account
+        if not current_user.is_following(user):
+            # Return a special template for private accounts that the user is not following
+            return render_template('private_profile.html', user=user)
+    
     # Get workout count
     workout_count = Workout.query.filter_by(user_id=user.id).count()
     
@@ -754,16 +772,7 @@ def profile(username=None):
         Session.session_date >= three_months_ago
     ).group_by('date').order_by('date').all()
     
-    # Get data for reps chart
-    reps_data = db.session.query(
-        db.func.strftime('%Y-%m-%d', Session.session_date).label('date'),
-        db.func.sum(Session.total_reps).label('reps')
-    ).filter(
-        Session.user_id == user.id,
-        Session.session_date >= three_months_ago
-    ).group_by('date').order_by('date').all()
-    
-    # Get data for EXP chart
+    # Get data for experience chart
     exp_data = db.session.query(
         db.func.strftime('%Y-%m-%d', Session.session_date).label('date'),
         db.func.sum(Session.exp_gained).label('exp')
@@ -772,19 +781,50 @@ def profile(username=None):
         Session.session_date >= three_months_ago
     ).group_by('date').order_by('date').all()
     
-    # Format chart data for JavaScript
+    # Prepare data for the chart
+    dates = [data[0] for data in volume_data]
+    volumes = [float(data[1] or 0) for data in volume_data]
+    
+    # Convert volume to user's preferred unit
+    volumes = [convert_volume_to_preferred_unit(v, user.preferred_weight_unit) for v in volumes]
+    
+    # Prepare duration data
+    duration_dates = [data[0] for data in duration_data]
+    durations = [int(data[1] or 0) for data in duration_data]
+    
+    # Prepare exp data
+    exp_dates = [data[0] for data in exp_data]
+    exps = [int(data[1] or 0) for data in exp_data]
+    
+    # Get total reps data
+    reps_data = db.session.query(
+        db.func.strftime('%Y-%m-%d', Session.session_date).label('date'),
+        db.func.sum(Session.total_reps).label('reps')
+    ).filter(
+        Session.user_id == user.id,
+        Session.session_date >= three_months_ago
+    ).group_by('date').order_by('date').all()
+    
+    # Prepare reps data
+    reps_dates = [data[0] for data in reps_data]
+    reps = [int(data[1] or 0) for data in reps_data]
+    
+    # Combine all data for the chart
     chart_data = {
-        'dates': [str(date) for date, _ in volume_data],
-        'volume': [float(volume) for _, volume in volume_data],
-        'duration': [float(duration) for _, duration in duration_data],
-        'reps': [int(reps) if reps else 0 for _, reps in reps_data],
-        'exp': [int(exp) if exp else 0 for _, exp in exp_data]
+        'dates': dates,
+        'volumes': volumes,
+        'duration_dates': duration_dates,
+        'durations': durations,
+        'exp_dates': exp_dates,
+        'exps': exps,
+        'reps_dates': reps_dates,
+        'reps': reps
     }
     
-    # Get user's recent workouts
-    recent_workouts = Session.query.filter_by(user_id=user.id).order_by(Session.session_date.desc()).limit(5).all()
+    # Get recent workouts for this user
+    recent_workouts = Session.query.filter_by(user_id=user.id).order_by(Session.session_date.desc()).limit(10).all()
     
-    # Process each workout to get additional data
+    # Process the workouts for display
     processed_workouts = []
     
     for session in recent_workouts:
@@ -843,49 +883,30 @@ def profile(username=None):
                 'title': session.title,
                 'description': session.description,
                 'exercises': exercises,
-                'user': user,
-                'is_own': user.id == current_user.id,
+                'is_own': session.user_id == current_user.id,
                 'duration': session.duration,
                 'volume': convert_volume_to_preferred_unit(session.volume, user.preferred_weight_unit),
                 'session_rating': session.session_rating,
                 'like_count': like_count,
                 'user_liked': user_liked,
                 'comment_count': comment_count,
-                'user_level': user.level,
                 'photo': session.photo
             })
         except Exception as e:
-            print(f"Error processing workout: {e}")
+            print(f"Error processing workout for profile: {e}")
             continue
     
-    # Get unread notification count
+    # Get unread notification count for the navbar
     unread_notification_count = Notification.query.filter_by(
         user_id=current_user.id,
         is_read=False
     ).count()
     
-    # Get best lifts
-    best_lifts = {}
+    # Get best lifts for this user
+    best_lifts = []
     
-    # Find all exercises with input_type containing 'weight' and 'reps'
-    weight_reps_exercises = Exercise.query.filter(
-        Exercise.input_type.like('%weight%'),
-        Exercise.input_type.like('%reps%')
-    ).all()
-    
-    for exercise in weight_reps_exercises:
-        # Find the highest weight for this exercise
-        best_set = Set.query.join(Session).filter(
-            Set.exercise_id == exercise.id,
-            Session.user_id == user.id,
-            Session.session_date >= three_months_ago
-        ).order_by(Set.weight.desc()).first()
-        
-        if best_set and best_set.weight > 0:
-            best_lifts[exercise.name] = f"{convert_volume_to_preferred_unit(best_set.weight, user.preferred_weight_unit)}{user.preferred_weight_unit}"
-    
-    # Calculate user account age
-    account_age = (datetime.now() - user.created_at).days if user.created_at else 0
+    # Calculate account age in days
+    account_age = (datetime.now() - user.created_at).days
     
     # Format account age in a human-readable way
     if account_age == 0:
@@ -915,135 +936,140 @@ def profile(username=None):
                           account_age_str=account_age_str)
 
 @auth.route('/statistics')
+@auth.route('/statistics/<username>')
 @login_required
-def statistics():
-    """User statistics page"""
-    user = current_user
+def statistics(username=None):
+    """Show user statistics page"""
+    if username is None:
+        user = current_user
+    else:
+        user = User.query.filter_by(username=username).first_or_404()
+
+    # Check privacy settings - only allow viewing if it's the current user or the profile is public
+    if user.id != current_user.id and user.privacy_setting == 'private':
+        flash('This user\'s profile is private', 'error')
+        return redirect(url_for('auth.home'))
+
+    # Get user's workouts
+    workouts = Workout.query.filter_by(user_id=user.id).all()
     
-    # Calculate yearly stats
-    this_year_start = datetime(datetime.now().year, 1, 1)
+    # Get user's sessions
+    sessions = Session.query.filter_by(user_id=user.id).all()
     
-    # Workout count for this year
-    yearly_workout_count = Session.query.filter(
+    # Process data for statistics
+    # Get user activity for the last 3 months
+    three_months_ago = datetime.now() - timedelta(days=90)
+    
+    # Get data for volume chart
+    volume_data = db.session.query(
+        db.func.strftime('%Y-%m-%d', Session.session_date).label('date'),
+        db.func.sum(Session.volume).label('volume')
+    ).filter(
         Session.user_id == user.id,
-        Session.session_date >= this_year_start
-    ).count()
+        Session.session_date >= three_months_ago
+    ).group_by('date').order_by('date').all()
     
-    # Total EXP gained this year
-    yearly_exp = db.session.query(db.func.sum(Session.exp_gained)).filter(
+    # Get data for duration chart
+    duration_data = db.session.query(
+        db.func.strftime('%Y-%m-%d', Session.session_date).label('date'),
+        db.func.sum(db.func.coalesce(Session.duration, '0')).label('duration')
+    ).filter(
         Session.user_id == user.id,
-        Session.session_date >= this_year_start
-    ).scalar() or 0
+        Session.session_date >= three_months_ago
+    ).group_by('date').order_by('date').all()
     
-    # Total levels gained this year (approximation)
-    yearly_levels = yearly_exp // 100
-    
-    # Total workout duration this year
-    total_duration_seconds = db.session.query(db.func.sum(db.func.extract('epoch', db.func.cast(Session.duration, db.Time)))).filter(
+    # Get data for experience chart
+    exp_data = db.session.query(
+        db.func.strftime('%Y-%m-%d', Session.session_date).label('date'),
+        db.func.sum(Session.exp_gained).label('exp')
+    ).filter(
         Session.user_id == user.id,
-        Session.session_date >= this_year_start
-    ).scalar() or 0
+        Session.session_date >= three_months_ago
+    ).group_by('date').order_by('date').all()
     
-    # Format duration as days, hours, minutes
-    days = total_duration_seconds // (24 * 3600)
-    remaining_seconds = total_duration_seconds % (24 * 3600)
-    hours = remaining_seconds // 3600
-    remaining_seconds %= 3600
-    minutes = remaining_seconds // 60
-    
-    yearly_duration = f"{days}d {hours}h {minutes}m"
-    
-    # Total weight lifted this year
-    yearly_volume = db.session.query(db.func.sum(Session.volume)).filter(
+    # Get total reps data
+    reps_data = db.session.query(
+        db.func.strftime('%Y-%m-%d', Session.session_date).label('date'),
+        db.func.sum(Session.total_reps).label('reps')
+    ).filter(
         Session.user_id == user.id,
-        Session.session_date >= this_year_start
-    ).scalar() or 0
+        Session.session_date >= three_months_ago
+    ).group_by('date').order_by('date').all()
     
-    # Format volume with the user's preferred unit
-    yearly_volume_formatted = f"{convert_volume_to_preferred_unit(yearly_volume, user.preferred_weight_unit)} {user.preferred_weight_unit}"
+    # Prepare data for the charts
+    chart_data = {
+        'dates': [data[0] for data in volume_data],
+        'volume': [float(data[1] or 0) for data in volume_data],
+        'duration': [float(data[1] or 0) for data in duration_data],
+        'exp': [int(data[1] or 0) for data in exp_data],
+        'reps': [int(data[1] or 0) for data in reps_data]
+    }
     
-    # Get best lifts for all weight+reps exercises
-    best_lifts = {}
+    # Calculate overall statistics
+    overall_stats = {
+        'total_workouts': len(sessions),
+        'total_volume': sum(session.volume or 0 for session in sessions),
+        'total_duration': sum(int(parse_duration(session.duration or 0)) for session in sessions),
+        'total_exp': sum(session.exp_gained or 0 for session in sessions)
+    }
     
-    # Find all exercises with input_type containing 'weight' and 'reps'
-    weight_reps_exercises = Exercise.query.filter(
-        Exercise.input_type.like('%weight%'),
-        Exercise.input_type.like('%reps%')
-    ).all()
+    # Calculate exercise stats
+    exercise_stats = {}
+    body_part_stats = {}
     
-    for exercise in weight_reps_exercises:
-        # Find the highest weight for this exercise
-        best_set = Set.query.join(Session).filter(
-            Set.exercise_id == exercise.id,
-            Session.user_id == user.id,
-            Session.session_date >= this_year_start
-        ).order_by(Set.weight.desc()).first()
-        
-        if best_set and best_set.weight > 0:
-            best_lifts[exercise.name] = f"{convert_volume_to_preferred_unit(best_set.weight, user.preferred_weight_unit)}{user.preferred_weight_unit}"
-    
-    # All-time stats (mostly the same as yearly stats for now)
-    all_time_workout_count = Session.query.filter(Session.user_id == user.id).count()
-    all_time_exp = db.session.query(db.func.sum(Session.exp_gained)).filter(Session.user_id == user.id).scalar() or 0
-    all_time_levels = all_time_exp // 100
-    
-    # Total all-time workout duration
-    all_time_duration_seconds = db.session.query(db.func.sum(db.func.extract('epoch', db.func.cast(Session.duration, db.Time)))).filter(
-        Session.user_id == user.id
-    ).scalar() or 0
-    
-    # Format duration as days, hours, minutes
-    days = all_time_duration_seconds // (24 * 3600)
-    remaining_seconds = all_time_duration_seconds % (24 * 3600)
-    hours = remaining_seconds // 3600
-    remaining_seconds %= 3600
-    minutes = remaining_seconds // 60
-    
-    all_time_duration = f"{days}d {hours}h {minutes}m"
-    
-    # Total all-time weight lifted
-    all_time_volume = db.session.query(db.func.sum(Session.volume)).filter(Session.user_id == user.id).scalar() or 0
-    all_time_volume_formatted = f"{convert_volume_to_preferred_unit(all_time_volume, user.preferred_weight_unit)} {user.preferred_weight_unit}"
-    
-    # Get best all-time lifts for all weight+reps exercises
-    all_time_best_lifts = {}
-    
-    for exercise in weight_reps_exercises:
-        # Find the highest weight for this exercise
-        best_set = Set.query.join(Session).filter(
-            Set.exercise_id == exercise.id,
-            Session.user_id == user.id
-        ).order_by(Set.weight.desc()).first()
-        
-        if best_set and best_set.weight > 0:
-            all_time_best_lifts[exercise.name] = f"{convert_volume_to_preferred_unit(best_set.weight, user.preferred_weight_unit)}{user.preferred_weight_unit}"
+    # Initialize best_lifts dictionary
+    best_lifts = {
+        'Bench Press': '0kg',
+        'Squat': '0kg',
+        'Deadlift': '0kg',
+        'Bicep Curl': '0kg'
+    }
     
     # Get unread notification count
     unread_notification_count = Notification.query.filter_by(
-        user_id=user.id,
+        user_id=current_user.id,
         is_read=False
     ).count()
     
+    # Create a basic mapping for muscle groups
+    muscle_map = {
+        'chest': ['chest', 'pec'],
+        'back': ['back', 'lat', 'trap'],
+        'legs': ['quad', 'hamstring', 'calf', 'glute', 'leg'],
+        'shoulders': ['shoulder', 'delt'],
+        'arms': ['bicep', 'tricep', 'forearm', 'arm'],
+        'abs': ['ab', 'core', 'oblique'],
+        'cardio': ['cardio']
+    }
+    
     return render_template('statistics.html',
-                          yearly_workout_count=yearly_workout_count,
-                          yearly_exp=yearly_exp,
-                          yearly_levels=yearly_levels,
-                          yearly_duration=yearly_duration,
-                          yearly_volume=yearly_volume_formatted,
-                          best_lifts=best_lifts,
-                          all_time_workout_count=all_time_workout_count,
-                          all_time_exp=all_time_exp,
-                          all_time_levels=all_time_levels,
-                          all_time_duration=all_time_duration,
-                          all_time_volume=all_time_volume_formatted,
-                          all_time_best_lifts=all_time_best_lifts,
-                          unread_notification_count=unread_notification_count)
+                          chart_data=chart_data,
+                          overall_stats=overall_stats,
+                          exercise_stats=exercise_stats,
+                          body_part_stats=body_part_stats,
+                          muscle_map=muscle_map,
+                          unread_notification_count=unread_notification_count,
+                          user=user,
+                          best_lifts=best_lifts)
 
 @auth.route('/calendar')
+@auth.route('/calendar/<username>')
 @login_required
-def calendar():
-    """Activity calendar showing workout days"""
-    user = current_user
+def calendar(username=None):
+    """Show workout calendar"""
+    if username is None:
+        user = current_user
+    else:
+        user = User.query.filter_by(username=username).first_or_404()
+    
+    # Check privacy settings - only allow viewing if it's the current user or the profile is public
+    if user.id != current_user.id and user.privacy_setting == 'private':
+        flash('This user\'s profile is private', 'error')
+        return redirect(url_for('auth.home'))
+    
+    # Get current month and year
+    now = datetime.now()
+    current_year = now.year
     
     # Get all workout dates for the past year
     one_year_ago = datetime.now() - timedelta(days=365)
@@ -1060,27 +1086,25 @@ def calendar():
         if date_str not in calendar_data:
             calendar_data[date_str] = {
                 'count': 1,
-                'volume': workout.volume,
-                'exp': workout.exp_gained
+                'volume': workout.volume or 0,
+                'exp': workout.exp_gained or 0
             }
         else:
             calendar_data[date_str]['count'] += 1
-            calendar_data[date_str]['volume'] += workout.volume
-            calendar_data[date_str]['exp'] += workout.exp_gained
-    
+            calendar_data[date_str]['volume'] += (workout.volume or 0)
+            calendar_data[date_str]['exp'] += (workout.exp_gained or 0)
+
     # Get unread notification count
     unread_notification_count = Notification.query.filter_by(
-        user_id=user.id,
+        user_id=current_user.id,
         is_read=False
     ).count()
-    
-    # Get current year for calendar initialization
-    current_year = datetime.now().year
     
     return render_template('calendar.html',
                           calendar_data=calendar_data,
                           current_year=current_year,
-                          unread_notification_count=unread_notification_count)
+                          unread_notification_count=unread_notification_count,
+                          user=user)
 
 @auth.route('/user/<int:user_id>/follow', methods=['POST'])
 @login_required
@@ -1110,22 +1134,302 @@ def follow_user(user_id):
             'message': f'You unfollowed {user.username}'
         })
     else:
-        # Follow
-        current_user.following.append(user)
-        db.session.commit()
+        # Check if there's a pending request already
+        existing_request = FollowRequest.query.filter_by(
+            requester_id=current_user.id,
+            receiver_id=user.id,
+            status='pending'
+        ).first()
         
-        # Create notification for the followed user
-        notification = Notification(
-            user_id=user.id,
-            message=f"{current_user.username} started following you!",
-            is_read=False
-        )
-        db.session.add(notification)
-        db.session.commit()
+        if existing_request:
+            return jsonify({
+                'success': True,
+                'following': False,
+                'pending': True,
+                'message': f'Follow request already sent to {user.username}'
+            })
         
+        # Handle private accounts differently
+        if user.privacy_setting == 'private':
+            # Create a follow request
+            follow_request = FollowRequest(
+                requester_id=current_user.id,
+                receiver_id=user.id,
+                status='pending'
+            )
+            db.session.add(follow_request)
+            
+            # Create notification for the request
+            notification = Notification(
+                user_id=user.id,
+                message=f"{current_user.username} wants to follow you",
+                is_read=False,
+                type='follow_request',
+                related_id=follow_request.id
+            )
+            db.session.add(notification)
+            db.session.commit()
+            
+            return jsonify({
+                'success': True,
+                'following': False,
+                'pending': True,
+                'message': f'Follow request sent to {user.username}'
+            })
+        else:
+            # For public accounts, follow directly
+            current_user.following.append(user)
+            db.session.commit()
+            
+            # Create notification for the followed user
+            notification = Notification(
+                user_id=user.id,
+                message=f"{current_user.username} started following you!",
+                is_read=False,
+                type='follow',
+                related_id=current_user.id
+            )
+            db.session.add(notification)
+            db.session.commit()
+            
+            return jsonify({
+                'success': True,
+                'following': True,
+                'follower_count': user.followers.count(),
+                'message': f'You are now following {user.username}'
+            })
+
+@auth.route('/search_users', methods=['GET', 'POST'])
+@login_required
+def search_users():
+    """Search for users by username"""
+    search_query = request.args.get('query', '')
+    
+    if search_query:
+        # Search for users with similar usernames (case insensitive)
+        users = User.query.filter(User.username.ilike(f'%{search_query}%')).all()
+    else:
+        users = []
+    
+    # Format user data for the response
+    user_results = []
+    for user in users:
+        # Skip the current user from results
+        if user.id == current_user.id:
+            continue
+            
+        # Get follower count
+        follower_count = user.followers.count()
+        
+        # Check if the current user is following this user
+        is_following = current_user.is_following(user)
+        
+        # Format the user data
+        user_data = {
+            'id': user.id,
+            'username': user.username,
+            'first_name': user.first_name,
+            'last_name': user.last_name,
+            'profile_pic': user.profile_pic,
+            'level': user.level,
+            'follower_count': follower_count,
+            'is_following': is_following
+        }
+        user_results.append(user_data)
+    
+    # Return JSON if it's an AJAX request
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         return jsonify({
             'success': True,
-            'following': True,
-            'follower_count': user.followers.count(),
-            'message': f'You are now following {user.username}'
+            'users': user_results
         })
+    
+    # Otherwise, render the search page
+    return render_template('search_users.html', 
+                          users=user_results, 
+                          search_query=search_query)
+
+@auth.route('/notifications')
+@login_required
+def notifications():
+    """View and manage notifications"""
+    # Get all notifications for the current user
+    notifications = Notification.query.filter_by(
+        user_id=current_user.id
+    ).order_by(Notification.date_sent.desc()).all()
+    
+    # Get follow requests directly from the FollowRequest model
+    pending_requests = FollowRequest.query.filter_by(
+        receiver_id=current_user.id,
+        status='pending'
+    ).all()
+    
+    # Format the follow requests for the template
+    follow_requests = []
+    for request in pending_requests:
+        requester = User.query.get(request.requester_id)
+        if requester:
+            follow_requests.append({
+                'id': request.id,
+                'user': requester
+            })
+    
+    # Mark notifications as read
+    for notification in notifications:
+        if not notification.is_read:
+            notification.is_read = True
+    db.session.commit()
+    
+    return render_template('notifications.html', 
+                           notifications=notifications,
+                           follow_requests=follow_requests)
+
+@auth.route('/follow-request/<int:request_id>/accept', methods=['POST', 'GET'])
+@login_required
+def accept_follow_request(request_id):
+    """Accept a follow request"""
+    follow_request = FollowRequest.query.get_or_404(request_id)
+    
+    # Ensure the current user is the receiver
+    if follow_request.receiver_id != current_user.id:
+        if request.method == 'GET':
+            flash('You are not authorized to accept this request', 'error')
+            return redirect(url_for('auth.notifications'))
+        else:
+            return jsonify({
+                'success': False,
+                'message': 'You are not authorized to accept this request'
+            }), 403
+    
+    # Update request status
+    follow_request.status = 'accepted'
+    
+    # Add follower relationship
+    requester = User.query.get(follow_request.requester_id)
+    if requester:
+        current_user.followers.append(requester)
+    
+    # Create notification for the requester
+    notification = Notification(
+        user_id=follow_request.requester_id,
+        message=f"{current_user.username} accepted your follow request!",
+        is_read=False,
+        type='follow_accepted'
+    )
+    db.session.add(notification)
+    db.session.commit()
+    
+    if request.method == 'GET':
+        flash(f'You accepted {requester.username}\'s follow request', 'success')
+        return redirect(url_for('auth.notifications'))
+    else:
+        # For AJAX requests
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({
+                'success': True,
+                'message': f'You accepted {requester.username}\'s follow request'
+            })
+        # For regular POST requests, redirect to notifications page
+        flash(f'You accepted {requester.username}\'s follow request', 'success')
+        return redirect(url_for('auth.notifications'))
+
+@auth.route('/follow-request/<int:request_id>/reject', methods=['POST', 'GET'])
+@login_required
+def reject_follow_request(request_id):
+    """Reject a follow request"""
+    follow_request = FollowRequest.query.get_or_404(request_id)
+    
+    # Ensure the current user is the receiver
+    if follow_request.receiver_id != current_user.id:
+        if request.method == 'GET':
+            flash('You are not authorized to reject this request', 'error')
+            return redirect(url_for('auth.notifications'))
+        else:
+            return jsonify({
+                'success': False,
+                'message': 'You are not authorized to reject this request'
+            }), 403
+    
+    # Get requester info before updating
+    requester = User.query.get(follow_request.requester_id)
+    requester_username = requester.username if requester else "user"
+    
+    # Update request status
+    follow_request.status = 'rejected'
+    db.session.commit()
+    
+    if request.method == 'GET':
+        flash(f'You rejected {requester_username}\'s follow request', 'success')
+        return redirect(url_for('auth.notifications'))
+    else:
+        # For AJAX requests
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({
+                'success': True,
+                'message': 'Follow request rejected'
+            })
+        # For regular POST requests, redirect to notifications page
+        flash(f'You rejected {requester_username}\'s follow request', 'success')
+        return redirect(url_for('auth.notifications'))
+
+@auth.route('/api/notifications')
+@login_required
+def api_notifications():
+    """API endpoint for fetching notifications"""
+    # Get all notifications for the current user
+    notifications = Notification.query.filter_by(
+        user_id=current_user.id
+    ).order_by(Notification.date_sent.desc()).limit(10).all()
+    
+    # Format notifications for JSON response
+    notification_data = []
+    for notification in notifications:
+        notification_data.append({
+            'id': notification.id,
+            'message': notification.message,
+            'is_read': notification.is_read,
+            'date_sent': notification.date_sent.strftime('%Y-%m-%d %H:%M:%S'),
+            'type': notification.type,
+            'related_id': notification.related_id
+        })
+    
+    # Get follow requests
+    follow_requests = []
+    pending_requests = FollowRequest.query.filter_by(
+        receiver_id=current_user.id,
+        status='pending'
+    ).all()
+    
+    for request in pending_requests:
+        requester = User.query.get(request.requester_id)
+        if requester:
+            follow_requests.append({
+                'id': request.id,
+                'requester_id': requester.id,
+                'requester_username': requester.username,
+                'message': f"{requester.username} wants to follow you",
+                'type': 'follow_request'
+            })
+    
+    return jsonify({
+        'success': True,
+        'notifications': notification_data,
+        'follow_requests': follow_requests
+    })
+
+@auth.route('/api/notifications/mark-read', methods=['POST'])
+@login_required
+def mark_notifications_read():
+    """Mark all notifications as read"""
+    # Update all unread notifications
+    Notification.query.filter_by(
+        user_id=current_user.id,
+        is_read=False
+    ).update({'is_read': True})
+    
+    db.session.commit()
+    
+    return jsonify({
+        'success': True,
+        'message': 'All notifications marked as read'
+    })

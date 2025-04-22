@@ -7,11 +7,13 @@ from .filters import init_filters
 import os
 from flask import json
 from datetime import timedelta
+from flask_wtf.csrf import CSRFProtect
 
 # Create instances of Flask extensions
 db = SQLAlchemy()
 migrate = Migrate()
 login_manager = LoginManager()
+csrf = CSRFProtect()
 
 def create_app():
     # Initialize the Flask application
@@ -30,6 +32,11 @@ def create_app():
     migrate.init_app(app, db)
     login_manager.init_app(app)
     login_manager.login_view = 'auth.login'
+    csrf.init_app(app)
+    
+    # CSRF protection exemptions for API endpoints
+    csrf.exempt('workout.log_workout_api')
+    csrf.exempt('auth.register_post')
     
     # Register blueprints
     from .auth import auth as auth_blueprint

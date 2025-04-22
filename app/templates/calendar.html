@@ -21,7 +21,13 @@
 
     <div class="card">
         <div class="card-header">
-            <h2>Your Workout Activity</h2>
+            <h2>
+                {% if user.id == current_user.id %}
+                Your Workout Activity
+                {% else %}
+                {{ user.username }}'s Workout Activity
+                {% endif %}
+            </h2>
             <div class="legend-container">
                 <div class="legend-item">
                     <div class="legend-color" style="background-color: rgba(53, 162, 235, 0.2);"></div>

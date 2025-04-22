@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+
+{% block title %}Search Users{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4">
+    <h1 class="text-2xl font-bold mb-6">Search Users</h1>
+    
+    <!-- Search Form -->
+    <div class="bg-white rounded-lg shadow-md p-4 mb-6">
+        <form action="{{ url_for('auth.search_users') }}" method="GET" class="flex items-center">
+            <input type="text" name="query" placeholder="Search by username..." 
+                   value="{{ search_query }}" 
+                   class="flex-grow px-4 py-2 border border-gray-300 rounded-l-lg focus:outline-none focus:border-blue-500">
+            <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded-r-lg hover:bg-blue-600">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+            </button>
+        </form>
+    </div>
+    
+    <!-- Search Results -->
+    <div class="space-y-4">
+        {% if users %}
+            {% for user in users %}
+                <div class="bg-white rounded-lg shadow-md p-4 flex items-center justify-between">
+                    <div class="flex items-center">
+                        <!-- Profile Picture -->
+                        <a href="{{ url_for('auth.profile', username=user.username) }}" class="mr-4">
+                            {% if user.profile_pic %}
+                                <img src="{{ user.profile_pic }}" alt="{{ user.username }}" 
+                                     class="w-12 h-12 rounded-full object-cover">
+                            {% else %}
+                                <div class="w-12 h-12 rounded-full bg-gray-500 flex items-center justify-center text-white font-bold">
+                                    {{ user.username[0]|upper }}
+                                </div>
+                            {% endif %}
+                        </a>
+                        
+                        <!-- User Info -->
+                        <div>
+                            <a href="{{ url_for('auth.profile', username=user.username) }}" 
+                               class="font-bold text-gray-900 hover:text-blue-500">
+                                {{ user.first_name }} {{ user.last_name }}
+                            </a>
+                            <div class="flex items-center">
+                                <span class="text-gray-600">@{{ user.username }}</span>
+                                <span class="ml-2 text-xs px-2 py-1 bg-blue-100 text-blue-800 rounded-full">
+                                    Lvl {{ user.level }}
+                                </span>
+                            </div>
+                            <span class="text-sm text-gray-500">{{ user.follower_count }} followers</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Follow Button -->
+                    <button class="follow-btn px-4 py-2 rounded-lg text-sm font-medium {% if user.is_following %}bg-gray-200 text-gray-800 hover:bg-gray-300{% else %}bg-blue-500 text-white hover:bg-blue-600{% endif %}" 
+                            data-user-id="{{ user.id }}">
+                        {% if user.is_following %}
+                            Unfollow
+                        {% else %}
+                            Follow
+                        {% endif %}
+                    </button>
+                </div>
+            {% endfor %}
+        {% elif search_query %}
+            <div class="bg-white rounded-lg shadow-md p-8 text-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <h3 class="mt-4 text-lg font-medium text-gray-900">No users found</h3>
+                <p class="mt-1 text-gray-500">We couldn't find any users matching "{{ search_query }}"</p>
+            </div>
+        {% else %}
+            <div class="bg-white rounded-lg shadow-md p-8 text-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                <h3 class="mt-4 text-lg font-medium text-gray-900">Search for users</h3>
+                <p class="mt-1 text-gray-500">Enter a username to find people to follow</p>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Handle follow/unfollow button clicks
+    const followButtons = document.querySelectorAll('.follow-btn');
+    
+    followButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            const userId = this.getAttribute('data-user-id');
+            
+            fetch(`/user/${userId}/follow`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    if (data.following) {
+                        this.textContent = 'Unfollow';
+                        this.classList.remove('bg-blue-500', 'text-white', 'hover:bg-blue-600');
+                        this.classList.add('bg-gray-200', 'text-gray-800', 'hover:bg-gray-300');
+                    } else {
+                        this.textContent = 'Follow';
+                        this.classList.remove('bg-gray-200', 'text-gray-800', 'hover:bg-gray-300');
+                        this.classList.add('bg-blue-500', 'text-white', 'hover:bg-blue-600');
+                    }
+                }
+            })
+            .catch(error => console.error('Error:', error));
+        });
+    });
+});
+</script>
+{% endblock %} 

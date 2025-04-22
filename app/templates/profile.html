@@ -60,6 +60,7 @@
                             Follow
                             {% endif %}
                         </button>
+                        <div id="follow-status" class="mt-2 text-sm hidden"></div>
                     </div>
                     {% endif %}
                 </div>
@@ -134,8 +135,8 @@
             </div>
             <div class="flex justify-center mt-4">
                 <div class="mt-3">
-                    <a href="{{ url_for('auth.statistics') }}" class="btn btn-primary">Statistics</a>
-                    <a href="{{ url_for('auth.calendar') }}" class="btn btn-primary">Calendar</a>
+                    <a href="{{ url_for('auth.statistics', username=user.username) }}" class="btn btn-primary">Statistics</a>
+                    <a href="{{ url_for('auth.calendar', username=user.username) }}" class="btn btn-primary">Calendar</a>
                 </div>
             </div>
         </div>
@@ -435,6 +436,11 @@ document.addEventListener('DOMContentLoaded', function() {
     if (followBtn) {
         followBtn.addEventListener('click', function() {
             const userId = this.getAttribute('data-user-id');
+            const followStatus = document.getElementById('follow-status');
+            
+            // Disable button during request
+            this.disabled = true;
+            this.classList.add('opacity-75');
             
             fetch(`/user/${userId}/follow`, {
                 method: 'POST',
@@ -445,17 +451,74 @@ document.addEventListener('DOMContentLoaded', function() {
             })
             .then(response => response.json())
             .then(data => {
+                // Re-enable button
+                this.disabled = false;
+                this.classList.remove('opacity-75');
+                
                 if (data.success) {
+                    // Update button text
                     if (data.following) {
                         this.textContent = 'Unfollow';
+                        this.classList.remove('bg-blue-500');
+                        this.classList.add('bg-gray-500');
+                        
+                        // Show success message
+                        followStatus.textContent = 'You are now following this user';
+                        followStatus.classList.remove('hidden', 'text-red-500');
+                        followStatus.classList.add('text-green-500');
+                        
+                        // Hide message after 3 seconds
+                        setTimeout(() => {
+                            followStatus.classList.add('hidden');
+                        }, 3000);
                     } else {
                         this.textContent = 'Follow';
+                        this.classList.remove('bg-gray-500');
+                        this.classList.add('bg-blue-500');
+                        
+                        // Show success message
+                        followStatus.textContent = 'You unfollowed this user';
+                        followStatus.classList.remove('hidden', 'text-green-500');
+                        followStatus.classList.add('text-red-500');
+                        
+                        // Hide message after 3 seconds
+                        setTimeout(() => {
+                            followStatus.classList.add('hidden');
+                        }, 3000);
                     }
-                    // Update follower count
-                    document.querySelector('.stat-box:nth-child(2) .stat-value').textContent = data.follower_count;
+                    
+                    // Update follower count in the UI
+                    const followerCountEl = document.querySelector('.stat-box:nth-child(2) .stat-value');
+                    if (followerCountEl) {
+                        followerCountEl.textContent = data.follower_count;
+                    }
+                } else {
+                    // Show error message
+                    followStatus.textContent = data.message || 'Error processing your request';
+                    followStatus.classList.remove('hidden', 'text-green-500');
+                    followStatus.classList.add('text-red-500');
+                    
+                    // Hide message after 3 seconds
+                    setTimeout(() => {
+                        followStatus.classList.add('hidden');
+                    }, 3000);
                 }
             })
-            .catch(error => console.error('Error:', error));
+            .catch(error => {
+                console.error('Error:', error);
+                this.disabled = false;
+                this.classList.remove('opacity-75');
+                
+                // Show error message
+                followStatus.textContent = 'Network error. Please try again.';
+                followStatus.classList.remove('hidden', 'text-green-500');
+                followStatus.classList.add('text-red-500');
+                
+                // Hide message after 3 seconds
+                setTimeout(() => {
+                    followStatus.classList.add('hidden');
+                }, 3000);
+            });
         });
     }
 });

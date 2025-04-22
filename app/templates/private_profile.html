@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+
+{% block title %}{{ user.username }}'s Profile{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <!-- Profile Header Section -->
+    <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+        <div class="flex flex-col md:flex-row items-center">
+            <!-- Profile Picture -->
+            <div class="md:mr-6 mb-4 md:mb-0">
+                {% if user.profile_pic %}
+                <img src="{{ user.profile_pic }}" alt="{{ user.username }}" class="w-24 h-24 rounded-full object-cover">
+                {% else %}
+                <div class="w-24 h-24 rounded-full bg-gray-500 flex items-center justify-center text-white text-2xl font-bold">
+                    {{ user.username[0]|upper }}
+                </div>
+                {% endif %}
+            </div>
+            
+            <!-- User Info -->
+            <div class="text-center md:text-left">
+                <h1 class="text-2xl font-bold">{{ user.first_name }} {{ user.last_name }}</h1>
+                <p class="text-gray-600">@{{ user.username }}</p>
+                <p class="text-gray-500 text-sm">Joined {{ account_age_str }}</p>
+                <div class="mt-2 flex justify-center md:justify-start">
+                    <span class="inline-flex items-center px-3 py-1 bg-gray-100 text-gray-800 rounded-full text-sm">
+                        Level {{ user.level }} 
+                        <span class="ml-1 bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full text-xs">
+                            {{ user.badge }}
+                        </span>
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Private Account Message -->
+    <div class="bg-white rounded-lg shadow-md p-8 text-center">
+        <div class="mx-auto mb-6 w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            </svg>
+        </div>
+        <h2 class="text-xl font-bold text-gray-900 mb-2">This Account is Private</h2>
+        <p class="text-gray-600 mb-6 max-w-md mx-auto">
+            Follow this account to see their workout activity, statistics, and fitness journey.
+        </p>
+        
+        {% if current_user.id != user.id %}
+        <button class="follow-btn px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transition" data-user-id="{{ user.id }}">
+            {% if current_user.is_following(user) %}
+            Unfollow
+            {% else %}
+            Follow
+            {% endif %}
+        </button>
+        <div id="follow-status" class="mt-2 text-sm hidden"></div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Handle follow action
+    const followBtn = document.querySelector('.follow-btn');
+    if (followBtn) {
+        followBtn.addEventListener('click', function() {
+            const userId = this.getAttribute('data-user-id');
+            const followStatus = document.getElementById('follow-status');
+            
+            // Disable button during request
+            this.disabled = true;
+            this.classList.add('opacity-75');
+            
+            fetch(`/user/${userId}/follow`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Re-enable button
+                this.disabled = false;
+                this.classList.remove('opacity-75');
+                
+                if (data.success) {
+                    // Update button text and state
+                    if (data.following) {
+                        this.textContent = 'Unfollow';
+                        this.classList.remove('bg-blue-500', 'hover:bg-blue-600');
+                        this.classList.add('bg-gray-500', 'hover:bg-gray-600');
+                        
+                        // Show success message
+                        followStatus.textContent = 'You are now following this user';
+                        followStatus.classList.remove('hidden', 'text-red-500');
+                        followStatus.classList.add('text-green-500');
+                    } else if (data.pending) {
+                        this.textContent = 'Requested';
+                        this.classList.remove('bg-blue-500', 'hover:bg-blue-600');
+                        this.classList.add('bg-gray-300', 'hover:bg-gray-400', 'text-gray-800');
+                        
+                        // Show pending message
+                        followStatus.textContent = 'Follow request sent!';
+                        followStatus.classList.remove('hidden', 'text-red-500');
+                        followStatus.classList.add('text-green-500');
+                    } else {
+                        this.textContent = 'Follow';
+                        this.classList.remove('bg-gray-500', 'hover:bg-gray-600', 'bg-gray-300', 'hover:bg-gray-400', 'text-gray-800');
+                        this.classList.add('bg-blue-500', 'hover:bg-blue-600');
+                        
+                        // Show success message
+                        followStatus.textContent = 'You unfollowed this user';
+                        followStatus.classList.remove('hidden', 'text-green-500');
+                        followStatus.classList.add('text-red-500');
+                    }
+                    
+                    // Hide message after 3 seconds
+                    setTimeout(() => {
+                        followStatus.classList.add('hidden');
+                    }, 3000);
+                } else {
+                    // Show error message
+                    followStatus.textContent = data.message || 'Error processing your request';
+                    followStatus.classList.remove('hidden', 'text-green-500');
+                    followStatus.classList.add('text-red-500');
+                    
+                    // Hide message after 3 seconds
+                    setTimeout(() => {
+                        followStatus.classList.add('hidden');
+                    }, 3000);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                this.disabled = false;
+                this.classList.remove('opacity-75');
+                
+                // Show error message
+                followStatus.textContent = 'Network error. Please try again.';
+                followStatus.classList.remove('hidden', 'text-green-500');
+                followStatus.classList.add('text-red-500');
+                
+                // Hide message after 3 seconds
+                setTimeout(() => {
+                    followStatus.classList.add('hidden');
+                }, 3000);
+            });
+        });
+    }
+});
+</script>
+{% endblock %} 

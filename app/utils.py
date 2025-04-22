@@ -396,7 +396,7 @@ def parse_duration(duration_str):
             total_seconds += int(seconds_match.group(1))
             
         # If we found any time units, return the total
-        if total_seconds > 0:
+        if hours_match or minutes_match or seconds_match:
             return total_seconds
             
         # Fallback: just extract any number and assume it's minutes

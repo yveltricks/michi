@@ -35,6 +35,7 @@
                          alt="Profile Picture" class="h-full w-full object-cover">
                 </div>
                 <form action="{{ url_for('auth.update_profile_pic') }}" method="POST" enctype="multipart/form-data" class="flex-1">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <div class="mb-2">
                         <input type="file" name="profile_pic" id="profile_pic" 
                                accept="image/*" class="block w-full text-sm text-gray-500
@@ -57,6 +58,7 @@
         </div>
         
         <form action="{{ url_for('auth.update_personal_info') }}" method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                 <div>
                     <label class="block mb-2">First Name</label>
@@ -128,6 +130,7 @@
 
         <!-- Username Change Form -->
         <form action="{{ url_for('auth.change_username') }}" method="POST" class="mb-6">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <h3 class="text-lg font-medium mb-3">Change Username</h3>
             <div class="mb-4">
                 <label class="block mb-2">New Username</label>
@@ -144,6 +147,7 @@
 
         <!-- Password Change Form -->
         <form action="{{ url_for('auth.change_password') }}" method="POST" class="mb-6">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <h3 class="text-lg font-medium mb-3">Change Password</h3>
             <div class="mb-4">
                 <label class="block mb-2">Current Password</label>
@@ -171,6 +175,7 @@
     <div class="bg-white p-6 rounded-lg shadow mb-6">
         <h2 class="text-xl font-semibold mb-4">Measurement Preferences</h2>
         <form action="{{ url_for('auth.update_preferences') }}" method="POST" class="mb-4">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                     <label class="block mb-2">Weight Unit</label>
@@ -226,6 +231,7 @@
     <div class="bg-white p-6 rounded-lg shadow mb-6">
         <h2 class="text-xl font-semibold mb-4">Privacy Settings</h2>
         <form action="{{ url_for('auth.update_privacy') }}" method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="mb-4">
                 <label class="block mb-2">Profile Privacy</label>
                 <select name="privacy_setting" class="w-full p-2 border rounded">
@@ -248,6 +254,7 @@
             </a>
 
             <form action="{{ url_for('auth.delete_account') }}" method="POST" class="border-t pt-4">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <h3 class="text-lg font-medium mb-3 text-red-600">Delete Account</h3>
                 <div class="mb-4">
                     <label class="block mb-2">Confirm Password to Delete Account</label>

@@ -16,6 +16,18 @@ followers = db.Table('followers',
     db.Column('followed_id', db.Integer, db.ForeignKey('user.id'))
 )
 
+# New model for follow requests
+class FollowRequest(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    requester_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    receiver_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    status = db.Column(db.String(20), default='pending')  # pending, accepted, rejected
+    
+    # Relationships
+    requester = db.relationship('User', foreign_keys=[requester_id], backref='sent_requests')
+    receiver = db.relationship('User', foreign_keys=[receiver_id], backref='received_requests')
+
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     first_name = db.Column(db.String(100))
@@ -539,16 +551,20 @@ class SavedItem(db.Model):
 class Notification(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    message = db.Column(db.Text, nullable=False)
+    message = db.Column(db.String(500), nullable=False)
     is_read = db.Column(db.Boolean, default=False)
     date_sent = db.Column(db.DateTime, default=datetime.utcnow)
+    type = db.Column(db.String(50), default='general')  # general, follow, follow_request, like, comment
+    related_id = db.Column(db.Integer, nullable=True)  # ID related to the notification type
     
     def to_dict(self):
         return {
             'id': self.id,
             'message': self.message,
             'is_read': self.is_read,
-            'date_sent': self.date_sent.strftime('%Y-%m-%d %H:%M:%S')
+            'date_sent': self.date_sent.strftime('%Y-%m-%d %H:%M:%S'),
+            'type': self.type,
+            'related_id': self.related_id
         }
 
 class WorkoutLike(db.Model):
