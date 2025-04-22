@@ -2,126 +2,7 @@
 
 {% block title %}Workout Session{% endblock %}
 
-{% block content %}
-<div class="workout-container">
-    <h2>Workout Session</h2>
-
-    <div class="workout-card">
-        <div class="workout-header">
-            <img src="{{ session.user.profile_pic or url_for('static', filename='default_profile.jpg') }}"
-                 alt="Profile" class="profile-pic">
-            <div class="workout-info">
-                <h3>{{ session.user.first_name }} {{ session.user.last_name }}</h3>
-                <span class="username">@{{ session.user.username }}</span>
-                <span class="badge {{ session.user.badge.lower() }}">{{ session.user.badge }}</span>
-            </div>
-            <span class="workout-time">
-                {% if session.date %}
-                    {{ session.date.strftime('%B %d, %Y') }}
-                {% elif session.session_date %}
-                    {{ session.session_date.strftime('%B %d, %Y') }}
-                {% endif %}
-            </span>
-        </div>
-
-        <div class="workout-content">
-            <h4>{{ session.title or session.description or session.notes or 'Workout' }}</h4>
-            <div class="exercise-summary">
-                {% if exercises %}
-                    {% for exercise in exercises %}
-                    <div class="exercise-item">
-                        <div class="flex justify-between items-center">
-                            <div>
-                                <span class="exercise-name">{{ exercise.name }}</span>
-                                {% if exercise.get('weight') %}
-                                    <span class="exercise-details">{{ exercise.sets }}x{{ exercise.reps }} @ {{ exercise.weight }}{{ current_user.preferred_weight_unit }}</span>
-                                {% elif exercise.get('duration') %}
-                                    <span class="exercise-details">{{ exercise.sets }} sets, {{ exercise.duration }} mins</span>
-                                {% else %}
-                                    <span class="exercise-details">{{ exercise.sets }} sets</span>
-                                {% endif %}
-                            </div>
-                            <a href="{{ url_for('workout.view_exercise', exercise_id=exercise.id) }}" class="text-blue-600 hover:text-blue-800 text-sm">
-                                View Exercise History
-                            </a>
-                        </div>
-                    </div>
-                    {% endfor %}
-                {% else %}
-                    <div class="no-data">No exercise data available</div>
-                {% endif %}
-            </div>
-        </div>
-
-        {% if session.photo %}
-        <div class="workout-photo">
-            <img src="{{ session.photo }}" alt="Workout photo">
-        </div>
-        {% endif %}
-
-        <div class="workout-stats">
-            <div class="stat">
-                <i class="fas fa-stopwatch"></i>
-                {% if session.duration is number %}
-                    {{ (session.duration // 60)|int }} mins
-                {% else %}
-                    {{ session.duration }}
-                {% endif %}
-            </div>
-            <div class="stat">
-                <i class="fas fa-dumbbell"></i>
-                {{ session.volume }}{{ current_user.preferred_weight_unit }}
-            </div>
-            <div class="stat">
-                <i class="fas fa-star"></i>
-                {% if session.rating %}
-                    {{ session.rating }}/5
-                {% elif session.session_rating %}
-                    {{ session.session_rating }}/5
-                {% else %}
-                    3/5
-                {% endif %}
-            </div>
-            {% if session.exp_gained %}
-            <div class="stat">
-                <i class="fas fa-award"></i>
-                {{ session.exp_gained }} XP
-            </div>
-            {% endif %}
-        </div>
-
-        <!-- Social interaction section -->
-        <div class="social-interaction">
-            <div class="interaction-buttons">
-                <button class="like-button {% if session.user_liked %}liked{% endif %}" data-id="{{ session.id }}">
-                    <i class="{% if session.user_liked %}fas{% else %}far{% endif %} fa-thumbs-up"></i>
-                    <span class="like-count">{{ session.like_count|default(0) }}</span> Likes
-                </button>
-                <button class="comment-button" data-id="{{ session.id }}">
-                    <i class="far fa-comment"></i>
-                    <span>{{ session.comment_count|default(0) }}</span> Comments
-                </button>
-            </div>
-            
-            <!-- Comments section (hidden by default) -->
-            <div class="comments-section hidden" id="comments-{{ session.id }}">
-                <div class="comments-list" id="comments-list-{{ session.id }}">
-                    <!-- Comments will be loaded dynamically -->
-                    <div class="loading-comments">Loading comments...</div>
-                </div>
-                <div class="comment-form">
-                    <input type="text" class="comment-input" id="comment-input-{{ session.id }}" placeholder="Write a comment...">
-                    <button class="submit-comment" data-id="{{ session.id }}">Post</button>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <div class="action-buttons">
-        <a href="{{ url_for('workout.workout_page') }}" class="btn btn-primary">Back to Workouts</a>
-    </div>
-</div>
-
+{% block extra_head %}
 <style>
     .workout-container {
         max-width: 800px;
@@ -207,23 +88,26 @@
     }
     
     .exercise-item {
-        display: flex;
-        justify-content: space-between;
-        padding: 0.5rem 0;
+        padding: 0.75rem 0;
         border-bottom: 1px solid #eee;
     }
     
     .exercise-name {
         font-weight: 500;
+        color: #333;
     }
     
     .exercise-details {
         color: #6c757d;
+        font-size: 0.9rem;
+        display: inline-block;
+        margin-left: 0.5rem;
     }
     
     .workout-photo img {
         width: 100%;
         height: auto;
+        object-fit: cover;
     }
     
     .workout-stats {
@@ -252,21 +136,27 @@
     }
     
     .action-buttons {
-        text-align: center;
-        margin-bottom: 2rem;
+        display: flex;
+        justify-content: center;
+        margin-top: 1rem;
     }
     
     .btn {
-        display: inline-block;
-        padding: 0.5rem 1rem;
+        padding: 0.5rem 1.5rem;
         border-radius: 4px;
-        text-decoration: none;
+        cursor: pointer;
         font-weight: 500;
+        text-decoration: none;
     }
     
     .btn-primary {
         background-color: #007bff;
         color: white;
+        border: none;
+    }
+    
+    .btn-primary:hover {
+        background-color: #0069d9;
     }
     
     /* Social interaction styles */
@@ -277,27 +167,24 @@
     
     .interaction-buttons {
         display: flex;
-        gap: 1rem;
+        gap: 1.5rem;
     }
     
     .like-button, .comment-button {
         background: none;
         border: none;
-        padding: 0.5rem 1rem;
+        color: #6c757d;
         cursor: pointer;
         display: flex;
         align-items: center;
         gap: 0.5rem;
-        font-size: 0.9rem;
-        color: #6c757d;
-        transition: color 0.2s;
-    }
-    
-    .like-button:hover, .comment-button:hover {
-        color: #007bff;
     }
     
     .like-button.liked {
+        color: #007bff;
+    }
+    
+    .like-button:hover, .comment-button:hover {
         color: #007bff;
     }
     
@@ -326,6 +213,7 @@
     .comment-form {
         display: flex;
         gap: 0.5rem;
+        margin-top: 1rem;
     }
     
     .comment-input {
@@ -339,181 +227,456 @@
         background-color: #007bff;
         color: white;
         border: none;
-        padding: 0.5rem 1rem;
         border-radius: 4px;
+        padding: 0.5rem 1rem;
         cursor: pointer;
     }
+    
+    /* New styles for the impressive record section */
+    .impressive-record {
+        background-color: #1a1a1a;
+        color: white;
+        padding: 1.5rem;
+        border-radius: 8px;
+        margin-bottom: 1.5rem;
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .impressive-record h3 {
+        margin-top: 0;
+        margin-bottom: 1rem;
+        font-size: 1.2rem;
+        text-align: center;
+    }
+    
+    .impressive-record p {
+        margin: 0.5rem 0;
+        font-size: 1.1rem;
+        font-weight: 300;
+    }
+    
+    /* Muscle Split Diagram */
+    .muscle-split {
+        margin-top: 2rem;
+        margin-bottom: 2rem;
+    }
+    
+    .muscle-split h3 {
+        margin-bottom: 1rem;
+        text-align: center;
+    }
+    
+    .muscle-bar {
+        height: 30px;
+        background-color: #e9ecef;
+        border-radius: 4px;
+        margin-bottom: 0.75rem;
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .muscle-fill {
+        height: 100%;
+        background-color: #007bff;
+        border-radius: 4px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 10px;
+        color: white;
+        font-weight: 500;
+    }
+    
+    .muscle-label {
+        z-index: 1;
+        flex: 1;
+    }
+    
+    .muscle-percentage {
+        font-weight: bold;
+    }
+    
+    /* Fun message */
+    .fun-message {
+        background-color: #f8f9fa;
+        border-left: 4px solid #007bff;
+        padding: 1rem;
+        margin: 1.5rem 0;
+        border-radius: 0 4px 4px 0;
+    }
+    
+    .fun-message p {
+        margin: 0;
+        font-size: 1.1rem;
+        font-weight: 500;
+        color: #495057;
+    }
 </style>
+{% endblock %}
 
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    // Like button functionality
-    const likeButton = document.querySelector('.like-button');
-    if (likeButton) {
-        likeButton.addEventListener('click', function() {
-            const workoutId = this.getAttribute('data-id');
+{% block content %}
+<div class="workout-container">
+    <div class="workout-card">
+        <div class="workout-header">
+            <img src="{{ session.user.profile_pic or url_for('static', filename='default_profile.jpg') }}"
+                 alt="Profile" class="profile-pic">
+            <div class="workout-info">
+                <h3>{{ session.user.first_name }} {{ session.user.last_name }}</h3>
+                <span class="username">@{{ session.user.username }}</span>
+                <span class="badge {{ session.user.badge.lower() }}">{{ session.user.badge }}</span>
+            </div>
+            <span class="workout-time">
+                {% if session.date %}
+                    {{ session.date.strftime('%B %d, %Y') }}
+                {% elif session.session_date %}
+                    {{ session.session_date.strftime('%B %d, %Y') }}
+                {% endif %}
+            </span>
+        </div>
+
+        <div class="workout-content">
+            <h4>{{ session.title or session.description or session.notes or 'Workout' }}</h4>
             
-            // Show loading state
-            this.classList.add('opacity-50');
-            
-            fetch(`/api/workouts/${workoutId}/like`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                }
-            })
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error(`Server responded with status: ${response.status}`);
-                }
-                return response.json();
-            })
-            .then(data => {
-                // Remove loading state
-                this.classList.remove('opacity-50');
-                
-                if (data.success) {
-                    // Update like count
-                    const likeCountEl = this.querySelector('.like-count');
-                    likeCountEl.textContent = data.like_count;
+            <!-- Impressive Record Section -->
+            <div class="impressive-record">
+                <h3>Most Impressive Record of the Session:</h3>
+                <div id="impressive-record-content">
+                    {% set best_exercise = None %}
+                    {% set highest_volume = 0 %}
                     
-                    // Toggle thumbs up icon
-                    const iconEl = this.querySelector('i');
-                    if (data.liked) {
-                        iconEl.classList.remove('far');
-                        iconEl.classList.add('fas');
-                        this.classList.add('liked');
-                    } else {
-                        iconEl.classList.remove('fas');
-                        iconEl.classList.add('far');
-                        this.classList.remove('liked');
-                    }
-                } else {
-                    console.error('Error liking workout:', data.error);
-                    alert('Could not like this workout. Please try again later.');
-                }
-            })
-            .catch(error => {
-                // Remove loading state
-                this.classList.remove('opacity-50');
-                console.error('Error:', error);
-                alert('Could not like this workout. Please try again later.');
-            });
-        });
-    }
-    
-    // Comment button functionality
-    const commentButton = document.querySelector('.comment-button');
-    if (commentButton) {
-        commentButton.addEventListener('click', function() {
-            const workoutId = this.getAttribute('data-id');
-            const commentsSection = document.getElementById(`comments-${workoutId}`);
-            const commentsList = document.getElementById(`comments-list-${workoutId}`);
+                    {% for exercise in exercises %}
+                        {% if exercise.get('weight') is not none and exercise.get('reps') is not none %}
+                            {% set volume = exercise.weight * exercise.reps %}
+                            {% if volume > highest_volume %}
+                                {% set highest_volume = volume %}
+                                {% set best_exercise = exercise %}
+                            {% endif %}
+                        {% endif %}
+                    {% endfor %}
+                    
+                    {% if best_exercise %}
+                        <p>{{ best_exercise.weight }}{{ current_user.preferred_weight_unit }} x {{ best_exercise.reps }} {{ best_exercise.name }} is your most impressive record.</p>
+                        <p>Total session volume: {{ session.volume }}{{ current_user.preferred_weight_unit }}</p>
+                        
+                        <!-- Fun comparison -->
+                        {% if session.volume >= 600 and session.volume <= 800 %}
+                            <p>You lifted as much as an adult female giraffe weighs (600kg to 800kg)!</p>
+                        {% elif session.volume >= 500 %}
+                            <p>This is like lifting a grizzly bear!</p>
+                        {% elif session.volume >= 400 %}
+                            <p>This is like lifting an adult male lion!</p>
+                        {% elif session.volume >= 300 %}
+                            <p>This is like lifting 8 large mirrors!</p>
+                        {% elif session.volume >= 250 %}
+                            <p>This is like lifting a refrigerator!</p>
+                        {% elif session.volume >= 200 %}
+                            <p>This is like lifting a washing machine!</p>
+                        {% elif session.volume >= 150 %}
+                            <p>This is like lifting an adult kangaroo!</p>
+                        {% elif session.volume >= 100 %}
+                            <p>This is like lifting a baby gorilla!</p>
+                        {% elif session.volume >= 75 %}
+                            <p>This is like lifting a toilet!</p>
+                        {% elif session.volume >= 50 %}
+                            <p>This is like lifting an average 7-year-old child!</p>
+                        {% elif session.volume >= 30 %}
+                            <p>This is like lifting a medium-sized dog!</p>
+                        {% elif session.volume >= 20 %}
+                            <p>This is like lifting a car tire!</p>
+                        {% elif session.volume >= 10 %}
+                            <p>This is like lifting a microwave oven!</p>
+                        {% else %}
+                            <p>This is like lifting a small cat!</p>
+                        {% endif %}
+                    {% else %}
+                        <p>No weight exercises recorded in this session.</p>
+                    {% endif %}
+                </div>
+            </div>
             
-            if (commentsSection.classList.contains('hidden')) {
-                commentsSection.classList.remove('hidden');
-                
-                // Show loading state
-                commentsList.innerHTML = '<div class="loading-comments">Loading comments...</div>';
-                
-                // Load comments
-                fetch(`/api/workouts/${workoutId}/comments`)
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error(`Server responded with status: ${response.status}`);
-                    }
-                    return response.json();
-                })
-                .then(data => {
-                    if (data.success) {
-                        if (data.comments.length === 0) {
-                            commentsList.innerHTML = '<div class="loading-comments">No comments yet</div>';
-                        } else {
-                            commentsList.innerHTML = '';
-                            data.comments.forEach(comment => {
-                                const commentEl = document.createElement('div');
-                                commentEl.className = 'comment-item';
-                                commentEl.innerHTML = `
-                                    <div class="comment-header">
-                                        <span class="comment-author">${comment.user_name}</span>
-                                        <span class="comment-time">${comment.created_at}</span>
-                                    </div>
-                                    <div class="comment-text">${comment.text}</div>
-                                `;
-                                commentsList.appendChild(commentEl);
-                            });
-                        }
-                    } else {
-                        commentsList.innerHTML = '<div class="loading-comments text-red-500">Failed to load comments</div>';
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    commentsList.innerHTML = '<div class="loading-comments text-red-500">Failed to load comments</div>';
-                });
+            <!-- Muscle Split Diagram -->
+            <div class="muscle-split">
+                <h3>Muscle Split</h3>
+                <div id="muscle-split-content"></div>
+            </div>
+            
+            <!-- Exercise Summary -->
+            <h3 class="mt-6 mb-3">Exercises</h3>
+            <div class="exercise-summary">
+                {% if exercises %}
+                    {% for exercise in exercises %}
+                    <div class="exercise-item">
+                        <div class="flex justify-between items-center">
+                            <div>
+                                <span class="exercise-name">{{ exercise.name }}</span>
+                                {% if exercise.get('weight') %}
+                                    <span class="exercise-details">{{ exercise.sets }}x{{ exercise.reps }} @ {{ exercise.weight }}{{ current_user.preferred_weight_unit }}</span>
+                                {% elif exercise.get('duration') %}
+                                    <span class="exercise-details">{{ exercise.sets }} sets, {{ exercise.duration }} mins</span>
+                                {% else %}
+                                    <span class="exercise-details">{{ exercise.sets }} sets</span>
+                                {% endif %}
+                            </div>
+                            <a href="{{ url_for('workout.view_exercise', exercise_id=exercise.id) }}" class="text-blue-600 hover:text-blue-800 text-sm">
+                                View History
+                            </a>
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="no-data">No exercise data available</div>
+                {% endif %}
+            </div>
+        </div>
+
+        {% if session.photo %}
+        <div class="workout-photo">
+            <img src="{{ session.photo }}" alt="Workout photo">
+        </div>
+        {% endif %}
+
+        <div class="workout-stats">
+            <div class="stat">
+                <i class="fas fa-stopwatch"></i>
+                {% if session.duration is number %}
+                    {{ (session.duration // 60)|int }} mins
+                {% else %}
+                    {{ session.duration }}
+                {% endif %}
+            </div>
+            <div class="stat">
+                <i class="fas fa-dumbbell"></i>
+                {{ session.volume }}{{ current_user.preferred_weight_unit }}
+            </div>
+            <div class="stat">
+                <i class="fas fa-star"></i>
+                {% if session.rating %}
+                    {{ session.rating }}/5
+                {% elif session.session_rating %}
+                    {{ session.session_rating }}/5
+                {% else %}
+                    3/5
+                {% endif %}
+            </div>
+            {% if session.exp_gained %}
+            <div class="stat">
+                <i class="fas fa-award"></i>
+                {{ session.exp_gained }} XP
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Social interaction section -->
+        <div class="social-interaction">
+            <div class="interaction-buttons">
+                <button class="like-button {% if session.user_liked %}liked{% endif %}" data-id="{{ session.id }}">
+                    <i class="{% if session.user_liked %}fas{% else %}far{% endif %} fa-thumbs-up"></i>
+                    <span class="like-count">{{ session.like_count|default(0) }}</span> Likes
+                </button>
+                <button class="comment-button" data-id="{{ session.id }}">
+                    <i class="far fa-comment"></i>
+                    <span>{{ session.comment_count|default(0) }}</span> Comments
+                </button>
+            </div>
+            
+            <!-- Comments section (hidden by default) -->
+            <div class="comments-section hidden" id="comments-{{ session.id }}">
+                <div class="comments-list" id="comments-list-{{ session.id }}">
+                    <!-- Comments will be loaded dynamically -->
+                    <div class="loading-comments">Loading comments...</div>
+                </div>
+                <div class="comment-form">
+                    <input type="text" class="comment-input" id="comment-input-{{ session.id }}" placeholder="Write a comment...">
+                    <button class="submit-comment" data-id="{{ session.id }}">Post</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="action-buttons">
+        <a href="{{ url_for('workout.workout_page') }}" class="btn btn-primary">Back to Workouts</a>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Update the impressive record content
+        const impressiveRecordContent = document.getElementById('impressive-record-content');
+        if (impressiveRecordContent) {
+            // Get the session volume (if this line causes problems, it can be hard-coded)
+            const sessionVolume = {{ session.volume|default(0) }};
+            
+            // Set the content based on the volume
+            let message = '';
+            
+            if (sessionVolume >= 600 && sessionVolume <= 800) {
+                message = `<p>Total session volume: ${sessionVolume}kg</p><p>You lifted as much as an adult female giraffe weighs (600kg to 800kg)!</p>`;
+            } else if (sessionVolume >= 500) {
+                message = `<p>Total session volume: ${sessionVolume}kg</p><p>This is like lifting a grizzly bear!</p>`;
+            } else if (sessionVolume >= 400) {
+                message = `<p>Total session volume: ${sessionVolume}kg</p><p>This is like lifting an adult male lion!</p>`;
+            } else if (sessionVolume >= 300) {
+                message = `<p>Total session volume: ${sessionVolume}kg</p><p>This is like lifting 8 large mirrors!</p>`;
+            } else if (sessionVolume >= 250) {
+                message = `<p>Total session volume: ${sessionVolume}kg</p><p>This is like lifting a refrigerator!</p>`;
+            } else if (sessionVolume >= 200) {
+                message = `<p>Total session volume: ${sessionVolume}kg</p><p>This is like lifting a washing machine!</p>`;
+            } else if (sessionVolume >= 150) {
+                message = `<p>Total session volume: ${sessionVolume}kg</p><p>This is like lifting an adult kangaroo!</p>`;
+            } else if (sessionVolume >= 100) {
+                message = `<p>Total session volume: ${sessionVolume}kg</p><p>This is like lifting a baby gorilla!</p>`;
+            } else if (sessionVolume >= 75) {
+                message = `<p>Total session volume: ${sessionVolume}kg</p><p>This is like lifting a toilet!</p>`;
+            } else if (sessionVolume >= 50) {
+                message = `<p>Total session volume: ${sessionVolume}kg</p><p>This is like lifting an average 7-year-old child!</p>`;
+            } else if (sessionVolume >= 30) {
+                message = `<p>Total session volume: ${sessionVolume}kg</p><p>This is like lifting a medium-sized dog!</p>`;
+            } else if (sessionVolume >= 20) {
+                message = `<p>Total session volume: ${sessionVolume}kg</p><p>This is like lifting a car tire!</p>`;
+            } else if (sessionVolume >= 10) {
+                message = `<p>Total session volume: ${sessionVolume}kg</p><p>This is like lifting a microwave oven!</p>`;
             } else {
-                commentsSection.classList.add('hidden');
+                message = `<p>Total session volume: ${sessionVolume}kg</p><p>This is like lifting a small cat!</p>`;
             }
-        });
-    }
-    
-    // Submit comment functionality
-    const submitCommentButton = document.querySelector('.submit-comment');
-    if (submitCommentButton) {
-        submitCommentButton.addEventListener('click', function() {
-            const workoutId = this.getAttribute('data-id');
-            const inputEl = document.getElementById(`comment-input-${workoutId}`);
-            const commentText = inputEl.value.trim();
             
-            if (commentText) {
-                // Disable button during submission
-                this.disabled = true;
-                this.textContent = 'Posting...';
+            impressiveRecordContent.innerHTML = message;
+        }
+        
+        // Like button functionality
+        const likeButtons = document.querySelectorAll('.like-button');
+        likeButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                const workoutId = this.getAttribute('data-id');
+                const likeIcon = this.querySelector('i');
+                const likeCount = this.querySelector('.like-count');
                 
-                fetch(`/api/workouts/${workoutId}/comments`, {
+                fetch(`/${workoutId}/like`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ text: commentText })
-                })
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error(`Server responded with status: ${response.status}`);
+                        'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
                     }
-                    return response.json();
                 })
+                .then(response => response.json())
                 .then(data => {
-                    // Re-enable button
-                    this.disabled = false;
-                    this.textContent = 'Post';
-                    
                     if (data.success) {
-                        // Clear input
-                        inputEl.value = '';
+                        // Toggle like status
+                        if (data.liked) {
+                            likeIcon.classList.remove('far');
+                            likeIcon.classList.add('fas');
+                            button.classList.add('liked');
+                        } else {
+                            likeIcon.classList.remove('fas');
+                            likeIcon.classList.add('far');
+                            button.classList.remove('liked');
+                        }
                         
-                        // Refresh comments by simulating clicks
-                        const commentButton = document.querySelector(`.comment-button[data-id="${workoutId}"]`);
-                        commentButton.click(); // First click hides
-                        commentButton.click(); // Second click shows and refreshes
-                        
-                        // Update comment count
-                        const countEl = document.querySelector(`.comment-button[data-id="${workoutId}"] span`);
-                        countEl.textContent = parseInt(countEl.textContent) + 1;
-                    } else {
-                        alert('Failed to post comment: ' + (data.error || 'Unknown error'));
+                        // Update count
+                        likeCount.textContent = data.count;
                     }
                 })
-                .catch(error => {
-                    console.error('Error:', error);
-                    // Re-enable button
-                    this.disabled = false;
-                    this.textContent = 'Post';
-                    alert('Failed to post comment. Please try again.');
-                });
-            }
+                .catch(error => console.error('Error:', error));
+            });
         });
-    }
-});
+        
+        // Comment button functionality
+        const commentButtons = document.querySelectorAll('.comment-button');
+        commentButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                const workoutId = this.getAttribute('data-id');
+                const commentsSection = document.getElementById(`comments-${workoutId}`);
+                
+                if (commentsSection.classList.contains('hidden')) {
+                    commentsSection.classList.remove('hidden');
+                    
+                    // Load comments
+                    fetch(`/api/workouts/${workoutId}/comments`, {
+                        headers: {
+                            'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+                        }
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        const commentsList = document.getElementById(`comments-list-${workoutId}`);
+                        commentsList.innerHTML = '';
+                        
+                        if (data.comments && data.comments.length > 0) {
+                            data.comments.forEach(comment => {
+                                const commentEl = document.createElement('div');
+                                commentEl.className = 'comment';
+                                commentEl.innerHTML = `
+                                    <div class="comment-header">
+                                        <a href="/profile/${comment.username}" class="comment-user">${comment.user_name}</a>
+                                        <span class="comment-time">${comment.time_ago}</span>
+                                    </div>
+                                    <div class="comment-body">${comment.text}</div>
+                                `;
+                                commentsList.appendChild(commentEl);
+                            });
+                        } else {
+                            commentsList.innerHTML = '<div class="no-comments">No comments yet. Be the first to comment!</div>';
+                        }
+                    })
+                    .catch(error => console.error('Error:', error));
+                } else {
+                    commentsSection.classList.add('hidden');
+                }
+            });
+        });
+        
+        // Submit comment functionality
+        const submitButtons = document.querySelectorAll('.submit-comment');
+        submitButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                const workoutId = this.getAttribute('data-id');
+                const commentInput = document.getElementById(`comment-input-${workoutId}`);
+                const text = commentInput.value.trim();
+                
+                if (text) {
+                    fetch(`/api/workouts/${workoutId}/comments`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+                        },
+                        body: JSON.stringify({ text: text })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            // Update the comments list
+                            const commentsList = document.getElementById(`comments-list-${workoutId}`);
+                            const noComments = commentsList.querySelector('.no-comments');
+                            if (noComments) {
+                                commentsList.innerHTML = '';
+                            }
+                            
+                            const commentEl = document.createElement('div');
+                            commentEl.className = 'comment';
+                            commentEl.innerHTML = `
+                                <div class="comment-header">
+                                    <a href="/profile/${data.comment.username}" class="comment-user">${data.comment.user_name}</a>
+                                    <span class="comment-time">Just now</span>
+                                </div>
+                                <div class="comment-body">${data.comment.text}</div>
+                            `;
+                            commentsList.appendChild(commentEl);
+                            
+                            // Clear the input
+                            commentInput.value = '';
+                            
+                            // Update comment count
+                            const commentCount = document.querySelector(`.comment-button[data-id="${workoutId}"] span`);
+                            commentCount.textContent = (parseInt(commentCount.textContent) + 1).toString();
+                        }
+                    })
+                    .catch(error => console.error('Error:', error));
+                }
+            });
+        });
+    });
 </script>
 {% endblock %}

@@ -1140,9 +1140,17 @@ function completeWorkoutWithData(title, description, rating, notes, photoBase64)
             // Show success message
             showSuccessMessage('Workout completed successfully!');
             
-            // Redirect to home after a short delay
+            // Redirect to the session details page after a short delay instead of home
             setTimeout(() => {
-                window.location.href = '/home';
+                // Ensure we have a valid session ID from the response
+                const sessionId = data.session_id || (data.workout ? data.workout.id : null);
+                if (sessionId) {
+                    window.location.href = `/workout/session/${sessionId}`;
+                } else {
+                    // Fall back to home if no session ID is available
+                    console.warn("No session ID found in response, redirecting to home");
+                    window.location.href = '/home';
+                }
             }, 1500);
         } else {
             showErrorMessage('Failed to complete workout: ' + (data.error || 'Unknown error'));
