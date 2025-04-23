@@ -1164,13 +1164,35 @@ def statistics(username=None):
         flash('This user\'s profile is private', 'error')
         return redirect(url_for('auth.home'))
 
-    # Get user's workouts
-    workouts = Workout.query.filter_by(user_id=user.id).all()
-    
     # Get user's sessions
     sessions = Session.query.filter_by(user_id=user.id).all()
     
-    # Process data for statistics
+    # Calculate yearly statistics
+    current_year = datetime.now().year
+    start_of_year = datetime(current_year, 1, 1)
+    
+    yearly_sessions = Session.query.filter(
+        Session.user_id == user.id,
+        Session.session_date >= start_of_year
+    ).all()
+    
+    yearly_stats = {
+        'workout_count': len(yearly_sessions),
+        'exp': sum(session.exp_gained or 0 for session in yearly_sessions),
+        'levels': user.level - calculate_user_level_at_time(user.id, start_of_year),
+        'duration': sum(int(parse_duration(session.duration or 0)) for session in yearly_sessions),
+        'volume': sum(session.volume or 0 for session in yearly_sessions)
+    }
+    
+    # Calculate all-time statistics
+    all_time_stats = {
+        'workout_count': len(sessions),
+        'exp': sum(session.exp_gained or 0 for session in sessions),
+        'levels': user.level - 1,  # Assuming level 1 is starting level
+        'duration': sum(int(parse_duration(session.duration or 0)) for session in sessions),
+        'volume': sum(session.volume or 0 for session in sessions)
+    }
+    
     # Get user activity for the last 3 months
     three_months_ago = datetime.now() - timedelta(days=90)
     
@@ -1219,14 +1241,6 @@ def statistics(username=None):
         'reps': [int(data[1] or 0) for data in reps_data]
     }
     
-    # Calculate overall statistics
-    overall_stats = {
-        'total_workouts': len(sessions),
-        'total_volume': sum(session.volume or 0 for session in sessions),
-        'total_duration': sum(int(parse_duration(session.duration or 0)) for session in sessions),
-        'total_exp': sum(session.exp_gained or 0 for session in sessions)
-    }
-    
     # Calculate exercise stats
     exercise_stats = {}
     body_part_stats = {}
@@ -1258,7 +1272,16 @@ def statistics(username=None):
     
     return render_template('statistics.html',
                           chart_data=chart_data,
-                          overall_stats=overall_stats,
+                          yearly_workout_count=yearly_stats['workout_count'],
+                          yearly_exp=yearly_stats['exp'],
+                          yearly_levels=yearly_stats['levels'],
+                          yearly_duration=yearly_stats['duration'],
+                          yearly_volume=yearly_stats['volume'],
+                          all_time_workout_count=all_time_stats['workout_count'],
+                          all_time_exp=all_time_stats['exp'],
+                          all_time_levels=all_time_stats['levels'],
+                          all_time_duration=all_time_stats['duration'],
+                          all_time_volume=all_time_stats['volume'],
                           exercise_stats=exercise_stats,
                           body_part_stats=body_part_stats,
                           muscle_map=muscle_map,

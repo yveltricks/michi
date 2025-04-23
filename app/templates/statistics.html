@@ -39,11 +39,11 @@
             </div>
             <div class="stat-item">
                 <div class="stat-label">Duration:</div>
-                <div class="stat-value">{{ yearly_duration }}</div>
+                <div class="stat-value">{{ (yearly_duration / 60)|round|int }} hours</div>
             </div>
             <div class="stat-item">
                 <div class="stat-label">Total Weight Lifted:</div>
-                <div class="stat-value">{{ yearly_volume }}</div>
+                <div class="stat-value">{{ (yearly_volume / 1000)|round(1) }} {{ user.preferred_weight_unit }}</div>
             </div>
         </div>
     </div>
@@ -68,38 +68,153 @@
             </div>
             <div class="stat-item">
                 <div class="stat-label">Duration:</div>
-                <div class="stat-value">{{ all_time_duration }}</div>
+                <div class="stat-value">{{ (all_time_duration / 60)|round|int }} hours</div>
             </div>
             <div class="stat-item">
                 <div class="stat-label">Total Weight Lifted:</div>
-                <div class="stat-value">{{ all_time_volume }}</div>
+                <div class="stat-value">{{ (all_time_volume / 1000)|round(1) }} {{ user.preferred_weight_unit }}</div>
             </div>
         </div>
     </div>
 
-    <!-- Best Lifts Out of Exercises Done This Year -->
+    <!-- Charts Section -->
     <div class="stats-section">
         <div class="stats-section-header">
-            <h2>Best Lifts Out of Exercises Done This Year:</h2>
+            <h2>Progress Charts</h2>
         </div>
-        <div class="best-lifts-grid">
-            <div class="best-lift-item">
-                <div class="lift-label">Bench Press:</div>
-                <div class="lift-value">{{ best_lifts.get('Bench Press', '0kg') }}</div>
+        <div class="charts-container">
+            <div class="chart-wrapper">
+                <h3>Volume</h3>
+                <canvas id="volumeChart"></canvas>
             </div>
-            <div class="best-lift-item">
-                <div class="lift-label">Squat:</div>
-                <div class="lift-value">{{ best_lifts.get('Squat', '0kg') }}</div>
+            <div class="chart-wrapper">
+                <h3>Duration</h3>
+                <canvas id="durationChart"></canvas>
             </div>
-            <div class="best-lift-item">
-                <div class="lift-label">Dead lift:</div>
-                <div class="lift-value">{{ best_lifts.get('Deadlift', '0kg') }}</div>
+            <div class="chart-wrapper">
+                <h3>Experience</h3>
+                <canvas id="expChart"></canvas>
             </div>
-            <div class="best-lift-item">
-                <div class="lift-label">Bicep Curl:</div>
-                <div class="lift-value">{{ best_lifts.get('Bicep Curl', '0kg') }}</div>
+            <div class="chart-wrapper">
+                <h3>Reps</h3>
+                <canvas id="repsChart"></canvas>
             </div>
         </div>
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Chart colors
+    const colors = {
+        volume: 'rgba(54, 162, 235, 0.2)',
+        duration: 'rgba(255, 99, 132, 0.2)',
+        exp: 'rgba(75, 192, 192, 0.2)',
+        reps: 'rgba(153, 102, 255, 0.2)'
+    };
+
+    // Chart border colors
+    const borderColors = {
+        volume: 'rgba(54, 162, 235, 1)',
+        duration: 'rgba(255, 99, 132, 1)',
+        exp: 'rgba(75, 192, 192, 1)',
+        reps: 'rgba(153, 102, 255, 1)'
+    };
+
+    // Chart data from the server
+    const chartData = {{ chart_data|tojson }};
+
+    // Create volume chart
+    new Chart(document.getElementById('volumeChart'), {
+        type: 'line',
+        data: {
+            labels: chartData.dates,
+            datasets: [{
+                label: 'Volume',
+                data: chartData.volume,
+                backgroundColor: colors.volume,
+                borderColor: borderColors.volume,
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+
+    // Create duration chart
+    new Chart(document.getElementById('durationChart'), {
+        type: 'line',
+        data: {
+            labels: chartData.dates,
+            datasets: [{
+                label: 'Duration (minutes)',
+                data: chartData.duration,
+                backgroundColor: colors.duration,
+                borderColor: borderColors.duration,
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+
+    // Create exp chart
+    new Chart(document.getElementById('expChart'), {
+        type: 'line',
+        data: {
+            labels: chartData.dates,
+            datasets: [{
+                label: 'Experience',
+                data: chartData.exp,
+                backgroundColor: colors.exp,
+                borderColor: borderColors.exp,
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+
+    // Create reps chart
+    new Chart(document.getElementById('repsChart'), {
+        type: 'line',
+        data: {
+            labels: chartData.dates,
+            datasets: [{
+                label: 'Reps',
+                data: chartData.reps,
+                backgroundColor: colors.reps,
+                borderColor: borderColors.reps,
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+});
+</script>
 {% endblock %} 
