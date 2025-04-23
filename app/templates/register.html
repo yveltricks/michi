@@ -2,14 +2,27 @@
 <html>
 <head>
     <title>Register for Michi</title>
+    <!-- CSRF token to protect against cross-site request forgery attacks -->
     <meta name="csrf-token" content="{{ csrf_token() }}">
+    <!-- 
+    Using Tailwind CSS from CDN for quick styling.
+    It's brilliant for rapidly building responsive interfaces without writing tons of custom CSS.
+    -->
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
 </head>
 <body class="bg-gray-100">
     <div class="min-h-screen flex items-center justify-center">
+        <!-- 
+        Main registration container - a clean white card with shadow.
+        I've kept it a reasonable width (w-96) so it's not too stretched on larger screens.
+        -->
         <div class="bg-white p-8 rounded-lg shadow-md w-96">
             <h2 class="text-2xl font-bold mb-6 text-center">Register for Michi</h2>
 
+            <!-- 
+            Flash messages for displaying errors.
+            The red background makes it clear when something's gone wrong.
+            -->
             {% with messages = get_flashed_messages() %}
                 {% if messages %}
                     <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4">
@@ -18,30 +31,40 @@
                 {% endif %}
             {% endwith %}
 
+            <!-- 
+            Registration form with spaced inputs.
+            The space-y-4 class gives nice consistent vertical spacing between fields.
+            -->
             <form method="POST" class="space-y-4">
+                <!-- Hidden CSRF token field for security -->
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <!-- First Name -->
+                
+                <!-- 
+                User's personal information section.
+                Each field has consistent styling with helpful labels.
+                -->
                 <div>
                     <label class="block text-gray-700 text-sm font-bold mb-2">First Name</label>
                     <input type="text" name="first_name" maxlength="85" required
                            class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500">
                 </div>
 
-                <!-- Last Name -->
                 <div>
                     <label class="block text-gray-700 text-sm font-bold mb-2">Last Name</label>
                     <input type="text" name="last_name" maxlength="85" required
                            class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500">
                 </div>
 
-                <!-- Email -->
                 <div>
                     <label class="block text-gray-700 text-sm font-bold mb-2">Email</label>
                     <input type="email" name="email" required
                            class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500">
                 </div>
 
-                <!-- Username -->
+                <!-- 
+                Username field with pattern validation and helpful hint.
+                The pattern ensures usernames only contain valid characters.
+                -->
                 <div>
                     <label class="block text-gray-700 text-sm font-bold mb-2">Username</label>
                     <input type="text" name="username" required pattern="[a-zA-Z0-9_]{1,20}"
@@ -49,7 +72,10 @@
                     <p class="text-sm text-gray-500 mt-1">Only letters, numbers, and underscores allowed. Max 20 characters.</p>
                 </div>
 
-                <!-- Password -->
+                <!-- 
+                Password field with strength requirements displayed.
+                The hint text explains what makes a valid password.
+                -->
                 <div>
                     <label class="block text-gray-700 text-sm font-bold mb-2">Password</label>
                     <input type="password" name="password" required
@@ -57,7 +83,7 @@
                     <p class="text-sm text-gray-500 mt-1">Must be between 8 and 200 characters, contain at least one uppercase letter, one lowercase letter, and one number.</p>
                 </div>
 
-                <!-- Gender -->
+                <!-- Gender selection dropdown -->
                 <div>
                     <label class="block text-gray-700 text-sm font-bold mb-2">Gender</label>
                     <select name="gender" required class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500">
@@ -67,11 +93,15 @@
                     </select>
                 </div>
 
-                <!-- Birthday -->
+                <!-- 
+                Birthday selection with day, month, and year dropdowns.
+                These are connected through JavaScript to show the correct number of days
+                based on month and year (accounting for leap years too!).
+                -->
                 <div>
                     <label class="block text-gray-700 text-sm font-bold mb-2">Birthday</label>
                     <div class="grid grid-cols-3 gap-2">
-                        <!-- Day -->
+                        <!-- Day dropdown -->
                         <select name="birth_day" required class="px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500">
                             <option value="">Day</option>
                             {% for day in range(1, 32) %}
@@ -79,7 +109,7 @@
                             {% endfor %}
                         </select>
 
-                        <!-- Month -->
+                        <!-- Month dropdown with full month names -->
                         <select name="birth_month" required class="px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500">
                             <option value="">Month</option>
                             <option value="1">January</option>
@@ -96,7 +126,7 @@
                             <option value="12">December</option>
                         </select>
 
-                        <!-- Year -->
+                        <!-- Year dropdown with dynamically generated range -->
                         <select name="birth_year" required class="px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500">
                             <option value="">Year</option>
                             {% for year in range(year_range.end, year_range.start - 1, -1) %}
@@ -106,7 +136,10 @@
                     </div>
                 </div>
 
-                <!-- Bodyweight -->
+                <!-- 
+                Bodyweight input with unit selection.
+                The grid layout puts these side by side for a compact layout.
+                -->
                 <div class="grid grid-cols-2 gap-4">
                     <div>
                         <label class="block text-gray-700 text-sm font-bold mb-2">Bodyweight</label>
@@ -123,11 +156,14 @@
                 </div>
                 <p class="text-sm text-gray-500 mt-1">Enter a weight between 5-600 kg (11-1322 lbs)</p>
 
-                <!-- Measurement Preferences -->
+                <!-- 
+                Measurement preferences section - helps personalise the app experience.
+                Users can choose their preferred units for weight, distance and body measurements.
+                -->
                 <div class="space-y-4">
                     <h3 class="font-bold text-lg">Measurement Preferences</h3>
 
-                    <!-- Weight Unit -->
+                    <!-- Weight unit preference (kg or lbs) -->
                     <div>
                         <label class="block text-gray-700 text-sm font-bold mb-2">Weight Unit</label>
                         <select name="preferred_weight_unit" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500">
@@ -136,7 +172,7 @@
                         </select>
                     </div>
 
-                    <!-- Distance Unit -->
+                    <!-- Distance unit preference (km or miles) -->
                     <div>
                         <label class="block text-gray-700 text-sm font-bold mb-2">Distance Unit</label>
                         <select name="preferred_distance_unit" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500">
@@ -145,7 +181,7 @@
                         </select>
                     </div>
 
-                    <!-- Body Measurement Unit -->
+                    <!-- Body measurement unit preference (cm or inches) -->
                     <div>
                         <label class="block text-gray-700 text-sm font-bold mb-2">Body Measurement Unit</label>
                         <select name="preferred_measurement_unit" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500">
@@ -155,12 +191,15 @@
                     </div>
                 </div>
 
-                <!-- Register Button -->
+                <!-- 
+                Register button - large and blue for visibility.
+                The hover effect gives nice feedback when users interact with it.
+                -->
                 <button type="submit" class="w-full bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600 transition-colors">
                     Register
                 </button>
 
-                <!-- Login Link -->
+                <!-- Link back to login page for existing users -->
                 <p class="text-center text-gray-600 mt-4">
                     Already have an account? <a href="{{ url_for('auth.login') }}" class="text-blue-500 hover:underline">Login</a>
                 </p>
@@ -168,7 +207,11 @@
         </div>
     </div>
 
-    <!-- JavaScript for dynamic day dropdown -->
+    <!-- 
+    JavaScript for the birthday dropdowns.
+    This clever bit of code updates the days dropdown based on the selected month and year.
+    It handles leap years correctly too!
+    -->
     <script>
         function updateDays() {
             const daySelect = document.querySelector('select[name="birth_day"]');
@@ -209,7 +252,7 @@
             }
         }
 
-        // Add event listeners
+        // Set up event listeners when the DOM is loaded
         document.addEventListener('DOMContentLoaded', function() {
             const monthSelect = document.querySelector('select[name="birth_month"]');
             const yearSelect = document.querySelector('select[name="birth_year"]');
@@ -217,7 +260,7 @@
             monthSelect.addEventListener('change', updateDays);
             yearSelect.addEventListener('change', updateDays);
 
-            // Initial update
+            // Initial update to set correct days for default month
             updateDays();
         });
     </script>

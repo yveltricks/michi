@@ -1,14 +1,27 @@
 {% extends "base.html" %}
 {% block title %}Measurements{% endblock %}
 {% block content %}
+<!-- 
+Main container for the measurements dashboard.
+Uses a responsive grid layout that adjusts from 1 to 3 columns
+based on screen size, with consistent spacing between cards.
+-->
 <div class="container mx-auto px-4 py-8">
     <div class="text-center mb-8">
         <h1 class="text-3xl font-bold mb-2">Body Measurements</h1>
         <p class="text-gray-600">Track your body measurements to monitor your progress</p>
     </div>
 
+    <!-- 
+    Responsive grid of measurement cards.
+    Each card displays the most recent measurement value and links
+    to a dedicated tracking page for that specific measurement.
+    -->
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        <!-- Weight Card -->
+        <!-- 
+        Weight card - shows the latest weight in the user's preferred unit.
+        Includes a "Most Recent" label to indicate it's showing the latest entry.
+        -->
         <a href="{{ url_for('workout.track_measurement', measurement_type='weight') }}" 
            class="block bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-200 relative overflow-hidden">
             <div class="absolute top-0 right-0 bg-blue-500 text-white px-3 py-1 rounded-bl-lg text-sm">
@@ -39,7 +52,10 @@
             </div>
         </a>
 
-        <!-- Body Fat Card -->
+        <!-- 
+        Body fat percentage card - always displays in percentage format.
+        Includes date of measurement for context.
+        -->
         <a href="{{ url_for('workout.track_measurement', measurement_type='body_fat') }}"
            class="block bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-200 relative overflow-hidden">
             <div class="absolute top-0 right-0 bg-blue-500 text-white px-3 py-1 rounded-bl-lg text-sm">
@@ -65,7 +81,10 @@
             </div>
         </a>
 
-        <!-- Chest Card -->
+        <!-- 
+        Chest measurement card - displays in cm or inches based on user preference.
+        Uses unit conversion for consistent display regardless of storage format.
+        -->
         <a href="{{ url_for('workout.track_measurement', measurement_type='chest') }}"
            class="block bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-200 relative overflow-hidden">
             <div class="absolute top-0 right-0 bg-blue-500 text-white px-3 py-1 rounded-bl-lg text-sm">
@@ -96,7 +115,10 @@
             </div>
         </a>
 
-        <!-- Waist Card -->
+        <!-- 
+        Waist measurement card - important for tracking core changes.
+        Displays in user's preferred unit with automatic conversion.
+        -->
         <a href="{{ url_for('workout.track_measurement', measurement_type='waist') }}"
            class="block bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-200 relative overflow-hidden">
             <div class="absolute top-0 right-0 bg-blue-500 text-white px-3 py-1 rounded-bl-lg text-sm">
@@ -127,10 +149,14 @@
             </div>
         </a>
 
-        <!-- Arms Section -->
+        <!-- 
+        Arms section - consolidated card with links to all arm measurements.
+        Groups related measurements for more efficient use of space.
+        -->
         <div class="bg-white rounded-lg shadow-md p-6">
             <h2 class="text-xl font-semibold mb-4">Arms</h2>
             <div class="space-y-4">
+                <!-- Left bicep measurement with hover effect for better interactivity -->
                 <a href="{{ url_for('workout.track_measurement', measurement_type='left_bicep') }}"
                    class="block hover:bg-gray-50 p-2 rounded">
                     <span class="font-medium">Left Bicep</span>
@@ -145,6 +171,7 @@
                     </span>
                     {% endif %}
                 </a>
+                <!-- Right bicep measurement with consistent styling to match left side -->
                 <a href="{{ url_for('workout.track_measurement', measurement_type='right_bicep') }}"
                    class="block hover:bg-gray-50 p-2 rounded">
                     <span class="font-medium">Right Bicep</span>
@@ -159,6 +186,7 @@
                     </span>
                     {% endif %}
                 </a>
+                <!-- Left forearm measurement for complete arm tracking -->
                 <a href="{{ url_for('workout.track_measurement', measurement_type='left_forearm') }}"
                    class="block hover:bg-gray-50 p-2 rounded">
                     <span class="font-medium">Left Forearm</span>
@@ -173,6 +201,7 @@
                     </span>
                     {% endif %}
                 </a>
+                <!-- Right forearm measurement completes the arm measurements set -->
                 <a href="{{ url_for('workout.track_measurement', measurement_type='right_forearm') }}"
                    class="block hover:bg-gray-50 p-2 rounded">
                     <span class="font-medium">Right Forearm</span>
@@ -190,10 +219,14 @@
             </div>
         </div>
 
-        <!-- Legs Section -->
+        <!-- 
+        Legs section - consolidated card with links to all leg measurements.
+        Uses the same layout and hover effects as the arms section for consistency.
+        -->
         <div class="bg-white rounded-lg shadow-md p-6">
             <h2 class="text-xl font-semibold mb-4">Legs</h2>
             <div class="space-y-4">
+                <!-- Left thigh measurement tracking -->
                 <a href="{{ url_for('workout.track_measurement', measurement_type='left_thigh') }}"
                    class="block hover:bg-gray-50 p-2 rounded">
                     <span class="font-medium">Left Thigh</span>

@@ -2,8 +2,17 @@
 {% block title %}Track {{ measurement_type|title }}{% endblock %}
 
 {% block extra_head %}
+<!-- 
+I'm using Chart.js here for visualising measurement data over time.
+It's a brilliant library for creating responsive, interactive charts.
+Much better than trying to build something custom!
+-->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <style>
+    /* 
+    The chart container gets a nice white background and subtle shadow
+    to make it stand out as an important element on the page.
+    */
     .chart-container {
         background-color: white;
         padding: 20px;
@@ -14,17 +23,28 @@
         height: 400px;
     }
 
-    /* Add this to ensure the x-axis labels have enough space */
+    /* 
+    Making sure chart labels don't get cut off at the bottom.
+    This was a bit tricky to get right - needed extra space for the x-axis labels.
+    */
     #measurementChart {
         margin-bottom: 30px; /* Adds space between the chart and the x-axis labels */
     }
 
+    /* 
+    A simple message for when there's no data to display.
+    Better than showing an empty chart or error.
+    */
     .no-data-message {
         text-align: center;
         padding: 20px;
         color: #666;
     }
 
+    /* 
+    The measurement history section gets the same styling as the chart
+    for visual consistency. White background with subtle shadow.
+    */
     .measurement-history {
         background-color: white;
         padding: 20px;
@@ -33,11 +53,13 @@
         margin-top: 20px;
     }
 
+    /* Making the table fill the container width */
     .measurement-history table {
         width: 100%;
         border-collapse: collapse;
     }
 
+    /* Table header and cell styling with subtle borders */
     .measurement-history th,
     .measurement-history td {
         padding: 12px;
@@ -45,23 +67,32 @@
         border-bottom: 1px solid #ddd;
     }
 
+    /* Light grey background for table headers */
     .measurement-history th {
         background-color: #f8f9fa;
     }
 
+    /* Row highlight on hover - helps users track across a row */
     .measurement-history tr:hover {
         background-color: #f1f1f1;
     }
 
+    /* Delete button styling - red text to indicate destructive action */
     .delete-button {
         color: #dc3545;
         cursor: pointer;
     }
 
+    /* Subtle underline on hover for delete button */
     .delete-button:hover {
         text-decoration: underline;
     }
 
+    /* 
+    Form container styling - matches the chart and table styles.
+    The form is super important for user interaction so it gets
+    the same visual treatment.
+    */
     .form-container {
         background-color: white;
         padding: 20px;
@@ -70,6 +101,7 @@
         margin-bottom: 20px;
     }
 
+    /* Form headings styling */
     .form-container h2 {
         margin-bottom: 16px;
         font-size: 1.25rem;
@@ -77,6 +109,7 @@
         color: #1a202c;
     }
 
+    /* Form labels styling */
     .form-container label {
         display: block;
         margin-bottom: 8px;
@@ -85,6 +118,7 @@
         color: #4a5568;
     }
 
+    /* Form input fields and selectors styling */
     .form-container input,
     .form-container select {
         width: 100%;
@@ -95,6 +129,7 @@
         color: #4a5568;
     }
 
+    /* Form submit button styling */
     .form-container button {
         width: 100%;
         padding: 10px;
@@ -107,10 +142,12 @@
         cursor: pointer;
     }
 
+    /* Button hover effect */
     .form-container button:hover {
         background-color: #3182ce;
     }
 
+    /* Time range selector styling for the chart */
     .time-range-selector {
         background-color: #f8f9fa;
         border: 1px solid #e2e8f0;
@@ -126,7 +163,10 @@
 <div class="container mx-auto px-4">
     <h1 class="text-2xl font-bold mb-6">Track {{ measurement_type|title|replace('_', ' ') }}</h1>
     
-    <!-- Input Form -->
+    <!-- 
+    Input form for logging new measurements.
+    The form changes based on the measurement type to display appropriate fields.
+    -->
     <div class="form-container">
         <h2>Log New {{ measurement_type|title|replace('_', ' ') }}</h2>
         <form id="measurement-form" class="space-y-4">
@@ -136,6 +176,10 @@
                     <input type="number" step="0.1" name="value" id="measurement-value" required min="0">
                 </div>
                 
+                <!-- 
+                Unit selector - only shown for measurements that can be in different units.
+                We use the user's preferred units as the default selection.
+                -->
                 {% if measurement_type in ['weight', 'chest', 'waist', 'hips', 'neck', 'left_bicep', 'right_bicep', 'left_forearm', 'right_forearm', 'left_thigh', 'right_thigh', 'left_calf', 'right_calf'] %}
                 <div class="w-32">
                     <label for="unit-selector">Unit</label>
@@ -152,6 +196,10 @@
                 {% endif %}
             </div>
             
+            <!-- 
+            Valid range information to guide the user.
+            Shows unit conversions to help users who think in different units.
+            -->
             <div class="text-sm text-gray-600">
                 Valid range: 
                 {% if measurement_type == 'weight' %}
@@ -167,13 +215,16 @@
         </form>
     </div>
 
-    <!-- Chart -->
+    <!-- 
+    Chart for visualising progress over time.
+    Users can select different time ranges to view trends.
+    -->
     <div class="chart-container">
         <div class="flex justify-between items-center mb-4">
             <h2 class="text-xl font-semibold">Progress Chart</h2>
             <select id="timeRange" class="time-range-selector">
-                <option value="3m">Last 3 Months</option>
-                <option value="6m">Last 6 Months</option>
+                <option value="30days">Last 30 Days</option>
+                <option value="60days">Last 60 Days</option>
                 <option value="cy">Current Year</option>
                 <option value="all">All Time</option>
             </select>
@@ -184,7 +235,10 @@
         </div>
     </div>
 
-    <!-- Measurement History -->
+    <!-- 
+    Measurement history table - shows all logged measurements
+    with values converted to the user's preferred units
+    -->
     <div class="measurement-history">
         <h2 class="text-xl font-semibold mb-4">Measurement History</h2>
         {% if logs %}
@@ -233,23 +287,31 @@
 
 {% block scripts %}
 <script>
-// Unit conversion functions
+// Unit conversion functions - handy utility functions for converting between units
 const kgToLbs = kg => kg * 2.20462;
 const lbsToKg = lbs => lbs / 2.20462;
 const cmToIn = cm => cm * 0.393701;
 const inToCm = inches => inches * 2.54;
 
+// Format date for display in chart
+function formatDate(dateString) {
+    const date = new Date(dateString);
+    return date.toLocaleDateString();
+}
+
+// Store the chart instance so we can destroy and recreate it
 let measurementChart = null;
 
 // Initialize the chart with proper configuration
 function initChart(data) {
     const ctx = document.getElementById('measurementChart').getContext('2d');
     
+    // Destroy previous chart instance if it exists to prevent memory leaks
     if (measurementChart) {
         measurementChart.destroy();
     }
 
-    // Show/hide no data message
+    // Show/hide no data message based on whether there's data to display
     const noDataMessage = document.getElementById('chart-no-data');
     if (data.labels.length === 0) {
         noDataMessage.classList.remove('hidden');
@@ -258,7 +320,7 @@ function initChart(data) {
         noDataMessage.classList.add('hidden');
     }
 
-    // Determine the unit for the y-axis label
+    // Determine the unit for the y-axis label based on measurement type and user preferences
     let unit;
     if ('{{ measurement_type }}' === 'weight') {
         unit = '{{ current_user.preferred_weight_unit }}';
@@ -268,6 +330,7 @@ function initChart(data) {
         unit = '{{ current_user.preferred_measurement_unit }}';
     }
 
+    // Create the chart with Chart.js
     measurementChart = new Chart(ctx, {
         type: 'line',
         data: {
@@ -291,7 +354,7 @@ function initChart(data) {
             },
             scales: {
                 y: {
-                    beginAtZero: false,
+                    beginAtZero: false, // Don't force y-axis to start at zero for better detail
                     grid: {
                         color: 'rgba(0, 0, 0, 0.1)'
                     },
@@ -319,27 +382,43 @@ function initChart(data) {
     });
 }
 
-// Load chart data with time range
-function loadChartData() {
-    const timeRange = document.getElementById('timeRange').value;
-    fetch(`/workout/api/measurement-data/{{ measurement_type }}?range=${timeRange}`)
-        .then(response => response.json())
-        .then(data => {
-            initChart(data);
-        })
-        .catch(error => {
-            console.error('Error loading chart data:', error);
-            document.getElementById('chart-no-data').classList.remove('hidden');
-        });
+// Load chart data function - retrieves and displays measurement history on chart
+function loadChartData(timeRange = '30days') {
+    fetch(`/workout/api/measurement-data/{{ measurement_type }}?range=${timeRange}`, {
+        method: 'GET',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        initChart(data);
+    })
+    .catch(error => {
+        console.error('Error loading chart data:', error);
+        const noDataMessage = document.getElementById('chart-no-data');
+        const chartCanvas = document.getElementById('measurementChart');
+        noDataMessage.style.display = 'block';
+        chartCanvas.style.display = 'none';
+    });
 }
 
-// Handle time range changes
-document.getElementById('timeRange').addEventListener('change', loadChartData);
+// Handler for time range selector change
+document.getElementById('timeRange').addEventListener('change', function() {
+    const selectedTimeRange = this.value;
+    loadChartData(selectedTimeRange);
+});
 
-// Handle form submission
-document.getElementById('measurement-form').addEventListener('submit', function(e) {
-    e.preventDefault();
+// Submit form to log a new measurement when the button is clicked
+document.getElementById('measurement-form').addEventListener('submit', function(event) {
+    event.preventDefault();
     
+    // Parse the measurement value entered by the user
     let value = parseFloat(document.getElementById('measurement-value').value);
     const unitSelector = document.getElementById('unit-selector');
     let unit = null;
@@ -349,7 +428,7 @@ document.getElementById('measurement-form').addEventListener('submit', function(
         unit = unitSelector.value;
     }
 
-    // Create the data object
+    // Create the data object to send to the server
     const data = {
         value: value
     };
@@ -359,10 +438,11 @@ document.getElementById('measurement-form').addEventListener('submit', function(
         data.unit = unit;
     }
 
+    // Send the data to the server via fetch API
     fetch(`/workout/measurements/{{ measurement_type }}`, {
         method: 'POST',
         headers: {
-            'Content-Type': 'application/json',
+            'Content-Type': 'application/json'
         },
         body: JSON.stringify(data)
     })
@@ -374,7 +454,7 @@ document.getElementById('measurement-form').addEventListener('submit', function(
     })
     .then(data => {
         if (data.success) {
-            window.location.reload();
+            window.location.reload(); // Reload the page to show the new measurement
         } else {
             alert(data.error || 'Error logging measurement');
         }
@@ -385,11 +465,14 @@ document.getElementById('measurement-form').addEventListener('submit', function(
     });
 });
 
-// Delete measurement
+// Delete measurement function - handles confirmation and API call
 function deleteMeasurement(logId) {
     if (confirm('Are you sure you want to delete this measurement?')) {
         fetch(`/workout/delete-measurement/${logId}`, {
-            method: 'DELETE'
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json'
+            }
         })
         .then(response => {
             if (!response.ok) {
@@ -399,7 +482,7 @@ function deleteMeasurement(logId) {
         })
         .then(data => {
             if (data.success) {
-                window.location.reload();
+                window.location.reload(); // Reload the page to update the list
             } else {
                 alert(data.error || 'Error deleting measurement');
             }
@@ -412,15 +495,17 @@ function deleteMeasurement(logId) {
 }
 
 // Initialize chart on page load
-document.addEventListener('DOMContentLoaded', loadChartData);
+document.addEventListener('DOMContentLoaded', function() {
+    loadChartData();
+});
 
-// Prevent arrow keys from exceeding limits
+// Prevent value from exceeding limits when manually entered
 document.getElementById('measurement-value').addEventListener('input', function(e) {
     const max = parseFloat(this.max);
     const min = parseFloat(this.min);
     let value = parseFloat(this.value);
 
-    // Handle manual input
+    // Handle manual input that exceeds boundaries
     if (value > max) {
         this.value = max;
     } else if (value < min) {
@@ -428,13 +513,13 @@ document.getElementById('measurement-value').addEventListener('input', function(
     }
 });
 
-// Add event listener for arrow keys
+// Add event listener for arrow keys to prevent exceeding limits
 document.getElementById('measurement-value').addEventListener('keydown', function(e) {
     const max = parseFloat(this.max);
     const min = parseFloat(this.min);
     let value = parseFloat(this.value);
 
-    // Prevent arrow keys from exceeding limits
+    // Prevent arrow keys from allowing values outside the valid range
     if (e.key === 'ArrowUp' && value >= max) {
         e.preventDefault();
         this.value = max;

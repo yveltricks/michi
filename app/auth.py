@@ -9,9 +9,10 @@ from dataclasses import dataclass
 import re
 import json
 from .workout import calculate_workout_metrics  # Import the function from workout.py
-from .utils import convert_volume_to_preferred_unit, calculate_weekly_stats, compare_exercise_progress, parse_duration
+from .utils import convert_volume_to_preferred_unit, calculate_weekly_stats, compare_exercise_progress, parse_duration, identify_underworked_muscles
 from werkzeug.utils import secure_filename
 import os
+import copy
 
 @dataclass
 class YearRange:
@@ -54,55 +55,268 @@ def validate_weight(weight_value, unit='kg'):
 @auth.route('/home')
 @login_required
 def home():
-    """Home page route"""
-    # Get recent workouts for the current user
-    recent_workouts = Workout.query.filter_by(user_id=current_user.id).order_by(Workout.date.desc()).limit(10).all()
-    
-    # Get followed users' workouts for "Home" feed
-    followed_users = current_user.following.all()
-    followed_user_ids = [user.id for user in followed_users] + [current_user.id]  # Include own posts
-    following_sessions = Session.query.filter(Session.user_id.in_(followed_user_ids)).order_by(Session.session_date.desc()).limit(10).all()
-    
-    # Get all users' public workouts for "Discover" feed (excluding those already shown in Home feed)
-    public_sessions = Session.query.filter(~Session.user_id.in_(followed_user_ids)).order_by(Session.session_date.desc()).limit(10).all()
-    
-    # Calculate weekly stats
-    weekly_stats = calculate_weekly_stats(current_user.id)
-    
-    # Make sure the weekly stats have default values if they're empty
-    if not weekly_stats.get('current_week'):
-        weekly_stats['current_week'] = {
-            'workout_count': 0,
-            'total_volume': 0,
-            'total_duration': 0,
-            'total_exp': 0
-        }
-    
-    if not weekly_stats.get('comparisons'):
-        weekly_stats['comparisons'] = {
-            'workout_count': 0,
-            'total_volume': 0,
-            'total_duration': 0,
-            'total_exp': 0
-        }
-    
-    # Process following sessions for display
-    processed_following_sessions = process_sessions_for_display(following_sessions, current_user)
-    
-    # Process public sessions for display
-    processed_public_sessions = process_sessions_for_display(public_sessions, current_user)
-    
-    # Get unread notification count
-    unread_notification_count = Notification.query.filter_by(
-        user_id=current_user.id,
-        is_read=False
-    ).count()
-    
-    return render_template('home.html', 
-                          following_sessions=processed_following_sessions,
-                          public_sessions=processed_public_sessions,
-                          weekly_stats=weekly_stats,
-                          unread_notification_count=unread_notification_count)
+    # Use a no_autoflush context for the entire request
+    with db.session.no_autoflush:
+        # Get current user's weekly stats
+        weekly_stats = calculate_weekly_stats(current_user.id)
+        
+        # Template expects the weekly_stats directly as returned by calculate_weekly_stats
+        # No need to reformat it since the template uses weekly_stats.current_week
+        
+        # Get followed users' workouts
+        following_sessions = []
+        
+        # Get current user's own sessions
+        user_sessions = Session.query.filter_by(user_id=current_user.id)\
+                        .order_by(Session.session_date.desc())\
+                        .limit(5).all()
+                        
+        # Add current user's sessions to the list with additional info
+        for session in user_sessions:
+            # Create a dictionary with the necessary data
+            session_data = {
+                'id': session.id,  # This is the ID used in various links and as data-id attributes
+                'session_date': session.session_date,
+                'title': session.title or 'Workout',  # Default title if none
+                'description': session.description,
+                'duration': session.duration,
+                'volume': session.volume,
+                'exp_gained': session.exp_gained,
+                'session_rating': session.session_rating or 0,  # Provide a default rating
+                'photo': session.photo,
+                'sets_completed': session.sets_completed,
+                'total_reps': session.total_reps,
+                'is_own': True,  # Mark as user's own workout
+                'user': current_user,
+                'user_level': current_user.level,
+                # These fields will be updated below if a workout is found
+                'user_liked': False,
+                'like_count': 0,
+                'comment_count': 0
+            }
+            
+            # Format exercises data
+            try:
+                if session.exercises:
+                    session_data['exercises'] = json.loads(session.exercises)
+                else:
+                    session_data['exercises'] = []
+            except Exception as e:
+                print(f"Error loading exercises: {e}")
+                session_data['exercises'] = []
+            
+            # Get social interaction data
+            workout = Workout.query.filter_by(
+                user_id=current_user.id,
+                date=session.session_date
+            ).first()
+            
+            if workout:
+                # Use workout ID for social features
+                session_data['id'] = workout.id
+                
+                # Count likes and comments
+                like_count = WorkoutLike.query.filter_by(workout_id=workout.id).count()
+                comment_count = WorkoutComment.query.filter_by(workout_id=workout.id).count()
+                
+                session_data['user_liked'] = False  # Can't like your own workout
+                session_data['like_count'] = like_count
+                session_data['comment_count'] = comment_count
+            
+            following_sessions.append(session_data)
+        
+        # Only process if user is following someone
+        if current_user.following.count() > 0:
+            # Get sessions from followed users with public profiles
+            for followed_user in current_user.following:
+                # Skip users with private profiles
+                if followed_user.privacy_setting == 'private':
+                    continue
+                    
+                # Get most recent session from this user
+                sessions = Session.query.filter_by(user_id=followed_user.id)\
+                              .order_by(Session.session_date.desc())\
+                              .limit(5).all()
+                              
+                # Add sessions to the list with additional info
+                for session in sessions:
+                    # Instead of using copy.copy, create a dictionary with the necessary data
+                    session_data = {
+                        'id': session.id,  # This is the ID used in various links and as data-id attributes
+                        'session_date': session.session_date,
+                        'title': session.title or 'Workout',  # Default title if none
+                        'description': session.description,
+                        'duration': session.duration,
+                        'volume': session.volume,
+                        'exp_gained': session.exp_gained,
+                        'session_rating': session.session_rating or 0,  # Provide a default rating
+                        'photo': session.photo,
+                        'sets_completed': session.sets_completed,
+                        'total_reps': session.total_reps,
+                        'is_own': False,
+                        'user': followed_user,
+                        'user_level': followed_user.level,
+                        # These fields will be updated below if a workout is found
+                        'user_liked': False,
+                        'like_count': 0,
+                        'comment_count': 0
+                    }
+                    
+                    # Format exercises data
+                    try:
+                        if session.exercises:
+                            session_data['exercises'] = json.loads(session.exercises)
+                        else:
+                            session_data['exercises'] = []
+                    except Exception as e:
+                        print(f"Error loading exercises: {e}")
+                        session_data['exercises'] = []
+                    
+                    # Get social interaction data
+                    workout = Workout.query.filter_by(
+                        user_id=followed_user.id,
+                        date=session.session_date
+                    ).first()
+                    
+                    if workout:
+                        # Use workout ID for social features
+                        session_data['id'] = workout.id
+                        
+                        # Check if the current user has liked this workout
+                        user_liked = WorkoutLike.query.filter_by(
+                            workout_id=workout.id,
+                            user_id=current_user.id
+                        ).first() is not None
+                        
+                        # Count likes and comments
+                        like_count = WorkoutLike.query.filter_by(workout_id=workout.id).count()
+                        comment_count = WorkoutComment.query.filter_by(workout_id=workout.id).count()
+                        
+                        session_data['user_liked'] = user_liked
+                        session_data['like_count'] = like_count
+                        session_data['comment_count'] = comment_count
+                    
+                    following_sessions.append(session_data)
+        
+        # Get public sessions for the discover feed (exclude followed users)
+        followed_user_ids = [user.id for user in current_user.following]
+        followed_user_ids.append(current_user.id)  # Also exclude own sessions
+        
+        discover_sessions_query = Session.query.join(User)\
+                              .filter(User.privacy_setting == 'public')\
+                              .filter(~User.id.in_(followed_user_ids))\
+                              .order_by(Session.session_date.desc())\
+                              .limit(10).all()
+        
+        public_sessions = []                      
+        # Format discover sessions the same way
+        for session in discover_sessions_query:
+            # Create a dictionary with the necessary data
+            user = User.query.get(session.user_id)
+            if not user:
+                continue  # Skip if user not found
+                
+            session_data = {
+                'id': session.id,  # This is the ID used in various links and as data-id attributes
+                'session_date': session.session_date,
+                'title': session.title or 'Workout',  # Default title if none
+                'description': session.description,
+                'duration': session.duration,
+                'volume': session.volume,
+                'exp_gained': session.exp_gained,
+                'session_rating': session.session_rating or 0,  # Provide a default rating
+                'photo': session.photo,
+                'sets_completed': session.sets_completed,
+                'total_reps': session.total_reps,
+                'is_own': False,
+                'user': user,
+                'user_level': user.level,
+                # These fields will be updated below if a workout is found
+                'user_liked': False,
+                'like_count': 0,
+                'comment_count': 0
+            }
+            
+            # Format exercises data
+            try:
+                if session.exercises:
+                    session_data['exercises'] = json.loads(session.exercises)
+                else:
+                    session_data['exercises'] = []
+            except Exception as e:
+                print(f"Error loading exercises: {e}")
+                session_data['exercises'] = []
+            
+            # Get social interaction data
+            workout = Workout.query.filter_by(
+                user_id=session.user_id,
+                date=session.session_date
+            ).first()
+            
+            if workout:
+                # Use workout ID for social features
+                session_data['id'] = workout.id
+                
+                # Check if the current user has liked this workout
+                user_liked = WorkoutLike.query.filter_by(
+                    workout_id=workout.id,
+                    user_id=current_user.id
+                ).first() is not None
+                
+                # Count likes and comments
+                like_count = WorkoutLike.query.filter_by(workout_id=workout.id).count()
+                comment_count = WorkoutComment.query.filter_by(workout_id=workout.id).count()
+                
+                session_data['user_liked'] = user_liked
+                session_data['like_count'] = like_count
+                session_data['comment_count'] = comment_count
+            
+            public_sessions.append(session_data)
+        
+        # Get unread notification count
+        unread_notification_count = Notification.query.filter_by(
+            user_id=current_user.id,
+            is_read=False
+        ).count()
+        
+        # Get top 10 users by level for global leaderboard
+        top_users = User.query.order_by(User.level.desc(), User.exp.desc()).limit(10).all()
+        
+        # Get current user's rank
+        user_rank_query = db.session.query(
+            db.func.count(User.id).label('rank')
+        ).filter(
+            (User.level > current_user.level) | 
+            ((User.level == current_user.level) & (User.exp > current_user.exp))
+        ).scalar()
+        
+        current_user_rank = user_rank_query + 1 if user_rank_query is not None else 1
+        
+        # Get top friends by level
+        following_ids = [user.id for user in current_user.following]
+        following_ids.append(current_user.id)  # Include current user
+        
+        top_friends = User.query.filter(
+            User.id.in_(following_ids)
+        ).order_by(
+            User.level.desc(), 
+            User.exp.desc()
+        ).limit(10).all()
+        
+        # Identify underworked muscles
+        underworked_muscle = identify_underworked_muscles(current_user.id)
+        
+        return render_template(
+            'home.html',
+            weekly_stats=weekly_stats,
+            following_sessions=following_sessions,
+            public_sessions=public_sessions,
+            unread_notification_count=unread_notification_count,
+            top_users=top_users,
+            top_friends=top_friends,
+            current_user_rank=current_user_rank,
+            underworked_muscle=underworked_muscle
+        )
 
 def process_sessions_for_display(sessions, current_user):
     """Process a list of sessions for display in the feed"""

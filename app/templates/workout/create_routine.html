@@ -2,13 +2,20 @@
 {% block title %}Create Routine{% endblock %}
 
 {% block extra_head %}
+<!-- 
+Import required stylesheets and JavaScript modules for the routine creation page.
+These scripts handle exercise selection, form validation, and other interactive elements.
+-->
 <link rel="stylesheet" href="{{ url_for('static', filename='css/workout.css') }}">
 <script src="{{ url_for('static', filename='js/workout.js') }}"></script>
 <script src="{{ url_for('static', filename='js/workout-timer.js') }}"></script>
 <script src="{{ url_for('static', filename='js/workout-handlers.js') }}"></script>
 <script src="{{ url_for('static', filename='js/modal-handlers.js') }}"></script>
 <style>
-    /* Additional routine-specific styles */
+    /* 
+    Additional routine-specific styles beyond the main workout.css file.
+    These styles create a clean, organised form with proper spacing and visual hierarchy.
+    */
     .routine-form {
         margin-top: 20px;
         background-color: white;
@@ -17,22 +24,29 @@
         box-shadow: 0 2px 5px rgba(0,0,0,0.1);
     }
     
+    /* Consistent spacing between form groups for readability */
     .routine-form .form-group {
         margin-bottom: 15px;
     }
     
+    /* Label styling to ensure clear field identification */
     .routine-form label {
         display: block;
         margin-bottom: 5px;
         font-weight: 500;
     }
     
+    /* 
+    Flexbox layout for muscle group checkboxes to wrap nicely 
+    on smaller screens whilst maintaining proper spacing
+    */
     .muscle-group-options {
         display: flex;
         flex-wrap: wrap;
         gap: 10px;
     }
     
+    /* Consistent input field styling across the form */
     .routine-form input[type="text"],
     .routine-form select,
     .routine-form textarea {
@@ -42,6 +56,10 @@
         border-radius: 4px;
     }
     
+    /* 
+    Toggle switch styling for the public/private selector.
+    Uses a custom slider design instead of the default checkbox.
+    */
     .toggle-switch {
         position: relative;
         display: inline-block;
@@ -49,12 +67,14 @@
         height: 24px;
     }
 
+    /* Hide the default checkbox but keep it accessible */
     .toggle-switch input {
         opacity: 0;
         width: 0;
         height: 0;
     }
 
+    /* Slider track styling with rounded corners */
     .toggle-slider {
         position: absolute;
         cursor: pointer;
@@ -67,6 +87,7 @@
         border-radius: 24px;
     }
 
+    /* Slider handle (the moving circle) */
     .toggle-slider:before {
         position: absolute;
         content: "";
@@ -79,14 +100,20 @@
         border-radius: 50%;
     }
 
+    /* Active state styling - blue background when checked */
     input:checked + .toggle-slider {
         background-color: #3b82f6;
     }
 
+    /* Move the handle to the right when checked */
     input:checked + .toggle-slider:before {
         transform: translateX(26px);
     }
     
+    /* 
+    Save button styling - prominent red colour to match the app's primary action buttons.
+    Full width for easy access on mobile devices.
+    */
     .save-routine-btn {
         display: block;
         width: 100%;
@@ -101,6 +128,7 @@
         margin-top: 20px;
     }
     
+    /* Darken the button on hover for visual feedback */
     .save-routine-btn:hover {
         background-color: #c53030;
     }
@@ -108,7 +136,16 @@
 {% endblock %}
 
 {% block content %}
+<!-- 
+Main container for the routine creation page.
+Uses minimum height to ensure proper spacing even with few exercises.
+Adds padding at the bottom to prevent content being hidden behind navigation.
+-->
 <div class="container mx-auto px-4 min-h-screen pb-24">
+    <!-- 
+    Header section with back button and title.
+    The title dynamically changes based on whether creating or editing a routine.
+    -->
     <div class="flex items-center mb-4 pt-4">
         <a href="{{ url_for('workout.workout_page') }}" class="inline-flex items-center text-gray-600 hover:text-gray-900">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
@@ -120,14 +157,22 @@
     </div>
 
     <div class="workout-container">
-        <!-- Routine Details Form -->
+        <!-- 
+        Routine details form - collects basic information about the routine.
+        Uses a responsive grid layout that stacks on mobile and displays in two columns on larger screens.
+        -->
         <div class="routine-form">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Routine name input field -->
                 <div class="form-group">
                     <label for="routine-name">Routine Name:</label>
                     <input type="text" id="routine-name" class="form-control" placeholder="e.g. Upper Body Day" {% if routine %}value="{{ routine.name }}"{% endif %}>
                 </div>
 
+                <!-- 
+                Difficulty level selector - helps users find appropriate routines.
+                Pre-selects the current value when editing an existing routine.
+                -->
                 <div class="form-group">
                     <label for="routine-level">Level:</label>
                     <select id="routine-level" class="form-control">
@@ -137,6 +182,10 @@
                     </select>
                 </div>
 
+                <!-- 
+                Training goal selector - helps categorise routines by purpose.
+                Influences how the routine is displayed in search results.
+                -->
                 <div class="form-group">
                     <label for="routine-goal">Goal:</label>
                     <select id="routine-goal" class="form-control">
@@ -148,6 +197,10 @@
                     </select>
                 </div>
 
+                <!-- 
+                Muscle groups selection - allows multiple selections via checkboxes.
+                Helps users find routines targeting specific muscle groups.
+                -->
                 <div class="form-group">
                     <label>Muscle Groups:</label>
                     <div class="muscle-group-options">
@@ -183,11 +236,19 @@
                     </div>
                 </div>
 
+                <!-- 
+                Routine description - spans both columns on larger screens.
+                Provides space for detailed information about the routine.
+                -->
                 <div class="md:col-span-2 form-group">
                     <label for="routine-description">Description (optional):</label>
                     <textarea id="routine-description" class="form-control" rows="3" placeholder="Describe your routine...">{% if routine %}{{ routine.description }}{% endif %}</textarea>
                 </div>
 
+                <!-- 
+                Sharing options - toggle switch for making the routine public.
+                Public routines appear in the explore section for all users.
+                -->
                 <div class="form-group sharing-options mb-4 p-3 border rounded bg-light">
                     <h4 class="mb-2">Sharing Options</h4>
                     <div class="flex items-center">

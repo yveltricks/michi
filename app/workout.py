@@ -19,127 +19,136 @@ workout = Blueprint('workout', __name__)
 @workout.route('/start-workout')
 @login_required
 def start_workout():
-    """Start a new workout or load a template"""
-    # Get all exercises for the dropdown
-    all_exercises = Exercise.query.all()
-
-    # Get the 5 most recent completed exercises for this user for quick selection
-    recent_sets = Set.query.join(Session).filter(
-        Session.user_id == current_user.id,
-        Set.completed == True
-    ).order_by(Session.session_date.desc()).limit(100).all()
-
-    # Extract unique exercise IDs while preserving order
-    recent_exercise_ids = []
-    for set in recent_sets:
-        if set.exercise_id not in recent_exercise_ids:
-            recent_exercise_ids.append(set.exercise_id)
-
-    # Limit to top 5
-    recent_exercise_ids = recent_exercise_ids[:5]
-
-    # Check if there's a repeat workout request
+    # Check if user wants to repeat a workout
     repeat_id = request.args.get('repeat')
+    prefilled_exercises = []
+    
     if repeat_id:
         try:
-            repeat_id = int(repeat_id)
-            # Check if it's a Session
+            # Try to find the workout session to repeat
             session = Session.query.get(repeat_id)
-
-            if session and session.user_id == current_user.id:
-                # Extract exercises from session
-                session_exercises = []
-
-                # Get the sets for this session
-                sets = Set.query.filter_by(session_id=repeat_id).all()
-
-                # Group sets by exercise
-                exercise_sets = {}
-                for s in sets:
-                    if s.exercise_id not in exercise_sets:
-                        exercise_sets[s.exercise_id] = []
-                    exercise_sets[s.exercise_id].append(s)
-
-                # Format exercises data
-                for exercise_id, sets in exercise_sets.items():
-                    exercise = Exercise.query.get(exercise_id)
-                    if not exercise:
-                        continue
-
-                    # Create exercise data structure
-                    exercise_data = {
-                        'id': exercise_id,
-                        'name': exercise.name,
-                        'input_type': exercise.input_type,
-                        'sets': []
-                    }
-
-                    # Add sets data
+            
+            if session and (session.user_id == current_user.id or User.query.get(session.user_id).privacy_setting == 'public'):
+                # Get all exercises from the previous workout
+                # Either from the Workout data or from the Sets
+                
+                # First try to get from Workout data if available
+                workout = Workout.query.filter_by(
+                    user_id=session.user_id,
+                    date=session.session_date
+                ).first()
+                
+                if workout and workout.data:
+                    # Parse workout data JSON
+                    try:
+                        data = json.loads(workout.data)
+                        
+                        # Check if exercises key exists
+                        if 'exercises' in data:
+                            exercises_data = data['exercises']
+                            
+                            # Filter out any exercises without an ID
+                            exercises_data = [ex for ex in exercises_data if 'id' in ex]
+                            
+                            # Format as prefilled exercises
+                            prefilled_exercises = []
+                            for ex in exercises_data:
+                                # Add to prefilled exercises
+                                exercise = Exercise.query.get(ex['id'])
+                                if not exercise:
+                                    continue
+                                    
+                                exercise_data = {
+                                    'id': exercise.id,
+                                    'name': exercise.name,
+                                    'input_type': exercise.input_type,
+                                    'sets': []
+                                }
+                                
+                                # Add the sets
+                                for s in ex['sets']:
+                                    set_data = {
+                                        'weight': s.get('weight'),
+                                        'reps': s.get('reps'),
+                                        'time': s.get('time'),
+                                        'distance': s.get('distance'),
+                                        'additional_weight': s.get('additional_weight'),
+                                        'assistance_weight': s.get('assistance_weight')
+                                    }
+                                    exercise_data['sets'].append(set_data)
+                                
+                                prefilled_exercises.append(exercise_data)
+                    except json.JSONDecodeError:
+                        print(f"Failed to parse workout data for session {repeat_id}")
+                
+                # If we don't have prefilled exercises from Workout data, try to get from Sets
+                if not prefilled_exercises:
+                    # Get all sets for this session
+                    sets = Set.query.filter_by(session_id=session.id).all()
+                    
+                    # Group by exercise
+                    exercises_dict = {}
                     for s in sets:
+                        if s.exercise_id not in exercises_dict:
+                            exercise = Exercise.query.get(s.exercise_id)
+                            if not exercise:
+                                continue
+                                
+                            exercises_dict[s.exercise_id] = {
+                                'id': exercise.id,
+                                'name': exercise.name,
+                                'input_type': exercise.input_type,
+                                'sets': []
+                            }
+                        
+                        # Add set data
                         set_data = {
                             'weight': s.weight,
                             'reps': s.reps,
                             'time': s.time,
                             'distance': s.distance,
-                            'additional_weight': s.additional_weight,
-                            'assistance_weight': s.assistance_weight
+                            'additional_weight': getattr(s, 'additional_weight', None),
+                            'assistance_weight': getattr(s, 'assistance_weight', None)
                         }
-                        exercise_data['sets'].append(set_data)
-
-                    session_exercises.append(exercise_data)
-
-                # Store the exercises in session for the start-workout page
-                from flask import session as flask_session
-                flask_session['repeat_workout_exercises'] = session_exercises
-
-                # Redirect back to the start-workout page (without the repeat parameter to avoid loops)
-                flash(
-                    'Workout loaded for repeat. Customize as needed and start when ready.', 'success')
-                return redirect(url_for('workout.start_workout'))
+                        exercises_dict[s.exercise_id]['sets'].append(set_data)
+                    
+                    # Convert dict to list
+                    prefilled_exercises = list(exercises_dict.values())
         except Exception as e:
-            print(f"Error loading repeat workout: {str(e)}")
+            print(f"Error getting exercises for repeat: {e}")
             import traceback
             traceback.print_exc()
-            # Continue with normal page loading
-
-    # Sort exercises by most recently used, then alphabetically
-    def sort_key(exercise):
-        try:
-            # Get the index in recent exercises (lower is more recent)
-            recent_index = recent_exercise_ids.index(
-                exercise.id) if exercise.id in recent_exercise_ids else float('inf')
-            return (recent_index, exercise.name)
-        except Exception as e:
-            print(f"Error sorting exercise {exercise.id}: {e}")
-            return (float('inf'), exercise.name)
-
-    sorted_exercises = sorted(all_exercises, key=sort_key)
-
-    # Get user's latest bodyweight for volume calculations
-    latest_bodyweight = Measurement.query.filter_by(user_id=current_user.id, type='weight')\
-        .order_by(Measurement.date.desc()).first()
-    user_weight = latest_bodyweight.value if latest_bodyweight else None
-
-    # Get unread notification count for the notification badge
-    unread_notification_count = Notification.query.filter_by(
+            
+    # Get user's most recent bodyweight for volume calculations
+    user_weight = 70  # Default value in kg
+    latest_weight = Measurement.query.filter_by(
         user_id=current_user.id,
-        is_read=False
-    ).count()
-
-    # Check if there are pre-filled exercises from a repeated workout
-    from flask import session as flask_session
-    prefilled_exercises = flask_session.get('repeat_workout_exercises', None)
-
-    # Remove the exercises from session after retrieving them to avoid persisting
-    if prefilled_exercises:
-        flask_session.pop('repeat_workout_exercises', None)
-
-    return render_template('workout/start.html',
-                          exercises=sorted_exercises,
-                          user_weight=user_weight,
-                          unread_notification_count=unread_notification_count,
-                          prefilled_exercises=prefilled_exercises)
-
+        type='weight'
+    ).order_by(Measurement.date.desc()).first()
+    
+    if latest_weight:
+        user_weight = latest_weight.value
+        
+        # Convert to kg if necessary
+        if latest_weight.unit == 'lbs':
+            user_weight = user_weight / 2.20462
+    
+    # Get all exercises for the selector modal
+    exercises = Exercise.query.all()
+    
+    # Get exercise suggestions based on user's workout history
+    from .utils import identify_underworked_muscles, get_suggested_exercises
+    focus_muscle = identify_underworked_muscles(current_user.id)
+    suggested_exercises = get_suggested_exercises(current_user.id, limit=5)
+    
+    return render_template(
+        'workout/start.html', 
+        exercises=exercises, 
+        prefilled_exercises=json.dumps(prefilled_exercises) if prefilled_exercises else None,
+        user_weight=user_weight,
+        focus_muscle=focus_muscle,
+        suggested_exercises=suggested_exercises
+    )
 
 @workout.route('/log-workout', methods=['POST'])
 @login_required

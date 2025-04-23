@@ -3,22 +3,43 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- CSRF token for form submission security -->
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>Michi - {% block title %}{% endblock %}</title>
     
-    <!-- Tailwind CSS -->
+    <!-- 
+    I'm using Tailwind CSS from CDN for quick prototyping and responsive design.
+    It's brilliant for rapidly building interfaces without writing tons of custom CSS.
+    -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- Legacy CSS support -->
+    <!-- 
+    Legacy CSS support for custom styles that aren't easily done with Tailwind.
+    The modal.css file contains styles specifically for popup modals.
+    -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/modal.css') }}">
     
+    <!-- 
+    Block for page-specific CSS and JS that child templates can inject.
+    Keeps the base template clean while allowing specialisation.
+    -->
     {% block extra_head %}{% endblock %}
 </head>
+<!-- 
+Setting user preferences as data attributes on the body tag.
+This makes them accessible to JS without additional AJAX calls.
+-->
 <body data-weight-unit="{{ current_user.preferred_weight_unit }}" data-distance-unit="{{ current_user.preferred_distance_unit }}" class="bg-gray-100 text-gray-900">
-    <!-- Navigation -->
+    <!-- 
+    Navigation - Different layouts for authenticated vs non-authenticated users.
+    The layout is also responsive with different nav styles for mobile vs desktop.
+    -->
     {% if current_user.is_authenticated %}
-    <!-- Hide top navigation on mobile, show on larger screens -->
+    <!-- 
+    Top navigation - hidden on mobile (we use bottom navigation for mobile)
+    but visible on desktop/tablet screens. This is responsive design in action.
+    -->
     <nav class="hidden md:block bg-white shadow-lg">
         <div class="max-w-6xl mx-auto px-4">
             <div class="flex justify-between items-center h-16">
@@ -32,6 +53,10 @@
                     <a href="{{ url_for('workout.measurements') }}" class="text-gray-600 hover:text-gray-900 {% if request.endpoint == 'workout.measurements' %}font-medium{% endif %}">Measurements</a>
                     <a href="{{ url_for('auth.profile') }}" class="text-gray-600 hover:text-gray-900 {% if request.endpoint == 'auth.profile' %}font-medium{% endif %}">Profile</a>
                     <a href="{{ url_for('auth.settings') }}" class="text-gray-600 hover:text-gray-900">Settings</a>
+                    <!-- 
+                    Notification button with badge for unread notifications.
+                    The badge shows the count and appears only when there are unread notifications.
+                    -->
                     <a href="{{ url_for('auth.notifications') }}" class="text-gray-600 hover:text-gray-900 relative">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
@@ -42,13 +67,19 @@
                         </span>
                         {% endif %}
                     </a>
+                    <!-- Search button to find other users -->
                     <a href="{{ url_for('auth.search_users') }}" class="text-gray-600 hover:text-gray-900">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                         </svg>
                     </a>
+                    <!-- Unit converter tool - opens in a modal popup -->
                     <a href="#" onclick="openUnitConverter(event)" class="text-gray-600 hover:text-gray-900">Unit Converter</a>
                     <a href="{{ url_for('auth.logout') }}" class="text-gray-600 hover:text-gray-900">Logout</a>
+                    <!-- 
+                    Profile picture or fallback avatar with initial.
+                    This creates a nice visual element in the nav bar.
+                    -->
                     <a href="{{ url_for('auth.profile') }}" class="flex items-center">
                         {% if current_user.profile_pic %}
                         <img src="{{ current_user.profile_pic }}" 
@@ -64,6 +95,10 @@
         </div>
     </nav>
     {% else %}
+    <!-- 
+    Simplified navigation for non-authenticated users.
+    Only shows login and register links - keeping it focused on getting users signed up.
+    -->
     <nav class="bg-white shadow-lg">
         <div class="max-w-6xl mx-auto px-4">
             <div class="flex justify-between items-center h-16">
@@ -80,7 +115,11 @@
     </nav>
     {% endif %}
 
-    <!-- Flash Messages -->
+    <!-- 
+    Flash Messages - Display alerts from backend operations.
+    These auto-style based on the message category (error or success).
+    Flask's flash system is brilliant for showing feedback on form submissions.
+    -->
     {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
             <div class="max-w-6xl mx-auto px-4 mt-4">
@@ -93,14 +132,21 @@
         {% endif %}
     {% endwith %}
 
-    <!-- Main Content -->
+    <!-- 
+    Main Content - This is where templates will inject their content.
+    The padding-bottom (pb-20) gives space for the bottom navigation on mobile.
+    -->
     <main class="max-w-6xl mx-auto px-4 py-8 pb-20">
         {% block content %}{% endblock %}
     </main>
 
-    <!-- Bottom Navigation Tabs -->
+    <!-- 
+    Bottom Navigation Tabs - Only shown for authenticated users.
+    This is mobile-friendly navigation that's fixed to the bottom of the screen.
+    Perfect for thumb reachability on modern phones.
+    -->
     {% if current_user.is_authenticated %}
-    <nav class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50">
+    <nav class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50 md:hidden">
         <div class="flex justify-around items-center h-16">
             <a href="{{ url_for('auth.home') }}" class="flex flex-col items-center justify-center text-gray-600 hover:text-blue-500 w-1/3 h-full">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -133,15 +179,22 @@
     </nav>
     {% endif %}
 
-    <!-- Scripts -->
+    <!-- 
+    Scripts - Chart.js for data visualisation and custom JS for app functionality.
+    I'm loading Chart.js from CDN as it's a hefty library and CDNs provide caching benefits.
+    -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.7.0/chart.min.js"></script>
     <script>
     // Set up CSRF protection for AJAX requests
     document.addEventListener('DOMContentLoaded', function() {
-        // Get CSRF token
+        // Get CSRF token from meta tag
         const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
         
-        // Add CSRF token to all fetch requests
+        // 
+        // This is clever - we're monkey-patching the fetch API to automatically
+        // include CSRF tokens in all non-GET requests. This protects against
+        // cross-site request forgery attacks without having to add the token manually.
+        // 
         const originalFetch = window.fetch;
         window.fetch = function(url, options = {}) {
             // Only add for POST, PUT, DELETE methods
@@ -159,7 +212,10 @@
             return originalFetch(url, options);
         };
         
-        // Set up notification system if the user is logged in
+        // 
+        // Notification system for logged-in users
+        // This loads notifications via AJAX when the user clicks the bell icon.
+        // 
         if (document.querySelector('meta[name="csrf-token"]')) {
             // Set up notification panel functionality
             const notificationPanel = document.getElementById('notification-panel');
@@ -177,7 +233,7 @@
                     // Clear previous notifications and show loading state
                     notificationsContainer.innerHTML = '<div class="text-center text-gray-500 py-4">Loading notifications...</div>';
                     
-                    // Load notifications
+                    // Load notifications via AJAX
                     fetch('/api/notifications')
                         .then(response => {
                             if (!response.ok) {
@@ -442,5 +498,32 @@
     {% if not toast_container_exists %}
     <div class="toast-container position-fixed bottom-0 right-0 p-3" style="z-index: 1050; right: 0; bottom: 0;"></div>
     {% endif %}
+
+    <!-- Bottom Navigation Bar for Mobile -->
+    <div class="fixed bottom-0 left-0 right-0 bg-white shadow-lg z-40 md:hidden">
+        <div class="flex justify-around items-center h-16">
+            <a href="{{ url_for('auth.home') }}" class="flex flex-col items-center text-gray-600 hover:text-blue-500 px-3 py-2 {{ 'text-blue-500' if request.endpoint == 'auth.home' else '' }}">
+                <i class="fas fa-home text-xl"></i>
+                <span class="text-xs mt-1">Home</span>
+            </a>
+            <a href="{{ url_for('workout.workout_page') }}" class="flex flex-col items-center text-gray-600 hover:text-blue-500 px-3 py-2 {{ 'text-blue-500' if request.endpoint.startswith('workout.') else '' }}">
+                <i class="fas fa-dumbbell text-xl"></i>
+                <span class="text-xs mt-1">Workout</span>
+            </a>
+            <a href="{{ url_for('auth.profile') }}" class="flex flex-col items-center text-gray-600 hover:text-blue-500 px-3 py-2 {{ 'text-blue-500' if request.endpoint == 'auth.profile' and not request.view_args.get('username') else '' }}">
+                <i class="fas fa-user text-xl"></i>
+                <span class="text-xs mt-1">Profile</span>
+            </a>
+        </div>
+    </div>
+
+    <!-- Add padding to the bottom of the content to prevent it from being hidden behind the navigation bar on mobile -->
+    <style>
+        @media (max-width: 768px) {
+            body {
+                padding-bottom: 5rem;
+            }
+        }
+    </style>
 </body>
 </html>

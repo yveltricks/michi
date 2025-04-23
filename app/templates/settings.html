@@ -2,6 +2,10 @@
 {% block title %}Settings{% endblock %}
 {% block extra_head %}
 <style>
+    /* 
+    Make sure all select dropdowns have a consistent width.
+    This keeps the forms looking tidy and properly aligned.
+    */
     select {
         width: 100%;
         min-width: 200px;
@@ -12,6 +16,10 @@
 <div class="container mx-auto px-4 py-6">
     <h1 class="text-2xl font-bold mb-6">Account Settings</h1>
 
+    <!-- 
+    Flash messages for feedback after form submissions.
+    These show success or error notifications so users know what happened.
+    -->
     {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
             {% for category, message in messages %}
@@ -22,11 +30,17 @@
         {% endif %}
     {% endwith %}
 
-    <!-- Personal Information Section -->
+    <!-- 
+    Personal Information Section - the basics that define a user's profile.
+    I've organised this into a nice card with consistent padding and shadow.
+    -->
     <div class="bg-white p-6 rounded-lg shadow mb-6">
         <h2 class="text-xl font-semibold mb-4">Personal Information</h2>
         
-        <!-- Profile Picture Section -->
+        <!-- 
+        Profile Picture Section - users can upload, view or remove their photo.
+        The circular crop gives a polished, professional look to profile images.
+        -->
         <div class="mb-6">
             <h3 class="text-lg font-medium mb-3">Profile Picture</h3>
             <div class="flex items-center space-x-4">
@@ -57,6 +71,11 @@
             </div>
         </div>
         
+        <!-- 
+        Personal details form - name, gender and birthday.
+        The grid layout keeps things aligned nicely on larger screens
+        while stacking vertically on mobile for better readability.
+        -->
         <form action="{{ url_for('auth.update_personal_info') }}" method="POST">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
@@ -78,6 +97,10 @@
                 </select>
             </div>
 
+            <!-- 
+            Birthday fields as three separate dropdowns - more user-friendly 
+            than a date picker for birthdates that are usually in the past.
+            -->
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                 <div>
                     <label class="block mb-2">Birth Month</label>
@@ -124,11 +147,17 @@
         </form>
     </div>
 
-    <!-- Account Information Section -->
+    <!-- 
+    Account Information Section - for username and password changes.
+    These are separated from personal details since they affect login credentials.
+    -->
     <div class="bg-white p-6 rounded-lg shadow mb-6">
         <h2 class="text-xl font-semibold mb-4">Account Information</h2>
 
-        <!-- Username Change Form -->
+        <!-- 
+        Username change form - simple but important for user identity.
+        Includes validation pattern to ensure usernames follow our rules.
+        -->
         <form action="{{ url_for('auth.change_username') }}" method="POST" class="mb-6">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <h3 class="text-lg font-medium mb-3">Change Username</h3>
@@ -145,7 +174,11 @@
             </button>
         </form>
 
-        <!-- Password Change Form -->
+        <!-- 
+        Password change form - includes current password verification
+        and new password confirmation to prevent mistakes.
+        The pattern attribute enforces our password strength requirements.
+        -->
         <form action="{{ url_for('auth.change_password') }}" method="POST" class="mb-6">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <h3 class="text-lg font-medium mb-3">Change Password</h3>
@@ -171,7 +204,11 @@
         </form>
     </div>
 
-    <!-- Measurement Preferences Section -->
+    <!-- 
+    Measurement Preferences Section - personalises how units are displayed.
+    This is important for a fitness app where users from different regions
+    may prefer different units (metric vs imperial).
+    -->
     <div class="bg-white p-6 rounded-lg shadow mb-6">
         <h2 class="text-xl font-semibold mb-4">Measurement Preferences</h2>
         <form action="{{ url_for('auth.update_preferences') }}" method="POST" class="mb-4">
@@ -199,6 +236,11 @@
                     </select>
                 </div>
             </div>
+            
+            <!-- 
+            Additional preference checkboxes for workout features.
+            These toggle advanced functionality for more personalised workouts.
+            -->
             <div class="mt-4">
                 <label class="flex items-center space-x-2">
                     <input type="checkbox" name="range_enabled" class="form-checkbox h-5 w-5 text-blue-600"
@@ -227,7 +269,10 @@
         </form>
     </div>
 
-    <!-- Privacy Settings Section -->
+    <!-- 
+    Privacy Settings Section - controls who can see the user's profile.
+    This is crucial for users who want to keep their fitness journey private.
+    -->
     <div class="bg-white p-6 rounded-lg shadow mb-6">
         <h2 class="text-xl font-semibold mb-4">Privacy Settings</h2>
         <form action="{{ url_for('auth.update_privacy') }}" method="POST">
@@ -245,7 +290,10 @@
         </form>
     </div>
 
-    <!-- Account Actions Section -->
+    <!-- 
+    Account Actions Section - contains more serious account operations.
+    Placed at the bottom since these are less commonly used options.
+    -->
     <div class="bg-white p-6 rounded-lg shadow">
         <h2 class="text-xl font-semibold mb-4">Account Actions</h2>
         <div class="space-y-4">

@@ -4,12 +4,18 @@
 
 {% block extra_head %}
 <style>
+    /* 
+    I've gone for a card-based design here with subtle shadows and rounded corners
+    to give the workout session a modern, clean look. The max-width container keeps
+    everything nicely centered and readable on larger screens.
+    */
     .workout-container {
         max-width: 800px;
         margin: 2rem auto;
         padding: 0 1rem;
     }
     
+    /* Main container for workout info with nice shadow and rounded corners */
     .workout-card {
         background-color: #fff;
         border-radius: 8px;
@@ -18,6 +24,7 @@
         margin-bottom: 2rem;
     }
     
+    /* Header section with user info and workout date */
     .workout-header {
         display: flex;
         align-items: center;
@@ -26,6 +33,7 @@
         border-bottom: 1px solid #eee;
     }
     
+    /* Circular profile pic - I like the rounded effect for profile images */
     .profile-pic {
         width: 50px;
         height: 50px;
@@ -34,6 +42,7 @@
         margin-right: 1rem;
     }
     
+    /* User info section with name and username */
     .workout-info {
         flex: 1;
     }
@@ -42,11 +51,13 @@
         margin: 0;
     }
     
+    /* Username styling - a bit muted compared to the name */
     .username {
         color: #6c757d;
         font-size: 0.9rem;
     }
     
+    /* Badge styling for user level - different colours for different levels */
     .badge {
         display: inline-block;
         padding: 0.25rem 0.5rem;
@@ -70,11 +81,13 @@
         color: white;
     }
     
+    /* Workout date display - subtle and aligned to the right */
     .workout-time {
         font-size: 0.9rem;
         color: #6c757d;
     }
     
+    /* Main content area of the workout card */
     .workout-content {
         padding: 1.5rem;
     }
@@ -83,20 +96,24 @@
         margin-top: 0;
     }
     
+    /* Exercise summary section */
     .exercise-summary {
         margin-top: 1rem;
     }
     
+    /* Individual exercise item with bottom border to separate */
     .exercise-item {
         padding: 0.75rem 0;
         border-bottom: 1px solid #eee;
     }
     
+    /* Exercise name - bold to stand out */
     .exercise-name {
         font-weight: 500;
         color: #333;
     }
     
+    /* Exercise details like sets, reps, weight - slightly muted */
     .exercise-details {
         color: #6c757d;
         font-size: 0.9rem;
@@ -104,12 +121,14 @@
         margin-left: 0.5rem;
     }
     
+    /* Styling for workout photos */
     .workout-photo img {
         width: 100%;
         height: auto;
         object-fit: cover;
     }
     
+    /* Stats section at the bottom of the card */
     .workout-stats {
         display: flex;
         justify-content: space-around;
@@ -118,10 +137,12 @@
         border-top: 1px solid #eee;
     }
     
+    /* Individual stat item styling */
     .stat {
         text-align: center;
     }
     
+    /* Icons for stats - using FontAwesome */
     .stat i {
         display: block;
         font-size: 1.5rem;
@@ -129,18 +150,21 @@
         color: #007bff;
     }
     
+    /* Message for when there's no data available */
     .no-data {
         text-align: center;
         color: #6c757d;
         padding: 1rem 0;
     }
     
+    /* Action buttons container - centered at bottom */
     .action-buttons {
         display: flex;
         justify-content: center;
         margin-top: 1rem;
     }
     
+    /* Button styling - consistent with the app's look and feel */
     .btn {
         padding: 0.5rem 1.5rem;
         border-radius: 4px;
@@ -159,17 +183,19 @@
         background-color: #0069d9;
     }
     
-    /* Social interaction styles */
+    /* Social interaction section for likes and comments */
     .social-interaction {
         padding: 1rem;
         border-top: 1px solid #eee;
     }
     
+    /* Container for like and comment buttons */
     .interaction-buttons {
         display: flex;
         gap: 1.5rem;
     }
     
+    /* Like and comment button styling */
     .like-button, .comment-button {
         background: none;
         border: none;
@@ -180,14 +206,17 @@
         gap: 0.5rem;
     }
     
+    /* When a post is liked, highlight the button */
     .like-button.liked {
         color: #007bff;
     }
     
+    /* Hover effects for like and comment buttons */
     .like-button:hover, .comment-button:hover {
         color: #007bff;
     }
     
+    /* Comments section - hidden by default until clicked */
     .comments-section {
         margin-top: 1rem;
         border-top: 1px solid #eee;
@@ -198,24 +227,28 @@
         display: none;
     }
     
+    /* Scrollable container for comments with max height */
     .comments-list {
         max-height: 300px;
         overflow-y: auto;
         margin-bottom: 1rem;
     }
     
+    /* Loading message while comments are being fetched */
     .loading-comments {
         text-align: center;
         color: #6c757d;
         padding: 0.5rem;
     }
     
+    /* Comment form styling */
     .comment-form {
         display: flex;
         gap: 0.5rem;
         margin-top: 1rem;
     }
     
+    /* Comment input field */
     .comment-input {
         flex: 1;
         padding: 0.5rem;
@@ -223,6 +256,7 @@
         border-radius: 4px;
     }
     
+    /* Comment submit button */
     .submit-comment {
         background-color: #007bff;
         color: white;
@@ -232,7 +266,11 @@
         cursor: pointer;
     }
     
-    /* New styles for the impressive record section */
+    /* 
+    Impressive record section - I wanted this to stand out with a dark background
+    and contrast against the rest of the card. It highlights the user's best accomplishment
+    in this workout.
+    */
     .impressive-record {
         background-color: #1a1a1a;
         color: white;
@@ -256,7 +294,10 @@
         font-weight: 300;
     }
     
-    /* Muscle Split Diagram */
+    /* 
+    Muscle split diagram styling - visual representation of which
+    muscle groups were worked in this session
+    */
     .muscle-split {
         margin-top: 2rem;
         margin-bottom: 2rem;
@@ -267,6 +308,7 @@
         text-align: center;
     }
     
+    /* Bar container for muscle group percentage */
     .muscle-bar {
         height: 30px;
         background-color: #e9ecef;
@@ -276,6 +318,7 @@
         overflow: hidden;
     }
     
+    /* Fill section of the muscle bar based on percentage */
     .muscle-fill {
         height: 100%;
         background-color: #007bff;
@@ -297,7 +340,7 @@
         font-weight: bold;
     }
     
-    /* Fun message */
+    /* Fun message styling - used for motivational messages */
     .fun-message {
         background-color: #f8f9fa;
         border-left: 4px solid #007bff;
@@ -318,6 +361,7 @@
 {% block content %}
 <div class="workout-container">
     <div class="workout-card">
+        <!-- Workout header with user info -->
         <div class="workout-header">
             <img src="{{ session.user.profile_pic or url_for('static', filename='default_profile.jpg') }}"
                  alt="Profile" class="profile-pic">
@@ -336,15 +380,21 @@
         </div>
 
         <div class="workout-content">
+            <!-- Workout title - fallback to generic "Workout" if none provided -->
             <h4>{{ session.title or session.description or session.notes or 'Workout' }}</h4>
             
-            <!-- Impressive Record Section -->
+            <!-- 
+            Impressive Record Section - Shows the user's best accomplishment from this workout
+            with a fun comparison to real-world objects. This is statically rendered in the template
+            to avoid JavaScript complexity.
+            -->
             <div class="impressive-record">
                 <h3>Most Impressive Record of the Session:</h3>
                 <div id="impressive-record-content">
                     {% set best_exercise = None %}
                     {% set highest_volume = 0 %}
                     
+                    <!-- Find the exercise with the highest volume (weight × reps) -->
                     {% for exercise in exercises %}
                         {% if exercise.get('weight') is not none and exercise.get('reps') is not none %}
                             {% set volume = exercise.weight * exercise.reps %}
@@ -359,7 +409,7 @@
                         <p>{{ best_exercise.weight }}{{ current_user.preferred_weight_unit }} x {{ best_exercise.reps }} {{ best_exercise.name }} is your most impressive record.</p>
                         <p>Total session volume: {{ session.volume }}{{ current_user.preferred_weight_unit }}</p>
                         
-                        <!-- Fun comparison -->
+                        <!-- Fun comparison based on total workout volume -->
                         {% if session.volume >= 600 and session.volume <= 800 %}
                             <p>You lifted as much as an adult female giraffe weighs (600kg to 800kg)!</p>
                         {% elif session.volume >= 500 %}
@@ -395,13 +445,13 @@
                 </div>
             </div>
             
-            <!-- Muscle Split Diagram -->
+            <!-- Muscle Split Diagram - shows distribution of work across muscle groups -->
             <div class="muscle-split">
                 <h3>Muscle Split</h3>
                 <div id="muscle-split-content"></div>
             </div>
             
-            <!-- Exercise Summary -->
+            <!-- Exercise Summary - list of all exercises performed -->
             <h3 class="mt-6 mb-3">Exercises</h3>
             <div class="exercise-summary">
                 {% if exercises %}
@@ -430,12 +480,14 @@
             </div>
         </div>
 
+        <!-- Workout photo if available -->
         {% if session.photo %}
         <div class="workout-photo">
             <img src="{{ session.photo }}" alt="Workout photo">
         </div>
         {% endif %}
 
+        <!-- Workout stats section - duration, volume, rating, XP -->
         <div class="workout-stats">
             <div class="stat">
                 <i class="fas fa-stopwatch"></i>
@@ -467,7 +519,7 @@
             {% endif %}
         </div>
 
-        <!-- Social interaction section -->
+        <!-- Social interaction section - for likes and comments -->
         <div class="social-interaction">
             <div class="interaction-buttons">
                 <button class="like-button {% if session.user_liked %}liked{% endif %}" data-id="{{ session.id }}">
@@ -494,6 +546,7 @@
         </div>
     </div>
     
+    <!-- Back button to return to workouts page -->
     <div class="action-buttons">
         <a href="{{ url_for('workout.workout_page') }}" class="btn btn-primary">Back to Workouts</a>
     </div>
@@ -502,8 +555,10 @@
 
 {% block scripts %}
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function() {
         // Update the impressive record content
+        // We're using JavaScript here to enhance the static template version
+        // This provides a fallback if the template rendering fails for any reason
         const impressiveRecordContent = document.getElementById('impressive-record-content');
         if (impressiveRecordContent) {
             // Get the session volume (if this line causes problems, it can be hard-coded)
@@ -512,6 +567,8 @@
             // Set the content based on the volume
             let message = '';
             
+            // Fun comparisons based on total volume lifted
+            // These give the user a relatable reference for their achievement
             if (sessionVolume >= 600 && sessionVolume <= 800) {
                 message = `<p>Total session volume: ${sessionVolume}kg</p><p>You lifted as much as an adult female giraffe weighs (600kg to 800kg)!</p>`;
             } else if (sessionVolume >= 500) {
@@ -546,6 +603,7 @@
         }
         
         // Like button functionality
+        // Handles the AJAX request to like/unlike a workout
         const likeButtons = document.querySelectorAll('.like-button');
         likeButtons.forEach(button => {
             button.addEventListener('click', function() {
@@ -554,21 +612,21 @@
                 const likeCount = this.querySelector('.like-count');
                 
                 fetch(`/${workoutId}/like`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
                         'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
                     }
                 })
                 .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
+            .then(data => {
+                if (data.success) {
                         // Toggle like status
-                        if (data.liked) {
+                    if (data.liked) {
                             likeIcon.classList.remove('far');
                             likeIcon.classList.add('fas');
                             button.classList.add('liked');
-                        } else {
+                    } else {
                             likeIcon.classList.remove('fas');
                             likeIcon.classList.add('far');
                             button.classList.remove('liked');
@@ -581,27 +639,28 @@
                 .catch(error => console.error('Error:', error));
             });
         });
-        
-        // Comment button functionality
+    
+    // Comment button functionality
+    // Shows/hides the comments section and loads comments via AJAX
         const commentButtons = document.querySelectorAll('.comment-button');
         commentButtons.forEach(button => {
             button.addEventListener('click', function() {
-                const workoutId = this.getAttribute('data-id');
-                const commentsSection = document.getElementById(`comments-${workoutId}`);
+            const workoutId = this.getAttribute('data-id');
+            const commentsSection = document.getElementById(`comments-${workoutId}`);
+            
+            if (commentsSection.classList.contains('hidden')) {
+                commentsSection.classList.remove('hidden');
                 
-                if (commentsSection.classList.contains('hidden')) {
-                    commentsSection.classList.remove('hidden');
-                    
-                    // Load comments
+                // Load comments via AJAX
                     fetch(`/api/workouts/${workoutId}/comments`, {
                         headers: {
                             'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
                         }
                     })
                     .then(response => response.json())
-                    .then(data => {
+                .then(data => {
                         const commentsList = document.getElementById(`comments-list-${workoutId}`);
-                        commentsList.innerHTML = '';
+                            commentsList.innerHTML = '';
                         
                         if (data.comments && data.comments.length > 0) {
                             data.comments.forEach(comment => {
@@ -616,30 +675,31 @@
                                 `;
                                 commentsList.appendChild(commentEl);
                             });
-                        } else {
+                    } else {
                             commentsList.innerHTML = '<div class="no-comments">No comments yet. Be the first to comment!</div>';
-                        }
-                    })
+                    }
+                })
                     .catch(error => console.error('Error:', error));
-                } else {
-                    commentsSection.classList.add('hidden');
-                }
-            });
+            } else {
+                commentsSection.classList.add('hidden');
+            }
         });
-        
-        // Submit comment functionality
+        });
+    
+    // Submit comment functionality
+    // Handles posting a new comment via AJAX
         const submitButtons = document.querySelectorAll('.submit-comment');
         submitButtons.forEach(button => {
             button.addEventListener('click', function() {
-                const workoutId = this.getAttribute('data-id');
+            const workoutId = this.getAttribute('data-id');
                 const commentInput = document.getElementById(`comment-input-${workoutId}`);
                 const text = commentInput.value.trim();
                 
                 if (text) {
-                    fetch(`/api/workouts/${workoutId}/comments`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
+                fetch(`/api/workouts/${workoutId}/comments`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
                             'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
                         },
                         body: JSON.stringify({ text: text })
@@ -667,8 +727,8 @@
                             
                             // Clear the input
                             commentInput.value = '';
-                            
-                            // Update comment count
+                        
+                        // Update comment count
                             const commentCount = document.querySelector(`.comment-button[data-id="${workoutId}"] span`);
                             commentCount.textContent = (parseInt(commentCount.textContent) + 1).toString();
                         }
@@ -677,6 +737,6 @@
                 }
             });
         });
-    });
+});
 </script>
 {% endblock %}

@@ -1,6 +1,10 @@
 from datetime import datetime, timedelta
 from . import db
 from .models import Session
+from sqlalchemy import func, desc
+import json
+from sqlalchemy.orm import joinedload
+from .models import User, Workout, Exercise, Set, Measurement
 
 def get_weekly_stats(user_id):
     """
@@ -410,3 +414,136 @@ def parse_duration(duration_str):
     except Exception as e:
         print(f"Error parsing duration '{duration_str}': {str(e)}")
         return 0
+
+def identify_underworked_muscles(user_id):
+    """
+    Analyze a user's workout history to identify which major muscle groups have been underworked
+    
+    Args:
+        user_id: The ID of the user to analyze
+        
+    Returns:
+        String: The name of the most underworked muscle group, or None if no clear winner
+    """
+    # Define major muscle groups to track
+    major_muscle_groups = {
+        'chest': 0,
+        'back': 0,
+        'legs': 0,
+        'shoulders': 0,
+        'arms': 0,
+        'core': 0,
+        'cardio': 0
+    }
+    
+    # Get sessions from the last 30 days
+    thirty_days_ago = datetime.utcnow() - timedelta(days=30)
+    sessions = Session.query.filter(
+        Session.user_id == user_id,
+        Session.session_date >= thirty_days_ago
+    ).all()
+    
+    # Find all sets performed
+    all_sets = []
+    for session in sessions:
+        set_records = Set.query.filter_by(session_id=session.id).all()
+        for set_record in set_records:
+            all_sets.append(set_record)
+    
+    # Count exercises by muscle group
+    for set_record in all_sets:
+        # Skip if no exercise or completed flag is False
+        if not set_record.exercise or not set_record.completed:
+            continue
+            
+        muscles_worked = set_record.exercise.muscles_worked.lower() if set_record.exercise.muscles_worked else ""
+        
+        # Check each major muscle group
+        for muscle_group in major_muscle_groups:
+            if muscle_group in muscles_worked:
+                major_muscle_groups[muscle_group] += 1
+    
+    # If no workouts recorded, return None
+    if sum(major_muscle_groups.values()) == 0:
+        return None
+    
+    # Find the most underworked muscle group
+    min_volume = float('inf')
+    underworked_muscle = None
+    
+    for muscle, count in major_muscle_groups.items():
+        if count < min_volume:
+            min_volume = count
+            underworked_muscle = muscle
+    
+    # Map the underworked muscle to a readable name
+    muscle_display_names = {
+        'chest': 'Chest',
+        'back': 'Back',
+        'legs': 'Legs',
+        'shoulders': 'Shoulders',
+        'arms': 'Arms',
+        'core': 'Core',
+        'cardio': 'Cardio'
+    }
+    
+    return muscle_display_names.get(underworked_muscle, underworked_muscle)
+
+def get_suggested_exercises(user_id, limit=5):
+    """
+    Get exercise suggestions based on user's workout history and underworked muscles
+    
+    Args:
+        user_id: The ID of the user
+        limit: Maximum number of suggestions to return
+        
+    Returns:
+        List of exercise objects with id and name fields
+    """
+    # Identify underworked muscle
+    underworked_muscle = identify_underworked_muscles(user_id)
+    
+    # Find recent exercises the user has done
+    thirty_days_ago = datetime.utcnow() - timedelta(days=30)
+    recent_set_ids = db.session.query(Set.exercise_id).join(Session).filter(
+        Session.user_id == user_id,
+        Session.session_date >= thirty_days_ago
+    ).distinct().all()
+    
+    recent_exercise_ids = [row[0] for row in recent_set_ids]
+    
+    # If we have an underworked muscle, find exercises for it
+    if underworked_muscle:
+        # Get top exercises for the underworked muscle that the user hasn't done recently
+        muscle_exercises = Exercise.query.filter(
+            Exercise.muscles_worked.like(f'%{underworked_muscle.lower()}%'),
+            ~Exercise.id.in_(recent_exercise_ids) if recent_exercise_ids else True
+        ).limit(limit).all()
+        
+        # If we don't have enough, get popular exercises for this muscle
+        if len(muscle_exercises) < limit:
+            additional_needed = limit - len(muscle_exercises)
+            existing_ids = [ex.id for ex in muscle_exercises]
+            
+            # Get popular exercises for this muscle that user hasn't seen yet
+            popular_exercises = Exercise.query.filter(
+                Exercise.muscles_worked.like(f'%{underworked_muscle.lower()}%'),
+                ~Exercise.id.in_(existing_ids) if existing_ids else True
+            ).limit(additional_needed).all()
+            
+            muscle_exercises.extend(popular_exercises)
+    else:
+        # Without an underworked muscle, suggest a variety of exercises
+        muscle_exercises = Exercise.query.filter(
+            ~Exercise.id.in_(recent_exercise_ids) if recent_exercise_ids else True
+        ).order_by(func.random()).limit(limit).all()
+    
+    # Format the response
+    suggestions = []
+    for exercise in muscle_exercises:
+        suggestions.append({
+            'id': exercise.id,
+            'name': exercise.name
+        })
+    
+    return suggestions

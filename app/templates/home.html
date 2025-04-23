@@ -1,11 +1,15 @@
-{# File: app/templates/home.html #}
+{# File: app/templates/home.html - The main dashboard users see when they log in #}
 {% extends "base.html" %}
 
 {% block title %}Home{% endblock %}
 
 {% block content %}
 <div class="container mx-auto px-4 min-h-screen pb-24">
-    <!-- Weekly summary with arrows -->
+    <!-- 
+    Weekly summary with trend arrows - gives users at-a-glance progress.
+    The arrows show if they're doing better or worse than last week - a bit of 
+    motivation to keep improving!
+    -->
     <div class="bg-white rounded-lg shadow-md p-4 mb-6">
         <h2 class="text-xl font-bold mb-3">This Week:</h2>
         <div class="grid grid-cols-4 gap-4 text-center">
@@ -59,19 +63,190 @@
         </div>
     </div>
     
-    <!-- User stats summary -->
-    <div class="bg-white rounded-lg shadow-md p-4 mb-6 flex justify-around items-center">
-        <div class="text-center">
-            <div class="text-lg font-semibold">LEVEL: {{ current_user.level }}</div>
-            <div class="text-sm text-gray-500">Beginner</div>
+    <!-- 
+    User stats summary - quick view of level and streak.
+    The streak counter is brilliant for keeping users coming back.
+    Didn't want to overload with too many stats here - keeping it simple.
+    -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+        <div class="bg-white rounded-lg shadow-md p-4 flex justify-around items-center">
+            <div class="text-center">
+                <div class="text-lg font-semibold">LEVEL: {{ current_user.level }}</div>
+                <div class="text-sm text-gray-500">{{ current_user.badge }}</div>
+            </div>
+            <div class="text-center">
+                <div class="text-lg font-semibold">Streak: {{ weekly_stats.streak }}</div>
+                <div class="text-sm text-gray-500">days</div>
+            </div>
         </div>
-        <div class="text-center">
-            <div class="text-lg font-semibold">Streak: {{ weekly_stats.streak }}</div>
-            <div class="text-sm text-gray-500">days</div>
+        
+        <!-- Underworked muscle recommendation -->
+        {% if underworked_muscle %}
+        <div class="bg-white rounded-lg shadow-md p-4">
+            <h3 class="text-lg font-semibold mb-2 flex items-center">
+                <i class="fas fa-bullseye text-red-500 mr-2"></i> Training Focus
+            </h3>
+            <p class="text-sm text-gray-700">Your <span class="font-semibold text-red-600">{{ underworked_muscle }}</span> could use some attention!</p>
+            <p class="text-xs text-gray-500 mt-1">This muscle group has been underworked in your recent training.</p>
+            <a href="{{ url_for('workout.start_workout') }}" class="mt-2 inline-block text-sm text-blue-600 hover:text-blue-800">
+                <i class="fas fa-dumbbell mr-1"></i> Start workout now
+            </a>
+        </div>
+        {% endif %}
+        
+        <!-- Level up goals -->
+        <div class="bg-white rounded-lg shadow-md p-4">
+            <h3 class="text-lg font-semibold mb-2 flex items-center">
+                <i class="fas fa-trophy text-yellow-500 mr-2"></i> Next Level
+            </h3>
+            <div class="flex items-center mb-2">
+                <div class="w-full bg-gray-200 rounded-full h-2.5">
+                    <div class="bg-blue-600 h-2.5 rounded-full exp-progress" data-percent="{{ (current_user.exp % 100) }}"></div>
+                </div>
+                <span class="text-sm text-gray-600 ml-2">{{ current_user.exp % 100 }}/100</span>
+            </div>
+            <p class="text-xs text-gray-500">{{ 100 - (current_user.exp % 100) }} XP needed for Level {{ current_user.level + 1 }}</p>
         </div>
     </div>
 
-    <!-- Feed tabs -->
+    <!-- Level Leaderboard -->
+    <div class="bg-white rounded-lg shadow-md p-4 mb-6">
+        <div class="flex justify-between items-center cursor-pointer" id="leaderboard-toggle">
+            <h2 class="text-xl font-bold flex items-center">
+                <i class="fas fa-crown text-yellow-500 mr-2"></i> Level Leaderboard
+            </h2>
+            <i class="fas fa-chevron-down transition-transform" id="leaderboard-arrow"></i>
+        </div>
+        
+        <div id="leaderboard-content" class="mt-3">
+            <!-- Tabs for Global vs Friends -->
+            <div class="flex border-b border-gray-200 mb-4">
+                <button id="global-tab" class="leaderboard-tab px-4 py-2 border-b-2 border-blue-500 text-blue-600 font-medium">Global</button>
+                <button id="friends-tab" class="leaderboard-tab px-4 py-2 text-gray-600 hover:text-gray-800 font-medium">Friends</button>
+            </div>
+            
+            <!-- Global Leaderboard -->
+            <div id="global-leaderboard" class="leaderboard-content">
+                {% if top_users %}
+                    <div class="overflow-hidden">
+                        {% for user in top_users %}
+                            <div class="flex items-center py-2 {% if loop.index % 2 == 0 %}bg-gray-50{% endif %} {% if user.id == current_user.id %}bg-blue-50{% endif %}">
+                                <div class="w-8 text-center font-bold {% if loop.index <= 3 %}text-yellow-500{% endif %}">{{ loop.index }}</div>
+                                <div class="w-12 h-12 relative">
+                                    {% if user.profile_pic %}
+                                        <img src="{{ user.profile_pic }}" alt="{{ user.username }}" class="w-10 h-10 rounded-full object-cover">
+                                    {% else %}
+                                        <div class="w-10 h-10 rounded-full bg-gray-300 flex items-center justify-center text-gray-600 font-bold">
+                                            {{ user.username[0]|upper }}
+                                        </div>
+                                    {% endif %}
+                                    {% if loop.index <= 3 %}
+                                        <div class="absolute -top-1 -right-1 w-5 h-5 flex items-center justify-center">
+                                            <i class="fas fa-award text-yellow-{% if loop.index == 1 %}500{% elif loop.index == 2 %}400{% else %}300{% endif %}"></i>
+                                        </div>
+                                    {% endif %}
+                                </div>
+                                <div class="flex-1 ml-2">
+                                    <a href="{{ url_for('auth.profile', username=user.username) }}" class="font-medium text-gray-900 hover:text-blue-600">
+                                        {{ user.username }}
+                                    </a>
+                                    <div class="text-xs text-gray-500">{{ user.badge }}</div>
+                                </div>
+                                <div class="w-20 text-right">
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                        Level {{ user.level }}
+                                    </span>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                    {% if current_user_rank > 10 %}
+                        <div class="mt-2 pt-2 border-t border-gray-200">
+                            <div class="flex items-center py-2 bg-blue-50">
+                                <div class="w-8 text-center font-bold">{{ current_user_rank }}</div>
+                                <div class="w-12">
+                                    {% if current_user.profile_pic %}
+                                        <img src="{{ current_user.profile_pic }}" alt="{{ current_user.username }}" class="w-10 h-10 rounded-full object-cover">
+                                    {% else %}
+                                        <div class="w-10 h-10 rounded-full bg-gray-300 flex items-center justify-center text-gray-600 font-bold">
+                                            {{ current_user.username[0]|upper }}
+                                        </div>
+                                    {% endif %}
+                                </div>
+                                <div class="flex-1 ml-2">
+                                    <span class="font-medium text-gray-900">{{ current_user.username }} <span class="text-xs">(You)</span></span>
+                                    <div class="text-xs text-gray-500">{{ current_user.badge }}</div>
+                                </div>
+                                <div class="w-20 text-right">
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                        Level {{ current_user.level }}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    {% endif %}
+                {% else %}
+                    <div class="text-center py-6 text-gray-500">
+                        <p>No users found.</p>
+                    </div>
+                {% endif %}
+            </div>
+            
+            <!-- Friends Leaderboard -->
+            <div id="friends-leaderboard" class="leaderboard-content hidden">
+                {% if top_friends %}
+                    <div class="overflow-hidden">
+                        {% for user in top_friends %}
+                            <div class="flex items-center py-2 {% if loop.index % 2 == 0 %}bg-gray-50{% endif %} {% if user.id == current_user.id %}bg-blue-50{% endif %}">
+                                <div class="w-8 text-center font-bold {% if loop.index <= 3 %}text-yellow-500{% endif %}">{{ loop.index }}</div>
+                                <div class="w-12 h-12 relative">
+                                    {% if user.profile_pic %}
+                                        <img src="{{ user.profile_pic }}" alt="{{ user.username }}" class="w-10 h-10 rounded-full object-cover">
+                                    {% else %}
+                                        <div class="w-10 h-10 rounded-full bg-gray-300 flex items-center justify-center text-gray-600 font-bold">
+                                            {{ user.username[0]|upper }}
+                                        </div>
+                                    {% endif %}
+                                    {% if loop.index <= 3 %}
+                                        <div class="absolute -top-1 -right-1 w-5 h-5 flex items-center justify-center">
+                                            <i class="fas fa-award text-yellow-{% if loop.index == 1 %}500{% elif loop.index == 2 %}400{% else %}300{% endif %}"></i>
+                                        </div>
+                                    {% endif %}
+                                </div>
+                                <div class="flex-1 ml-2">
+                                    <a href="{{ url_for('auth.profile', username=user.username) }}" class="font-medium text-gray-900 hover:text-blue-600">
+                                        {{ user.username }}
+                                    </a>
+                                    <div class="text-xs text-gray-500">{{ user.badge }}</div>
+                                </div>
+                                <div class="w-20 text-right">
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                        Level {{ user.level }}
+                                    </span>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                    {% if top_friends|length == 0 %}
+                        <div class="text-center py-6 text-gray-500">
+                            <p>Follow some friends to see them here!</p>
+                            <a href="#" class="text-blue-600 hover:text-blue-800 text-sm mt-2 inline-block">Find People</a>
+                        </div>
+                    {% endif %}
+                {% else %}
+                    <div class="text-center py-6 text-gray-500">
+                        <p>Follow some friends to see them here!</p>
+                        <a href="#" class="text-blue-600 hover:text-blue-800 text-sm mt-2 inline-block">Find People</a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- 
+    Feed tabs - toggle between your personalised feed and discover.
+    The discover tab helps users find new workout inspiration!
+    -->
     <div class="flex justify-center mb-6">
         <div class="inline-flex rounded-md shadow-sm" role="group">
             <button type="button" id="tab-home" class="px-4 py-2 text-sm font-medium text-gray-900 bg-white rounded-l-lg border border-gray-300 hover:bg-gray-100 focus:z-10 focus:bg-gray-100 active">
@@ -83,14 +258,21 @@
         </div>
     </div>
 
-    <!-- Workout feed -->
+    <!-- 
+    Workout feed - the social heart of the app.
+    I've gone for a card-based design similar to Instagram.
+    Each post shows user details, workout info and social interactions.
+    -->
     <div class="workout-feed space-y-6">
         <!-- Home feed (followed users' sessions) -->
         <div id="home-feed" style="display: block;">
             {% if following_sessions %}
                 {% for session in following_sessions %}
                 <div class="bg-white rounded-lg overflow-hidden shadow-md workout-post" data-workout-id="{{ session.id }}">
-                    <!-- Post header -->
+                    <!-- 
+                    Post header with user info and timestamp.
+                    Added a handy menu for own posts so users can delete or repeat workouts.
+                    -->
                     <div class="p-4 flex items-start justify-between">
                         <div class="flex items-start">
                             <a href="{{ url_for('auth.profile', username=session.user.username) }}">
@@ -131,7 +313,10 @@
                         {% endif %}
                     </div>
                     
-                    <!-- Post title and description -->
+                    <!-- 
+                    Workout title and description - kept it simple with just text,
+                    but could enhance with emoji support in the future.
+                    -->
                     <div class="px-4 pb-3">
                         <h4 class="font-bold text-gray-900">{{ session.title }}</h4>
                         {% if session.description %}
@@ -139,7 +324,10 @@
                         {% endif %}
                     </div>
                     
-                    <!-- Exercises -->
+                    <!-- 
+                    List of exercises - this was tricky to get right with all the different
+                    data structures. Added comparison indicators to show progress.
+                    -->
                     <div class="px-4 pb-4 text-sm text-gray-700">
                         {% for exercise in session.exercises %}
                             {% if exercise.name is defined %}
@@ -171,14 +359,20 @@
                         {% endfor %}
                     </div>
                     
-                    <!-- Workout photo -->
+                    <!-- 
+                    Workout photo - optional but adds a nice visual element.
+                    Using object-contain to maintain aspect ratio without stretching.
+                    -->
                     {% if session.photo %}
                     <div class="workout-photo mb-3">
                         <img src="{{ session.photo }}" alt="Workout photo" class="w-full h-auto max-h-60 object-contain rounded-md">
                     </div>
                     {% endif %}
 
-                    <!-- Workout stats -->
+                    <!-- 
+                    Workout stats - quick summary of duration, volume and rating.
+                    Used icons to make it more scannable and visual.
+                    -->
                     <div class="flex justify-between p-4 bg-gray-50 text-sm">
                         <div class="flex items-center text-gray-700">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -204,7 +398,10 @@
                         </div>
                     </div>
                     
-                    <!-- Social interaction section -->
+                    <!-- 
+                    Social interaction section - likes and comments.
+                    Added a 'View Details' link to see the full workout.
+                    -->
                     <div class="px-4 py-2 border-t border-gray-100">
                         <div class="flex justify-between">
                             <div class="flex space-x-4">
@@ -239,6 +436,10 @@
                 </div>
                 {% endfor %}
             {% else %}
+            <!-- 
+            Empty state - shows when user doesn't follow anyone yet.
+            A friendly nudge to get them to discover and follow other users.
+            -->
             <div class="bg-white rounded-lg p-8 text-center shadow-md">
                 <svg xmlns="http://www.w3.org/2000/svg" class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -418,6 +619,14 @@
 <!-- JavaScript for interactions -->
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // Fix the exp percentage linter error
+    const expBars = document.querySelectorAll('.exp-progress');
+    expBars.forEach(bar => {
+        if (bar.dataset.percent) {
+            bar.style.width = bar.dataset.percent + '%';
+        }
+    });
+
     // Tab switching
     const tabHome = document.getElementById('tab-home');
     const tabDiscover = document.getElementById('tab-discover');
@@ -445,6 +654,30 @@ document.addEventListener('DOMContentLoaded', function() {
             // Show discover feed, hide home feed
             discoverFeed.style.display = 'block';
             homeFeed.style.display = 'none';
+        });
+    }
+    
+    // Leaderboard toggle functionality
+    const leaderboardToggle = document.getElementById('leaderboard-toggle');
+    const leaderboardContent = document.getElementById('leaderboard-content');
+    const leaderboardArrow = document.getElementById('leaderboard-arrow');
+    
+    if (leaderboardToggle && leaderboardContent && leaderboardArrow) {
+        // Initial state - content visible
+        let isContentVisible = true;
+        
+        leaderboardToggle.addEventListener('click', function() {
+            isContentVisible = !isContentVisible;
+            
+            // Toggle visibility
+            leaderboardContent.style.display = isContentVisible ? 'block' : 'none';
+            
+            // Toggle arrow rotation
+            if (isContentVisible) {
+                leaderboardArrow.classList.remove('rotate-180');
+            } else {
+                leaderboardArrow.classList.add('rotate-180');
+            }
         });
     }
     
@@ -516,15 +749,15 @@ document.addEventListener('DOMContentLoaded', function() {
             const workoutId = this.getAttribute('data-id');
             if (confirm('Are you sure you want to delete this workout?')) {
                 fetch(`/api/workouts/${workoutId}/delete`, {
-                    method: 'POST',
-                    headers: {
+                method: 'POST',
+                headers: {
                         'Content-Type': 'application/json',
                         'X-Requested-With': 'XMLHttpRequest'
                     }
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
                         // Remove the workout from the DOM
                         const workoutPost = document.querySelector(`.workout-post[data-workout-id="${workoutId}"]`);
                         if (workoutPost) {
@@ -647,6 +880,36 @@ document.addEventListener('DOMContentLoaded', function() {
             if (e.target === notificationPanel) {
                 notificationPanel.classList.add('hidden');
             }
+        });
+    }
+
+    // Leaderboard tab functionality
+    const globalTab = document.getElementById('global-tab');
+    const friendsTab = document.getElementById('friends-tab');
+    const globalLeaderboard = document.getElementById('global-leaderboard');
+    const friendsLeaderboard = document.getElementById('friends-leaderboard');
+    
+    if (globalTab && friendsTab) {
+        globalTab.addEventListener('click', function() {
+            globalTab.classList.add('border-b-2', 'border-blue-500', 'text-blue-600');
+            globalTab.classList.remove('text-gray-600');
+            
+            friendsTab.classList.remove('border-b-2', 'border-blue-500', 'text-blue-600');
+            friendsTab.classList.add('text-gray-600');
+            
+            globalLeaderboard.classList.remove('hidden');
+            friendsLeaderboard.classList.add('hidden');
+        });
+        
+        friendsTab.addEventListener('click', function() {
+            friendsTab.classList.add('border-b-2', 'border-blue-500', 'text-blue-600');
+            friendsTab.classList.remove('text-gray-600');
+            
+            globalTab.classList.remove('border-b-2', 'border-blue-500', 'text-blue-600');
+            globalTab.classList.add('text-gray-600');
+            
+            friendsLeaderboard.classList.remove('hidden');
+            globalLeaderboard.classList.add('hidden');
         });
     }
 });

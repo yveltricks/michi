@@ -4,9 +4,15 @@
 {% block title %}{{ exercise.name }}{% endblock %}
 
 {% block extra_head %}
+<!-- Import the workout-specific CSS for consistent exercise page styling -->
 <link rel="stylesheet" href="{{ url_for('static', filename='css/workout.css') }}">
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <style>
+    /* 
+    Main container style for the exercise page.
+    Uses a clean white background with subtle shadow for
+    clear visual separation from the page background.
+    */
     .exercise-container {
         max-width: 800px;
         margin: 0 auto;
@@ -16,6 +22,11 @@
         box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
     }
     
+    /* 
+    Header section with exercise title and actions.
+    Uses flexbox to position the title and action buttons
+    on opposite sides of the container.
+    */
     .exercise-header {
         display: flex;
         justify-content: space-between;
@@ -25,31 +36,56 @@
         padding-bottom: 1rem;
     }
     
+    /* 
+    Large, bold exercise title that stands out
+    as the main heading on the page.
+    */
     .exercise-title {
         font-size: 1.875rem;
         font-weight: 700;
         margin-bottom: 0.5rem;
     }
     
+    /* 
+    Container for the exercise statistics section.
+    Provides proper spacing from adjacent elements.
+    */
     .exercise-stats {
         margin-bottom: 2rem;
     }
     
+    /* 
+    Each individual statistic item uses flexbox
+    to align the label and value horizontally.
+    */
     .stat-item {
         display: flex;
         margin-bottom: 0.75rem;
     }
     
+    /* 
+    Styled label for each statistic with fixed width
+    to ensure alignment of all values in the list.
+    */
     .stat-label {
         font-weight: 600;
         width: 150px;
         color: #4b5563;
     }
     
+    /* 
+    Value field for each statistic that takes up
+    remaining space in the flex container.
+    */
     .stat-value {
         flex: 1;
     }
     
+    /* 
+    Basic badge style used for categorisation.
+    Creates a pill-shaped element with distinctive
+    background colour for easy scanning.
+    */
     .badge {
         display: inline-block;
         padding: 0.25rem 0.75rem;
@@ -61,36 +97,49 @@
         color: #374151;
     }
     
+    /* Primary badge variant - blue shade for important tags */
     .badge-primary {
         background-color: #dbeafe;
         color: #1e40af;
     }
     
+    /* Secondary badge variant - purple shade for secondary tags */
     .badge-secondary {
         background-color: #e0e7ff;
         color: #3730a3;
     }
     
+    /* User badge variant - amber shade for user-related indicators */
     .user-badge {
         background-color: #fef3c7;
         color: #92400e;
     }
     
+    /* 
+    Container for the exercise history section.
+    Provides vertical spacing from the previous section.
+    */
     .history-container {
         margin-top: 2rem;
     }
     
+    /* Subheading for the history section */
     .history-title {
         font-size: 1.25rem;
         font-weight: 600;
         margin-bottom: 1rem;
     }
     
+    /* 
+    Table styling for the set history records.
+    Uses full width with clean borders between rows.
+    */
     .set-history-table {
         width: 100%;
         border-collapse: collapse;
     }
     
+    /* Cell styling for the history table */
     .set-history-table th,
     .set-history-table td {
         padding: 0.75rem;
@@ -98,11 +147,16 @@
         border-bottom: 1px solid #e5e7eb;
     }
     
+    /* Header cells with subtle background for distinction */
     .set-history-table th {
         background-color: #f9fafb;
         font-weight: 600;
     }
     
+    /* 
+    Action button styling for primary actions.
+    Uses indigo background with white text for high contrast.
+    */
     .action-button {
         display: inline-block;
         padding: 0.5rem 1rem;
@@ -114,10 +168,15 @@
         margin-right: 0.5rem;
     }
     
+    /* Hover state darkens the background slightly for feedback */
     .action-button:hover {
         background-color: #4338ca;
     }
     
+    /* 
+    Grid layout for the statistic cards.
+    Responsive design that adjusts columns based on container width.
+    */
     .stat-cards {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
@@ -125,6 +184,10 @@
         margin-bottom: 2rem;
     }
     
+    /* 
+    Individual stat card styling with subtle background and shadow.
+    Centralised content for clear visual presentation of key metrics.
+    */
     .stat-card {
         background-color: #f9fafb;
         border-radius: 8px;
@@ -133,6 +196,7 @@
         text-align: center;
     }
     
+    /* Large, prominent display of the statistic value */
     .stat-card-value {
         font-size: 1.5rem;
         font-weight: 700;
@@ -140,23 +204,32 @@
         color: #4f46e5;
     }
     
+    /* Smaller, muted label for the statistic description */
     .stat-card-label {
         font-size: 0.875rem;
         color: #6b7280;
     }
     
+    /* 
+    Container for the charts with fixed height and proper spacing.
+    */
     .chart-container {
         margin-top: 2rem;
         margin-bottom: 2rem;
         height: 300px;
     }
     
+    /* 
+    Horizontal tab navigation for switching between content sections.
+    Uses a bottom border to delineate the tab area.
+    */
     .tabs {
         display: flex;
         border-bottom: 1px solid #e5e7eb;
         margin-bottom: 1rem;
     }
     
+    /* Individual tab styling with hover effect */
     .tab {
         padding: 0.75rem 1rem;
         margin-right: 0.5rem;
@@ -164,25 +237,33 @@
         transition: all 0.2s;
     }
     
+    /* Active tab indicator with bottom border and colour change */
     .tab.active {
         border-bottom: 2px solid #4f46e5;
         color: #4f46e5;
         font-weight: 600;
     }
     
+    /* Subtle hover effect for inactive tabs */
     .tab:hover:not(.active) {
         background-color: #f9fafb;
         border-radius: 4px 4px 0 0;
     }
     
+    /* Hide inactive tab content by default */
     .tab-content {
         display: none;
     }
     
+    /* Show only the active tab content */
     .tab-content.active {
         display: block;
     }
 
+    /* 
+    Chart tab navigation centred above the chart.
+    Uses flexbox to place tabs in the centre with proper spacing.
+    */
     .chart-tabs {
         display: flex;
         justify-content: center;
@@ -190,6 +271,9 @@
         margin-bottom: 15px;
     }
 
+    /* 
+    Pill-shaped chart tab selectors with subtle background.
+    */
     .chart-tab {
         padding: 8px 16px;
         border-radius: 20px;
@@ -197,12 +281,6 @@
         cursor: pointer;
         font-size: 14px;
         transition: all 0.2s;
-    }
-
-    .chart-tab.active {
-        background-color: #4f46e5;
-        color: white;
-        font-weight: 500;
     }
 </style>
 {% endblock %}

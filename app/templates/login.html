@@ -2,8 +2,14 @@
 <html>
 <head>
     <title>Login</title>
+    <!-- CSRF token for security - prevents cross-site request forgery -->
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <style>
+        /* 
+           I've gone for a clean, minimalist design for the login page.
+           The centred box on a light background creates focus and
+           helps users get straight to logging in without distractions.
+        */
         body {
             font-family: Arial, sans-serif;
             background-color: #f5f5f5;
@@ -14,6 +20,10 @@
             align-items: center;
             justify-content: center;
         }
+        /* 
+           The white container with subtle shadow gives a nice card-like effect.
+           Keeping the width capped at 400px ensures it looks good on all devices.
+        */
         .container {
             background: white;
             padding: 40px;
@@ -23,19 +33,26 @@
             max-width: 400px;
             box-sizing: border-box;
         }
+        /* Heading is centred with good spacing below */
         h2 {
             text-align: center;
             margin-bottom: 30px;
             color: #333;
         }
+        /* Form groups keep related elements together with consistent spacing */
         .form-group {
             margin-bottom: 20px;
         }
+        /* Labels are slightly muted compared to input text for better hierarchy */
         label {
             display: block;
             margin-bottom: 5px;
             color: #555;
         }
+        /* 
+           Input fields are full width with comfortable padding.
+           The subtle border and rounded corners make them feel modern.
+        */
         input[type="email"],
         input[type="password"] {
             width: 100%;
@@ -45,6 +62,7 @@
             box-sizing: border-box;
             font-size: 16px;
         }
+        /* Remember me checkbox is aligned with its label for clarity */
         .remember-me {
             display: flex;
             align-items: center;
@@ -53,6 +71,10 @@
         .remember-me input {
             margin-right: 8px;
         }
+        /* 
+           The login button is full width and blue for good visibility.
+           It's larger than other elements to make it an obvious action.
+        */
         button {
             width: 100%;
             padding: 12px;
@@ -66,6 +88,7 @@
         button:hover {
             background-color: #0056b3;
         }
+        /* Register link is centred below the form with appropriate spacing */
         .register-link {
             text-align: center;
             margin-top: 20px;
@@ -77,6 +100,10 @@
         .register-link a:hover {
             text-decoration: underline;
         }
+        /* 
+           Error alerts have a soft red background for visibility without being harsh.
+           The rounded corners match our form elements for consistency.
+        */
         .alert {
             background-color: #f8d7da;
             color: #721c24;
@@ -91,6 +118,10 @@
     <div class="container">
         <h2>Login</h2>
         
+        <!-- 
+            Flash messages display error alerts when login fails.
+            This gives immediate feedback to users when something's wrong.
+        -->
         {% with messages = get_flashed_messages() %}
         {% if messages %}
         <div class="alert">
@@ -99,7 +130,12 @@
         {% endif %}
         {% endwith %}
 
+        <!-- 
+            Login form with email and password fields.
+            The form posts to our login route with CSRF protection.
+        -->
         <form method="POST" action="{{ url_for('auth.login') }}">
+            <!-- CSRF token hidden field for security -->
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="form-group">
                 <label for="email">Email</label>
@@ -111,6 +147,10 @@
                 <input type="password" id="password" name="password" required>
             </div>
 
+            <!-- 
+                Remember me checkbox for convenience - saves the user
+                having to log in again for a period of time.
+            -->
             <div class="remember-me">
                 <input type="checkbox" id="remember" name="remember">
                 <label for="remember">Remember me</label>
@@ -119,6 +159,10 @@
             <button type="submit">Login</button>
         </form>
 
+        <!-- 
+            Registration link for new users.
+            Provides an obvious path for those without accounts.
+        -->
         <div class="register-link">
             Don't have an account? <a href="{{ url_for('auth.register') }}">Register</a>
         </div>

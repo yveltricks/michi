@@ -2,13 +2,21 @@
 {% block title %}Perform Routine - {{ routine.name }}{% endblock %}
 
 {% block extra_head %}
+<!-- 
+Include necessary stylesheets and scripts for the workout performance page.
+jQuery is loaded first to ensure proper functioning of Bootstrap components.
+-->
 <link rel="stylesheet" href="{{ url_for('static', filename='css/workout.css') }}">
 <!-- jQuery must be loaded before Bootstrap -->
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <!-- Bootstrap JS for modal functionality -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
 
-<!-- Add immediate script for modal emergency closing -->
+<!-- 
+Emergency modal handling script - ensures users can always close modals
+even if something goes wrong with the standard closing mechanisms.
+This is crucial for preventing users from getting stuck in modal dialogs.
+-->
 <script>
 // Emergency modal closing function
 function emergencyCloseModals() {
@@ -46,7 +54,7 @@ function emergencyCloseModals() {
     return false;
 }
 
-// Add key listeners
+// Add key listeners for accessibility and emergency escape
 document.addEventListener('keydown', function(event) {
     // Escape key
     if (event.key === 'Escape' || event.key === 'Esc') {
@@ -70,6 +78,7 @@ document.addEventListener('click', function(event) {
 });
 </script>
 
+<!-- Include workout-specific JavaScript modules -->
 <script src="{{ url_for('static', filename='js/workout.js') }}"></script>
 <script src="{{ url_for('static', filename='js/workout-timer.js') }}"></script>
 <script src="{{ url_for('static', filename='js/workout-handlers.js') }}"></script>
@@ -77,7 +86,15 @@ document.addEventListener('click', function(event) {
 {% endblock %}
 
 {% block content %}
+<!-- 
+Stats bar - fixed position element showing real-time workout data.
+Displays workout duration, rest timer, and performance metrics.
+-->
 <div class="workout-stats-bar">
+    <!-- 
+    Workout timer with dropdown menu for timer controls.
+    Clicking the timer opens a control menu with pause/reset options.
+    -->
     <div class="timer-container" onclick="toggleTimerMenu()">
         <span id="workout-timer" data-seconds="0">00:00:00</span>
         <div id="timer-menu" class="timer-menu">
@@ -86,6 +103,10 @@ document.addEventListener('click', function(event) {
         </div>
     </div>
     
+    <!-- 
+    Rest timer - appears between sets to help time recovery periods.
+    Includes controls to manage the rest interval timing.
+    -->
     <div id="rest-timer-container" class="rest-timer-container" style="display: none;">
         <span class="rest-label">REST</span>
         <span id="rest-timer" data-seconds="0">00:00</span>
@@ -96,7 +117,12 @@ document.addEventListener('click', function(event) {
         </div>
     </div>
 
+    <!-- 
+    Real-time workout statistics display - shows various performance metrics.
+    All values update dynamically as the user progresses through the workout.
+    -->
     <div class="workout-stats">
+        <!-- Time tracking display with controls -->
         <div class="time-container">
             <div class="time-info">
                 <span class="time-label">TOTAL TIME</span>
@@ -109,7 +135,10 @@ document.addEventListener('click', function(event) {
             </div>
         </div>
         
-        <!-- Add EXP display container -->
+        <!-- 
+        Experience points display - shows EXP gained during workout.
+        Includes progress bar to visualise advancement towards next level.
+        -->
         <div class="exp-container">
             <div class="exp-notification" id="exp-notification" style="display: none;"></div>
             <div class="exp-info">
@@ -122,7 +151,10 @@ document.addEventListener('click', function(event) {
             <div class="level-badge">{{ current_user.level }}</div>
         </div>
         
-        <!-- Add volume, sets, and reps counters -->
+        <!-- 
+        Volume tracker - shows total weight lifted during workout.
+        Important metric for strength training progress.
+        -->
         <div class="stats-container volume-container">
             <div class="stats-info">
                 <span class="stats-label">VOLUME</span>
@@ -130,6 +162,7 @@ document.addEventListener('click', function(event) {
             </div>
         </div>
         
+        <!-- Sets counter - tracks total completed sets -->
         <div class="stats-container sets-container">
             <div class="stats-info">
                 <span class="stats-label">SETS</span>
@@ -137,6 +170,7 @@ document.addEventListener('click', function(event) {
             </div>
         </div>
         
+        <!-- Reps counter - tracks total repetitions performed -->
         <div class="stats-container reps-container">
             <div class="stats-info">
                 <span class="stats-label">REPS</span>
@@ -144,7 +178,10 @@ document.addEventListener('click', function(event) {
             </div>
         </div>
 
-        <!-- Add overall performance indicator -->
+        <!-- 
+        Performance indicator - compares current workout to previous sessions.
+        Shows percentage improvement and visual indicator (up/down arrow).
+        -->
         <div class="stats-container performance-container">
             <div class="stats-info">
                 <span class="stats-label">PERFORMANCE</span>
@@ -157,19 +194,30 @@ document.addEventListener('click', function(event) {
     </div>
 </div>
 
+<!-- 
+Main content area for the workout routine.
+Contains the exercise list and workout completion form.
+-->
 <div class="workout-container">
     <h1 class="text-2xl font-bold mb-4">{{ routine.name }}</h1>
 
-    <!-- Exercise List -->
+    <!-- 
+    Add exercise button - allows adding exercises beyond the routine's defaults.
+    Provides flexibility to customise the predefined routine as needed.
+    -->
     <button id="add-exercise-btn" class="add-exercise-btn">
         <i class="fas fa-plus"></i> Add Exercise
     </button>
 
+    <!-- Container for exercise cards that make up the routine -->
     <div id="exercises-container" class="exercise-list">
         <!-- Exercises will be dynamically added here -->
     </div>
 
-    <!-- Exercise Selection Modal -->
+    <!-- 
+    Exercise selection modal - appears when adding a new exercise.
+    Contains searchable, filterable list of available exercises.
+    -->
     <div id="exercise-modal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
@@ -177,6 +225,7 @@ document.addEventListener('click', function(event) {
                 <span class="close">&times;</span>
             </div>
             <div class="modal-body">
+                <!-- Search controls for finding specific exercises -->
                 <div class="search-container">
                     <input type="text" id="exercise-search" placeholder="Search exercises..." class="form-control">
                     <select id="muscle-filter" class="form-control">
@@ -190,6 +239,7 @@ document.addEventListener('click', function(event) {
                         <option value="cardio">Cardio</option>
                     </select>
                 </div>
+                <!-- List of available exercises from the database -->
                 <div id="exercise-list" class="exercise-options">
                     {% for exercise in exercises %}
                     <div class="exercise-option" data-id="{{ exercise.id }}" data-name="{{ exercise.name }}" data-muscles="{{ exercise.muscles_worked }}">

@@ -2,6 +2,7 @@
 {% block title %}Workouts & Routines{% endblock %}
 
 {% block extra_head %}
+<!-- Import the workout-specific CSS for consistent styling across all workout pages -->
 <link rel="stylesheet" href="{{ url_for('static', filename='css/workout.css') }}">
 {% endblock %}
 
@@ -10,6 +11,11 @@
     <h1 class="text-2xl font-bold mb-2 mt-4">Workouts & Routines</h1>
     <p class="mb-6 text-gray-700">Track your fitness progress and create workout routines.</p>
     
+    <!-- 
+    Main action buttons - prominent at the top of the page.
+    These are the two most important actions users will take,
+    so they're large, colourful, and impossible to miss!
+    -->
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <a href="{{ url_for('workout.start_workout') }}" class="start-workout-btn block py-4 bg-red-600 text-white text-center font-semibold rounded-md hover:bg-red-700 transition">
             <i class="fas fa-play"></i> Start Empty Workout
@@ -19,6 +25,10 @@
         </a>
     </div>
     
+    <!-- 
+    Routines section header with count and create button.
+    The count updates dynamically when routines are deleted.
+    -->
     <div class="flex justify-between items-center mb-4">
         <h2 class="text-xl font-bold">Your Routines ({{ routines|length }})</h2>
         <a href="{{ url_for('workout.create_routine') }}" class="create-routine-btn">
@@ -26,11 +36,23 @@
         </a>
     </div>
     
+    <!-- 
+    Help text explaining the dropdown menu - a small but useful hint
+    that helps new users understand how to manage their routines.
+    -->
     <p class="mb-4 text-sm text-gray-600">To edit or delete a routine, click the menu button <i class="fas fa-ellipsis-v"></i> in the top-right corner of each routine card.</p>
     
+    <!-- 
+    Routines grid - a responsive card layout of the user's saved routines.
+    Each card shows key info like name, level, targeted muscles, etc.
+    -->
     <div class="routines-grid">
         {% for routine in routines %}
         <div class="routine-card" data-id="{{ routine.id }}">
+            <!-- 
+            Card header with routine name and dropdown menu.
+            The dropdown has view, edit and delete options.
+            -->
             <div class="routine-header">
                 <h3 class="routine-title">{{ routine.name }}</h3>
                 <div class="routine-dropdown">
@@ -51,6 +73,11 @@
                 </div>
             </div>
             
+            <!-- 
+            Routine details section showing level, goal, targeted muscles,
+            number of exercises, and optional description.
+            The badges make it easy to quickly understand the routine's focus.
+            -->
             <div class="routine-details">
                 <div class="routine-badges">
                     <span class="badge badge-primary">{{ routine.level }}</span>
@@ -65,7 +92,7 @@
                     {% endif %}
                 </div>
                 
-                {# Use the exercise_count attribute we added in the controller #}
+                {# The exercise_count attribute is added by the controller #}
                 <span class="exercise-count">
                     {{ routine.exercise_count }} exercises
                 </span>
@@ -77,6 +104,10 @@
                 {% endif %}
             </div>
             
+            <!-- 
+            Card footer with action buttons - Perform and Edit.
+            These are the main actions users take with routines.
+            -->
             <div class="routine-actions">
                 <a href="{{ url_for('workout.perform_routine', routine_id=routine.id) }}" class="perform-routine-btn">
                     <i class="fas fa-play-circle"></i> Perform
@@ -89,6 +120,10 @@
         {% endfor %}
     </div>
     
+    <!-- 
+    Workout history section - dynamically loaded via JavaScript.
+    Shows a skeleton loader until the content is fetched.
+    -->
     <h2 class="text-xl font-bold mt-10 mb-4">Workout History</h2>
     <div id="workout-history-container" class="routines-grid">
         <div class="skeleton-loader">
@@ -98,7 +133,11 @@
 </div>
 
 <script>
-    // Toggle dropdown menu
+    // 
+    // Dropdown menu toggle function
+    // Controls the visibility of the dropdown menu for each routine card
+    // and handles closing other open dropdowns when a new one is opened.
+    //
     function toggleDropdown(event, routineId) {
         event.stopPropagation();
         const dropdownMenu = document.getElementById("dropdown-" + routineId);
@@ -118,7 +157,11 @@
         });
     }
     
-    // Handle delete routine
+    // 
+    // Delete routine function - handles the confirmation and API call
+    // Includes visual feedback with loading state and smooth animation
+    // when removing the card after successful deletion.
+    //
     function deleteRoutine(event, routineId) {
         event.preventDefault();
         event.stopPropagation();
@@ -162,7 +205,7 @@
                     }
                 } else {
                     alert(data.error || 'Error deleting routine');
-                    // Remove loading state if error
+                    // Remove loading state if error occurs
                     if (card) {
                         card.classList.remove('loading');
                         card.querySelector('.loading-overlay')?.remove();
@@ -172,7 +215,7 @@
             .catch(error => {
                 console.error('Error:', error);
                 alert(`An error occurred while deleting the routine: ${error.message}`);
-                // Remove loading state if error
+                // Remove loading state if error occurs during fetch
                 if (card) {
                     card.classList.remove('loading');
                     card.querySelector('.loading-overlay')?.remove();
@@ -181,8 +224,13 @@
         }
     }
     
-    // Load public routines
+    // 
+    // Page initialisation when DOM is loaded
+    // Fetches public routines from the server and sets up click handler to close dropdowns
+    // when clicking outside them for improved user experience.
+    //
     window.addEventListener('DOMContentLoaded', function() {
+        // Fetch public routines for the explore section
         fetch('/api/routines/explore')
         .then(response => response.json())
         .then(data => {
@@ -196,7 +244,8 @@
             console.error('Error fetching public routines:', error);
         });
         
-        // Close dropdowns when clicking outside
+        // Close dropdowns when clicking outside for better UX
+        // This prevents dropdowns staying open unintentionally
         document.addEventListener('click', function(event) {
             if (!event.target.closest('.routine-dropdown')) {
                 document.querySelectorAll('.routine-dropdown-menu').forEach(menu => {

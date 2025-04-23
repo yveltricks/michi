@@ -4,8 +4,16 @@
 {% block title %}Create Exercise{% endblock %}
 
 {% block extra_head %}
+<!-- 
+Additional stylesheets and scripts for the exercise creation form.
+Includes custom styling for form elements, chips, and interactive components.
+-->
 <link rel="stylesheet" href="{{ url_for('static', filename='css/workout.css') }}">
 <style>
+    /* 
+    Form container styling - creates a focused, contained form that stands out 
+    from the background with appropriate spacing and subtle shadow.
+    */
     .form-container {
         max-width: 800px;
         margin: 0 auto;
@@ -15,16 +23,22 @@
         box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
     }
     
+    /* Consistent vertical spacing between form elements */
     .form-group {
         margin-bottom: 1.5rem;
     }
     
+    /* Clear label styling with appropriate weight for visual hierarchy */
     .form-label {
         display: block;
         margin-bottom: 0.5rem;
         font-weight: 600;
     }
     
+    /* 
+    Form input styling with consistent padding and subtle borders
+    that match the overall design language.
+    */
     .form-control {
         width: 100%;
         padding: 0.75rem;
@@ -32,6 +46,10 @@
         border-radius: 0.375rem;
     }
     
+    /* 
+    Dropdown styling that matches text inputs but with 
+    appropriate visual cues for dropdown functionality.
+    */
     .form-select {
         width: 100%;
         padding: 0.75rem;
@@ -40,6 +58,10 @@
         background-color: white;
     }
     
+    /* 
+    Primary button styling using the application's colour scheme.
+    Important for consistency across all action buttons in the app.
+    */
     .btn-primary {
         background-color: #4f46e5;
         color: white;
@@ -52,10 +74,15 @@
         width: 100%;
     }
     
+    /* Hover state provides visual feedback for interactive elements */
     .btn-primary:hover {
         background-color: #4338ca;
     }
 
+    /* 
+    Chip container for displaying selected muscles in a responsive grid.
+    Uses flexbox for automatic wrapping and consistent spacing.
+    */
     .chip-container {
         display: flex;
         flex-wrap: wrap;
@@ -63,6 +90,10 @@
         margin-top: 0.5rem;
     }
     
+    /* 
+    Individual chip styling for selected items (muscles worked).
+    Rounded appearance with subtle background distinguishes them from other elements.
+    */
     .chip {
         background-color: #e5e7eb;
         padding: 0.25rem 0.75rem;
@@ -72,22 +103,32 @@
         font-size: 0.875rem;
     }
     
+    /* Remove icon within chips for allowing users to deselect options */
     .chip .remove-icon {
         margin-left: 0.375rem;
         cursor: pointer;
         color: #6b7280;
     }
     
+    /* Hover state for remove icon provides clear deletion intent */
     .chip .remove-icon:hover {
         color: #ef4444;
     }
     
+    /* 
+    Helper text styling for providing additional context beneath inputs.
+    Smaller, lighter text distinguishes it from primary content.
+    */
     .form-hint {
         font-size: 0.875rem;
         color: #64748b;
         margin-top: 0.25rem;
     }
 
+    /* 
+    Description boxes for different exercise input types.
+    Hidden by default and shown dynamically based on user selection.
+    */
     .input-type-description {
         font-size: 0.875rem;
         color: #64748b;
@@ -98,6 +139,7 @@
         display: none;
     }
     
+    /* Active state for showing the relevant description */
     .input-type-description.active {
         display: block;
     }
@@ -105,15 +147,31 @@
 {% endblock %}
 
 {% block content %}
+<!-- 
+Main form container - centralised on page with clean white background.
+Contains all input fields for creating a custom exercise.
+-->
 <div class="form-container">
     <h1 class="text-2xl font-bold mb-6">Create New Exercise</h1>
     
+    <!-- 
+    Exercise creation form - collects all necessary details to define a new exercise.
+    Data is submitted via JavaScript for validation and processing.
+    -->
     <form id="create-exercise-form">
+        <!-- 
+        Exercise name field - required input as this is the primary identifier.
+        Used throughout the app whenever this exercise is displayed.
+        -->
         <div class="form-group">
             <label for="exercise-name" class="form-label">Exercise Name*</label>
             <input type="text" id="exercise-name" name="name" class="form-control" required>
         </div>
         
+        <!-- 
+        Equipment selector - helps categorise exercises and enables filtering.
+        Users can quickly find exercises that match available equipment.
+        -->
         <div class="form-group">
             <label for="equipment" class="form-label">Equipment</label>
             <select id="equipment" name="equipment" class="form-select">
@@ -124,6 +182,10 @@
             </select>
         </div>
         
+        <!-- 
+        Primary body part selector - indicates the main muscle group targeted.
+        Helps with exercise classification and recommendations.
+        -->
         <div class="form-group">
             <label for="primary-muscle" class="form-label">Primary Body Part</label>
             <select id="primary-muscle" name="primary-muscle" class="form-select">
@@ -134,6 +196,10 @@
             </select>
         </div>
         
+        <!-- 
+        Additional muscles worked - multiple selection implemented as chips.
+        Allows tracking secondary muscle groups engaged during the exercise.
+        -->
         <div class="form-group">
             <label class="form-label">Additional Muscles Worked</label>
             <select id="additional-muscle" class="form-select" onchange="addMuscle()">
@@ -143,11 +209,16 @@
                 {% endfor %}
             </select>
             
+            <!-- Container for chips representing selected muscles -->
             <div id="muscles-container" class="chip-container"></div>
             <input type="hidden" id="muscles-worked" name="muscles_worked">
             <p class="form-hint">Select multiple muscles to add them to the list</p>
         </div>
         
+        <!-- 
+        Exercise type selector - determines what metrics will be tracked.
+        Different exercise types have different tracking requirements (weight, reps, distance, etc.).
+        -->
         <div class="form-group">
             <label for="input-type" class="form-label">Exercise Type*</label>
             <select id="input-type" name="input_type" class="form-select" required onchange="showInputTypeDescription()">
@@ -157,6 +228,10 @@
                 {% endfor %}
             </select>
             
+            <!-- 
+            Descriptive text for each exercise type.
+            Shows/hides dynamically based on selected type to provide guidance.
+            -->
             <div id="weight-reps-description" class="input-type-description">
                 Standard strength exercises where you track both weight lifted and repetitions.
                 <br>Example: Bench Press, Squats, Deadlifts
@@ -207,9 +282,16 @@
 
 {% block scripts %}
 <script>
-    // Store selected muscles
+    // Store selected muscles in a global array for persistent state tracking
     let selectedMuscles = [];
     
+    /**
+     * Adds a selected muscle to the tracking list
+     * 
+     * Gets the currently selected muscle from the dropdown and adds it
+     * to the global array if it doesn't already exist, then updates the 
+     * visual representation and resets the dropdown
+     */
     function addMuscle() {
         const select = document.getElementById('additional-muscle');
         const selectedMuscle = select.value;
@@ -217,23 +299,38 @@
         if (selectedMuscle && !selectedMuscles.includes(selectedMuscle)) {
             selectedMuscles.push(selectedMuscle);
             renderMuscles();
-            select.value = ''; // Reset select
+            select.value = ''; // Reset select dropdown after selection
         }
     }
     
+    /**
+     * Removes a muscle from the tracking list
+     * 
+     * Filters out the specified muscle from the array and
+     * updates the visual representation
+     * 
+     * @param {string} muscle - The name of the muscle to remove
+     */
     function removeMuscle(muscle) {
         selectedMuscles = selectedMuscles.filter(m => m !== muscle);
         renderMuscles();
     }
     
+    /**
+     * Renders the visual representation of selected muscles
+     * 
+     * Creates a "chip" element for each selected muscle with a remove
+     * option, and updates the hidden form field with the list of 
+     * selected muscles for form submission
+     */
     function renderMuscles() {
         const container = document.getElementById('muscles-container');
         const hiddenInput = document.getElementById('muscles-worked');
         
-        // Clear container
+        // Clear container to prevent duplicate entries
         container.innerHTML = '';
         
-        // Add chips for each muscle
+        // Add chips for each muscle with a remove button
         selectedMuscles.forEach(muscle => {
             const chip = document.createElement('div');
             chip.className = 'chip';
@@ -244,17 +341,23 @@
             container.appendChild(chip);
         });
         
-        // Update hidden field
+        // Update hidden field for form submission
         hiddenInput.value = selectedMuscles.join(', ');
     }
     
+    /**
+     * Shows the appropriate description for the selected exercise type
+     * 
+     * Hides all description boxes, then shows only the one
+     * that matches the currently selected exercise type
+     */
     function showInputTypeDescription() {
-        // Hide all descriptions
+        // Hide all descriptions first to ensure clean state
         document.querySelectorAll('.input-type-description').forEach(el => {
             el.classList.remove('active');
         });
         
-        // Show selected description
+        // Show selected description if one is selected
         const selectedType = document.getElementById('input-type').value;
         if (selectedType) {
             const descriptionEl = document.getElementById(`${selectedType}-description`);
@@ -264,22 +367,23 @@
         }
     }
     
-    // Handle form submission
+    // Add event listener for form submission
     document.getElementById('create-exercise-form').addEventListener('submit', function(e) {
-        e.preventDefault();
+        e.preventDefault(); // Prevent default form submission
         
+        // Collect all form values
         const name = document.getElementById('exercise-name').value;
         const equipment = document.getElementById('equipment').value;
         const primaryMuscle = document.getElementById('primary-muscle').value;
         const inputType = document.getElementById('input-type').value;
         
-        // If nothing selected, use primary muscle as muscles worked
+        // If no muscles were explicitly selected, use primary muscle as fallback
         let musclesWorked = document.getElementById('muscles-worked').value;
         if (!musclesWorked && primaryMuscle) {
             musclesWorked = primaryMuscle;
         }
         
-        // Prepare data
+        // Prepare data object for submission to API
         const data = {
             name: name,
             equipment: equipment,
@@ -288,7 +392,7 @@
             input_type: inputType
         };
         
-        // Send request
+        // Send HTTP request to create exercise endpoint
         fetch('/workout/api/workout/create-exercise', {
             method: 'POST',
             headers: {
@@ -297,6 +401,7 @@
             body: JSON.stringify(data)
         })
         .then(response => {
+            // Handle non-200 responses with detailed logging
             if (!response.ok) {
                 console.error('Response not OK:', response);
                 return response.text().then(text => {
@@ -310,13 +415,14 @@
             console.log('Response data:', data);
             if (data.success) {
                 alert('Exercise created successfully!');
-                // Redirect to workouts page or stay on page and reset form
+                // Redirect to start workout page after successful creation
                 window.location.href = '/workout/start-workout';
             } else {
                 alert(`Error: ${data.error}`);
             }
         })
         .catch(error => {
+            // Handle network errors or JSON parsing errors
             console.error('Error:', error);
             alert('Failed to create exercise. Please try again.');
         });

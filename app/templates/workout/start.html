@@ -4,6 +4,7 @@
 {% block title %}Start Workout{% endblock %}
 
 {% block extra_head %}
+{# Import essential JavaScript files required for workout functionality #}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/workout.css') }}">
 <script src="{{ url_for('static', filename='js/workout.js') }}"></script>
 <script src="{{ url_for('static', filename='js/workout-timer.js') }}"></script>
@@ -12,6 +13,11 @@
 {% endblock %}
 
 {% block content %}
+{# 
+Workout stats bar - fixed position at the top of the screen.
+Contains timer, rest timer, and key workout metrics to keep users informed
+of their progress throughout the session.
+#}
 <div class="workout-stats-bar">
     <div class="timer-container" onclick="toggleTimerMenu()">
         <span id="workout-timer" data-seconds="0">00:00:00</span>
@@ -21,6 +27,11 @@
         </div>
     </div>
     
+    {# 
+    Rest timer - Displays between sets to help users track rest periods.
+    Includes controls to cancel, restart or pause the rest countdown,
+    encouraging proper recovery between exercises.
+    #}
     <div id="rest-timer-container" class="rest-timer-container" style="display: none;">
         <span class="rest-label">REST</span>
         <span id="rest-timer" data-seconds="0">00:00</span>
@@ -31,6 +42,11 @@
         </div>
     </div>
 
+    {# 
+    Workout statistics display - Shows time, experience points, volume,
+    sets and repetitions. These metrics update in real-time as the 
+    user progresses through their workout session.
+    #}
     <div class="workout-stats">
         <div class="time-container">
             <div class="time-info">
@@ -44,7 +60,11 @@
             </div>
         </div>
         
-        <!-- Add EXP display container -->
+        {# 
+        EXP display - Shows experience points gained during the workout.
+        Includes a progress bar towards the next level to motivate users
+        and gamify their fitness journey.
+        #}
         <div class="exp-container">
             <div class="exp-notification" id="exp-notification" style="display: none;"></div>
             <div class="exp-info">
@@ -57,7 +77,11 @@
             <div class="level-badge">{{ current_user.level }}</div>
         </div>
         
-        <!-- Add volume, sets, and reps counters -->
+        {# 
+        Workout volume display - Shows total weight lifted, which is an
+        important metric for strength training. Updates automatically
+        as sets are logged throughout the session.
+        #}
         <div class="stats-container volume-container">
             <div class="stats-info">
                 <span class="stats-label">VOLUME</span>
@@ -65,6 +89,10 @@
             </div>
         </div>
         
+        {# 
+        Sets counter - Tracks total number of completed sets across all exercises.
+        A simple but important metric for tracking workout progress and volume.
+        #}
         <div class="stats-container sets-container">
             <div class="stats-info">
                 <span class="stats-label">SETS</span>
@@ -72,6 +100,11 @@
             </div>
         </div>
         
+        {# 
+        Reps counter - Tracks total repetitions performed across all exercises.
+        Particularly useful for volume-focused training programmes and
+        tracking overall workout density.
+        #}
         <div class="stats-container reps-container">
             <div class="stats-info">
                 <span class="stats-label">REPS</span>
@@ -79,7 +112,11 @@
             </div>
         </div>
 
-        <!-- Add overall performance indicator -->
+        {# 
+        Performance indicator - Shows how the current workout compares to
+        previous sessions. Provides immediate feedback on progress and 
+        helps users gauge improvement over time.
+        #}
         <div class="stats-container performance-container">
             <div class="stats-info">
                 <span class="stats-label">PERFORMANCE</span>
@@ -92,19 +129,50 @@
     </div>
 </div>
 
+{# 
+Main workout container - Holds the exercise list and workout completion form.
+This is the central area where users spend most of their time during a workout,
+adding exercises and logging their performance.
+#}
 <div class="workout-container">
     <h1 class="text-2xl font-bold mb-4">Start Workout</h1>
 
-    <!-- Exercise List -->
+    {# 
+    Add exercise button - Prominent control to add exercises to the workout.
+    Opens a modal with the complete exercise library for selection.
+    #}
     <button id="add-exercise-btn" class="add-exercise-btn">
         <i class="fas fa-plus"></i> Add Exercise
     </button>
 
+    {# Exercise suggestions - Shows recommended exercises based on training history #}
+    {% if suggested_exercises %}
+    <div class="mt-2 mb-4 text-sm">
+        <p class="text-gray-600 italic mb-1">Suggestions for today:</p>
+        <div class="flex flex-wrap gap-2">
+            {% for exercise in suggested_exercises %}
+            <button class="exercise-suggestion px-2 py-1 bg-blue-50 text-blue-700 rounded-full text-xs hover:bg-blue-100 flex items-center" 
+                    data-id="{{ exercise.id }}" 
+                    data-name="{{ exercise.name }}"
+                    onclick="addSuggestedExercise({{ exercise.id }}, '{{ exercise.name }}')">
+                <i class="fas fa-lightbulb text-yellow-500 mr-1"></i>
+                {{ exercise.name }}
+            </button>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    {# Container for exercise cards that are added to the workout #}
     <div id="exercises-container" class="exercise-list">
-        <!-- Exercises will be dynamically added here -->
+        {# Exercises will be dynamically added here via JavaScript #}
     </div>
 
-    <!-- Exercise Selection Modal -->
+    {# 
+    Exercise selection modal - Appears when "Add Exercise" is clicked.
+    Includes search functionality, muscle group filtering, and the 
+    complete exercise library for users to choose from.
+    #}
     <div id="exercise-modal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
@@ -112,6 +180,11 @@
                 <span class="close">&times;</span>
             </div>
             <div class="modal-body">
+                {# 
+                Search and filter controls to help users find exercises quickly.
+                Particularly useful for users with extensive exercise libraries
+                or when looking for specific exercises for a targeted workout.
+                #}
                 <div class="search-container">
                     <input type="text" id="exercise-search" placeholder="Search exercises..." class="form-control">
                     <select id="muscle-filter" class="form-control">
@@ -125,9 +198,28 @@
                         <option value="cardio">Cardio</option>
                     </select>
                 </div>
+                
+                {# Show focused muscle recommendation if available #}
+                {% if focus_muscle %}
+                <div class="p-2 mb-3 bg-yellow-50 border border-yellow-200 rounded">
+                    <p class="text-sm">
+                        <i class="fas fa-bullseye text-red-500 mr-1"></i>
+                        <strong>Recommended focus:</strong> Your <span class="font-semibold text-red-600">{{ focus_muscle }}</span> could use some training today.
+                    </p>
+                </div>
+                {% endif %}
+                
+                {# 
+                Exercise list populated from the database.
+                Each exercise displays its name, targeted muscles, and 
+                has an "Add" button to include it in the current workout.
+                #}
                 <div id="exercise-list" class="exercise-options">
                     {% for exercise in exercises %}
-                    <div class="exercise-option" data-id="{{ exercise.id }}" data-name="{{ exercise.name }}" data-muscles="{{ exercise.muscles_worked }}">
+                    <div class="exercise-option {% if focus_muscle and focus_muscle.lower() in exercise.muscles_worked.lower() %}highlight-exercise{% endif %}" 
+                         data-id="{{ exercise.id }}" 
+                         data-name="{{ exercise.name }}" 
+                         data-muscles="{{ exercise.muscles_worked }}">
                         <div class="exercise-info">
                             <h4>{{ exercise.name }}</h4>
                             <small>{{ exercise.muscles_worked }}</small>
@@ -139,6 +231,11 @@
                     </div>
                     {% endfor %}
                 </div>
+                {# 
+                Link to create new exercise if the user can't find what they need.
+                Ensures users aren't limited by the predefined exercise library
+                and can customise their workout experience.
+                #}
                 <div class="create-exercise-container" style="text-align: center; margin-top: 20px; padding-top: 20px; border-top: 1px solid #eee;">
                     <a href="{{ url_for('workout.create_exercise_page') }}" class="create-exercise-btn" style="display: inline-block; padding: 8px 16px; background-color: #4f46e5; color: white; border-radius: 4px; text-decoration: none;">
                         <i class="fas fa-plus"></i> Create New Exercise
@@ -148,7 +245,11 @@
         </div>
     </div>
 
-    <!-- Set Type Modal -->
+    {# 
+    Set type modal - For selecting different set types (normal, warm-up, drop set, etc).
+    Appears when the user clicks on the set type selector for an exercise,
+    allowing for more advanced and varied training techniques.
+    #}
     <div id="set-type-modal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
@@ -161,7 +262,11 @@
         </div>
     </div>
 
-    <!-- Range Settings Modal -->
+    {# 
+    Range settings modal - For setting target rep/weight/time ranges.
+    Helps users define their specific goals for each exercise set,
+    promoting progressive overload and structured training.
+    #}
     <div id="range-settings-modal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
@@ -176,13 +281,18 @@
                     </div>
                 </div>
                 <div id="range-inputs">
-                    <!-- Range inputs will be dynamically added here -->
+                    {# Range inputs will be dynamically added here via JavaScript #}
                 </div>
                 <button id="save-range-settings" class="btn btn-primary">Save Range Settings</button>
             </div>
         </div>
     </div>
 
+    {# 
+    Workout completion form - Shown at the bottom of the page.
+    Collects title, description, and rating before submitting the workout,
+    allowing users to document their session for future reference.
+    #}
     <div class="workout-form">
         <div class="form-group">
             <label for="workout-title">Workout Title (optional):</label>
@@ -203,7 +313,10 @@
             </select>
         </div>
         
-        <!-- Photo upload section -->
+        {# 
+        Photo upload section - Allows users to add a visual record of their workout.
+        Options for uploading an existing photo or taking a new one with the device camera.
+        #}
         <div class="form-group photo-upload-section">
             <label>Add a photo (optional):</label>
             <div class="flex flex-col space-y-2">
@@ -225,7 +338,10 @@
             </div>
         </div>
         
-        <!-- Notes section -->
+        {# 
+        Notes section - For additional information about the workout
+        that doesn't fit elsewhere in the form structure.
+        #}
         <div class="form-group">
             <label for="workout-notes">Add notes (optional):</label>
             <textarea id="workout-notes" class="form-control" rows="3" placeholder="Any additional notes about your workout"></textarea>
@@ -235,12 +351,15 @@
     </div>
 </div>
 
-<!-- Add this section where you handle sets for exercises -->
+{# Container for exercise sets that will be dynamically added via JavaScript #}
 <div id="set-container">
-    <!-- Placeholder for dynamically added sets -->
+    {# Placeholder for dynamically added sets #}
 </div>
 
-<!-- Rest Timer Settings Modal -->
+{# 
+Rest Timer Settings Modal - Allows users to configure automatic rest timers.
+This helps enforce proper recovery between sets for optimal training results.
+#}
 <div id="rest-timer-modal" class="modal">
     <div class="modal-content">
         <div class="modal-header">
@@ -274,7 +393,7 @@
 {% block scripts %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Handle photo upload buttons
+    // Handle photo upload and camera functionality for workout documentation
     const photoInput = document.getElementById('workout-photo');
     const uploadBtn = document.getElementById('photo-upload-btn');
     const cameraBtn = document.getElementById('photo-camera-btn');
@@ -317,20 +436,39 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 });
+
+// Function to add a suggested exercise directly
+function addSuggestedExercise(exerciseId, exerciseName) {
+    if (typeof addExerciseAndStayOpen === 'function') {
+        addExerciseAndStayOpen(exerciseId, exerciseName);
+        
+        // Show a small notification
+        const notification = document.createElement('div');
+        notification.className = 'fixed bottom-4 right-4 bg-green-100 text-green-800 px-4 py-2 rounded-lg shadow-lg';
+        notification.innerHTML = `<i class="fas fa-check-circle mr-2"></i>Added ${exerciseName}`;
+        document.body.appendChild(notification);
+        
+        // Remove after 3 seconds
+        setTimeout(() => {
+            notification.classList.add('opacity-0');
+            setTimeout(() => notification.remove(), 300);
+        }, 3000);
+    }
+}
 </script>
 
 {% if prefilled_exercises %}
 <script>
-// This data comes from the server via the Jinja2 template
+// This data comes from the server via the Jinja2 template - used when repeating a previous workout
 var prefilledExercises = JSON.parse('{{ prefilled_exercises|tojson|safe }}');
 
-// When the document is ready, process the prefilled exercises
+// When the document is ready, process the prefilled exercises to recreate a previous workout
 document.addEventListener("DOMContentLoaded", function() {
     console.log("Loading prefilled exercises from repeated workout:", prefilledExercises);
     
-    // Wait for workout.js to fully initialize
+    // Wait for workout.js to fully initialize before adding exercises
     setTimeout(function() {
-        // Process each exercise
+        // Process each exercise from the previous workout
         for (var i = 0; i < prefilledExercises.length; i++) {
             var exercise = prefilledExercises[i];
             console.log("Adding exercise:", exercise.name, "ID:", exercise.id);
@@ -341,7 +479,7 @@ document.addEventListener("DOMContentLoaded", function() {
             }
         }
         
-        // Show a success message
+        // Show a success message after loading the previous workout template
         if (typeof showSuccessMessage === 'function') {
             showSuccessMessage("Workout loaded from previous session. Adjust as needed and start when ready.");
         } else {
@@ -351,4 +489,32 @@ document.addEventListener("DOMContentLoaded", function() {
 });
 </script>
 {% endif %}
+
+<style>
+/* Style for exercise suggestions */
+.exercise-suggestion {
+    transition: all 0.2s ease;
+}
+
+.exercise-suggestion:hover {
+    transform: scale(1.05);
+}
+
+/* Style for highlighted exercises based on focus muscle */
+.highlight-exercise {
+    border-left: 3px solid #f59e0b;
+    background-color: rgba(254, 243, 199, 0.2);
+}
+
+/* Animation for notification */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.fixed {
+    animation: fadeIn 0.3s ease-out;
+    transition: opacity 0.3s ease;
+}
+</style>
 {% endblock %}
