@@ -9,7 +9,7 @@ from werkzeug.security import generate_password_hash
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app import create_app, db
-from app.models import User, Session, Exercise, Routine, Measurement, Goal, Statistic, SavedItem, Notification, BodyweightLog, SharedRoutine
+from app.models import User, Session, Exercise, Routine, Measurement, Statistic, SavedItem, Notification, BodyweightLog, SharedRoutine
 
 def create_sample_exercises():
     """Create a list of common exercises"""
@@ -407,30 +407,6 @@ def create_sample_measurements(users):
                     )
                     db.session.add(measurement)
 
-def create_sample_goals(users):
-    """Create goals for users"""
-    goal_templates = [
-        'Bench Press {target}kg',
-        'Squat {target}kg',
-        'Run {target}km',
-        'Lose {target}kg',
-        'Complete {target} workouts'
-    ]
-
-    for user in users:
-        num_goals = random.randint(2, 4)
-        for _ in range(num_goals):
-            target = random.randint(50, 200)
-            current = random.randint(0, target)
-            goal = Goal(
-                user_id=user.id,
-                goal_name=random.choice(goal_templates).format(target=target),
-                target_value=target,
-                current_value=current,
-                is_complete=(current >= target)
-            )
-            db.session.add(goal)
-
 def seed_database():
     """Main function to seed the database with sample data"""
     app = create_app()
@@ -458,10 +434,6 @@ def seed_database():
 
         print("Creating measurements...")
         create_sample_measurements(users)
-        db.session.commit()
-
-        print("Creating goals...")
-        create_sample_goals(users)
         db.session.commit()
 
         print("Database seeded successfully!")

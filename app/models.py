@@ -53,7 +53,6 @@ class User(UserMixin, db.Model):
     sessions = db.relationship('Session', backref='user', lazy=True)
     routines = db.relationship('Routine', backref='user', lazy=True)
     measurements = db.relationship('Measurement', backref='user', lazy=True)
-    goals = db.relationship('Goal', backref='user', lazy=True)
     statistics = db.relationship('Statistic', backref='user', lazy=True)
     saved_items = db.relationship('SavedItem', backref='user', lazy=True)
     notifications = db.relationship('Notification', backref='user', lazy=True)
@@ -523,14 +522,6 @@ class Measurement(db.Model):
             user_id=user_id,
             type=measurement_type
         ).order_by(cls.date.desc()).first()
-
-class Goal(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    goal_name = db.Column(db.String(100), nullable=False)
-    target_value = db.Column(db.Float)
-    current_value = db.Column(db.Float, default=0)
-    is_complete = db.Column(db.Boolean, default=False)
 
 class Statistic(db.Model):
     id = db.Column(db.Integer, primary_key=True)
